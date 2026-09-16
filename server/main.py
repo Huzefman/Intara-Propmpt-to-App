@@ -51,6 +51,7 @@ def call_gemini(prompt: str):
     return resp.text
 
 @app.post("/generate")
+@app.post("/api/generate")
 def generate(inp: PromptIn):
     raw = call_gemini(PROMPT.format(prompt=inp.prompt))
     try:
@@ -73,6 +74,7 @@ def generate(inp: PromptIn):
     return data
 
 @app.post("/rag")
+@app.post("/api/rag")
 def rag(inp: RagIn):
     # import here to avoid circular
     from rag import answer
@@ -83,5 +85,6 @@ def rag(inp: RagIn):
         raise HTTPException(500, str(e))
 
 @app.get("/health")
+@app.get("/api/health")
 def health():
     return {"ok": True, "model": MODEL, "supabase": bool(supabase)}

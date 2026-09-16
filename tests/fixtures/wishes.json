@@ -1,0 +1,226 @@
+[
+  {
+    "id": "wish-1-task-tracker",
+    "prompt": "A task tracker with users, tasks, and due dates",
+    "prd": {
+      "appName": "TaskOrb",
+      "tagline": "Track tasks across the cosmos",
+      "tables": [
+        {"name": "users", "fields": [{"name": "email", "type": "text"}, {"name": "created_at", "type": "timestamp"}]},
+        {"name": "tasks", "fields": [{"name": "title", "type": "text"}, {"name": "due_date", "type": "timestamp"}, {"name": "completed", "type": "boolean"}]}
+      ],
+      "pages": [
+        {"name": "Dashboard", "route": "/", "components": ["TaskList", "TaskCard"]},
+        {"name": "TaskDetail", "route": "/tasks/:id", "components": ["TaskForm"]}
+      ],
+      "apis": [
+        {"method": "GET", "path": "/api/tasks", "desc": "list tasks"},
+        {"method": "POST", "path": "/api/tasks", "desc": "create task"},
+        {"method": "GET", "path": "/api/users", "desc": "list users"},
+        {"method": "PATCH", "path": "/api/tasks/:id", "desc": "update task"}
+      ],
+      "auth": true
+    },
+    "artifacts": {
+      "schema": {
+        "tables": [
+          {"name": "users", "fields": [{"name": "email", "type": "text"}, {"name": "created_at", "type": "timestamp"}]},
+          {"name": "tasks", "fields": [{"name": "title", "type": "text"}, {"name": "due_date", "type": "timestamp"}, {"name": "completed", "type": "boolean"}]}
+        ],
+        "prisma": "model User {\n  id String @id @default(uuid())\n  email String @unique\n  createdAt DateTime @default(now())\n}\n\nmodel Task {\n  id String @id @default(uuid())\n  title String\n  dueDate DateTime?\n  completed Boolean @default(false)\n  userId String\n}",
+        "sql": "create table users (id uuid primary key default gen_random_uuid(), email text not null, created_at timestamptz default now());\ncreate table tasks (id uuid primary key default gen_random_uuid(), title text not null, due_date timestamptz, completed boolean default false);"
+      },
+      "frontend": {
+        "files": [
+          {"path": "src/pages/Dashboard.tsx", "content": "export default function Dashboard(){ return <div>Dashboard — Intara TaskOrb</div> }"},
+          {"path": "src/components/TaskCard.tsx", "content": "export function TaskCard({title}:{title:string}){ return <div>{title}</div> }"},
+          {"path": "src/api.ts", "content": "export const api = { listTasks: () => fetch('/api/tasks') }"}
+        ]
+      },
+      "backend": {
+        "files": [
+          {"path": "server/main.py", "content": "from fastapi import FastAPI\napp = FastAPI()\n@app.get(\"/health\")\ndef health(): return {\"ok\": True}\n"},
+          {"path": "server/models.py", "content": "from pydantic import BaseModel\nclass Task(BaseModel):\n    title: str\n    completed: bool = False\n"}
+        ],
+        "requirements": "fastapi==0.110.1\nuvicorn==0.29.0\npydantic>=2.9.0\n"
+      },
+      "spec": {
+        "readme": "# TaskOrb\nRun: npm install && npm run dev\nBackend: uvicorn main:app --reload\nIntara weaves stardust into schema.",
+        "openapi": {"openapi": "3.0.0", "paths": {"/api/tasks": {"get": {"summary": "list tasks"}}, "/api/users": {"get": {"summary": "list users"}}}},
+        "cites": ["DhiWise builds Rocket.new — one prompt → full app"]
+      }
+    }
+  },
+  {
+    "id": "wish-2-blog",
+    "prompt": "A minimalist blog with authors, posts, comments, and likes",
+    "prd": {
+      "appName": "BlogNebula",
+      "tagline": "Write across the stars",
+      "tables": [
+        {"name": "authors", "fields": [{"name": "name", "type": "text"}, {"name": "email", "type": "text"}]},
+        {"name": "posts", "fields": [{"name": "title", "type": "text"}, {"name": "body", "type": "text"}, {"name": "published", "type": "boolean"}]},
+        {"name": "comments", "fields": [{"name": "body", "type": "text"}, {"name": "created_at", "type": "timestamp"}]}
+      ],
+      "pages": [
+        {"name": "Feed", "route": "/", "components": ["PostList", "PostCard"]},
+        {"name": "Post", "route": "/posts/:id", "components": ["PostDetail", "CommentList"]}
+      ],
+      "apis": [
+        {"method": "GET", "path": "/api/posts", "desc": "list posts"},
+        {"method": "POST", "path": "/api/posts", "desc": "create post"},
+        {"method": "GET", "path": "/api/comments", "desc": "list comments"}
+      ],
+      "auth": true
+    },
+    "artifacts": {
+      "schema": {
+        "tables": [
+          {"name": "authors", "fields": [{"name": "name", "type": "text"}, {"name": "email", "type": "text"}]},
+          {"name": "posts", "fields": [{"name": "title", "type": "text"}, {"name": "body", "type": "text"}, {"name": "published", "type": "boolean"}]}
+        ],
+        "prisma": "model Author { id String @id @default(uuid()) name String email String }",
+        "sql": "create table authors (id uuid primary key default gen_random_uuid(), name text not null);"
+      },
+      "frontend": {
+        "files": [
+          {"path": "src/pages/Feed.tsx", "content": "export default function Feed(){ return <div>Feed</div> }"}
+        ]
+      },
+      "backend": {
+        "files": [
+          {"path": "server/main.py", "content": "from fastapi import FastAPI\napp = FastAPI()\n"}
+        ],
+        "requirements": "fastapi==0.110.1\n"
+      },
+      "spec": {
+        "readme": "# BlogNebula\nIntara blog wish granted.",
+        "openapi": {"openapi": "3.0.0", "paths": {"/api/posts": {"get": {}}}},
+        "cites": ["Supabase pgvector enables vector search"]
+      }
+    }
+  },
+  {
+    "id": "wish-3-ecommerce",
+    "prompt": "An e-commerce wishlist with products, carts, and orders",
+    "prd": {
+      "appName": "WishMart",
+      "tagline": "Shop the Intara way",
+      "tables": [
+        {"name": "products", "fields": [{"name": "name", "type": "text"}, {"name": "price", "type": "integer"}]},
+        {"name": "carts", "fields": [{"name": "quantity", "type": "integer"}, {"name": "created_at", "type": "timestamp"}]},
+        {"name": "orders", "fields": [{"name": "total", "type": "integer"}, {"name": "status", "type": "text"}]}
+      ],
+      "pages": [
+        {"name": "Catalog", "route": "/", "components": ["ProductGrid", "ProductCard"]},
+        {"name": "Cart", "route": "/cart", "components": ["CartList"]}
+      ],
+      "apis": [
+        {"method": "GET", "path": "/api/products", "desc": "list products"},
+        {"method": "POST", "path": "/api/orders", "desc": "create order"}
+      ],
+      "auth": true
+    },
+    "artifacts": {
+      "schema": {
+        "tables": [{"name": "products", "fields": [{"name": "name", "type": "text"}, {"name": "price", "type": "integer"}]}],
+        "prisma": "model Product { id String @id name String price Int }",
+        "sql": "create table products (id uuid primary key default gen_random_uuid(), name text not null);"
+      },
+      "frontend": {
+        "files": [{"path": "src/pages/Catalog.tsx", "content": "export default function Catalog(){ return <div>Catalog</div> }"}]
+      },
+      "backend": {
+        "files": [{"path": "server/main.py", "content": "from fastapi import FastAPI\napp = FastAPI()\n"}],
+        "requirements": "fastapi==0.110.1\n"
+      },
+      "spec": {
+        "readme": "# WishMart",
+        "openapi": {"openapi": "3.0.0", "paths": {"/api/products": {"get": {}}}},
+        "cites": ["Gemini 3.6 flash handles schema generation"]
+      }
+    }
+  },
+  {
+    "id": "wish-4-booking",
+    "prompt": "A booking system for salons with services, slots, and appointments",
+    "prd": {
+      "appName": "SalonOrbit",
+      "tagline": "Book your shine",
+      "tables": [
+        {"name": "services", "fields": [{"name": "name", "type": "text"}, {"name": "duration", "type": "integer"}]},
+        {"name": "slots", "fields": [{"name": "start_time", "type": "timestamp"}, {"name": "available", "type": "boolean"}]},
+        {"name": "appointments", "fields": [{"name": "customer", "type": "text"}, {"name": "created_at", "type": "timestamp"}]}
+      ],
+      "pages": [
+        {"name": "Services", "route": "/", "components": ["ServiceList"]},
+        {"name": "Book", "route": "/book", "components": ["SlotPicker"]}
+      ],
+      "apis": [
+        {"method": "GET", "path": "/api/slots", "desc": "list slots"},
+        {"method": "POST", "path": "/api/appointments", "desc": "create appointment"}
+      ],
+      "auth": false
+    },
+    "artifacts": {
+      "schema": {
+        "tables": [{"name": "services", "fields": [{"name": "name", "type": "text"}, {"name": "duration", "type": "integer"}]}],
+        "prisma": "model Service { id String @id name String duration Int }",
+        "sql": "create table services (id uuid primary key default gen_random_uuid(), name text not null);"
+      },
+      "frontend": {
+        "files": [{"path": "src/pages/Services.tsx", "content": "export default function Services(){ return <div>Services</div> }"}]
+      },
+      "backend": {
+        "files": [{"path": "server/main.py", "content": "from fastapi import FastAPI\napp = FastAPI()\n"}],
+        "requirements": "fastapi==0.110.1\n"
+      },
+      "spec": {
+        "readme": "# SalonOrbit",
+        "openapi": {"openapi": "3.0.0", "paths": {"/api/slots": {"get": {}}}},
+        "cites": ["React 18 + Vite + TypeScript"]
+      }
+    }
+  },
+  {
+    "id": "wish-5-forum",
+    "prompt": "A Q&A forum with questions, answers, votes, and tags",
+    "prd": {
+      "appName": "AskIntara",
+      "tagline": "Questions drift, answers land",
+      "tables": [
+        {"name": "questions", "fields": [{"name": "title", "type": "text"}, {"name": "body", "type": "text"}]},
+        {"name": "answers", "fields": [{"name": "body", "type": "text"}, {"name": "votes", "type": "integer"}]},
+        {"name": "tags", "fields": [{"name": "name", "type": "text"}]}
+      ],
+      "pages": [
+        {"name": "Questions", "route": "/", "components": ["QuestionList"]},
+        {"name": "Ask", "route": "/ask", "components": ["QuestionForm"]}
+      ],
+      "apis": [
+        {"method": "GET", "path": "/api/questions", "desc": "list questions"},
+        {"method": "POST", "path": "/api/answers", "desc": "create answer"}
+      ],
+      "auth": true
+    },
+    "artifacts": {
+      "schema": {
+        "tables": [{"name": "questions", "fields": [{"name": "title", "type": "text"}, {"name": "body", "type": "text"}]}],
+        "prisma": "model Question { id String @id title String body String }",
+        "sql": "create table questions (id uuid primary key default gen_random_uuid(), title text not null);"
+      },
+      "frontend": {
+        "files": [{"path": "src/pages/Questions.tsx", "content": "export default function Questions(){ return <div>Questions</div> }"}]
+      },
+      "backend": {
+        "files": [{"path": "server/main.py", "content": "from fastapi import FastAPI\napp = FastAPI()\n"}],
+        "requirements": "fastapi==0.110.1\n"
+      },
+      "spec": {
+        "readme": "# AskIntara",
+        "openapi": {"openapi": "3.0.0", "paths": {"/api/questions": {"get": {}}}},
+        "cites": ["FastAPI handles POST /generate"]
+      }
+    }
+  }
+]

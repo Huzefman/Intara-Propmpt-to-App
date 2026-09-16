@@ -31,10 +31,11 @@ def embed(texts: list[str]):
     # Gemini embeddings: model text-embedding-004
     out=[]
     for t in texts:
-        r=client.models.embed_content(model="text-embedding-004", contents=t)
-        # genai returns .embeddings[0].values
+        r=client.models.embed_content(model="gemini-embedding-001", contents=t)
         vals=getattr(r, 'embeddings', [{}])[0]
-        vals=getattr(vals, 'values', [0]*1536) if hasattr(vals,'values') else vals.get('values',[0]*1536) if isinstance(vals, dict) else [0]*1536
+        vals=getattr(vals, 'values', [0]*3072) if hasattr(vals,'values') else vals.get('values',[0]*3072) if isinstance(vals, dict) else [0]*3072
+        if len(vals) > 1536: vals = vals[:1536]
+        elif len(vals) < 1536: vals = vals + [0.0]*(1536-len(vals))
         out.append(vals)
     return out
 
