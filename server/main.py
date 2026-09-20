@@ -20,8 +20,16 @@ SUPA_KEY = os.getenv("SUPABASE_KEY", "")
 client = genai.Client(api_key=GEMINI_KEY) if GEMINI_KEY else None
 supabase = create_client(SUPA_URL, SUPA_KEY) if SUPA_URL and SUPA_KEY else None
 
-app = FastAPI(title="Prompt → App")
+app = FastAPI(title="Intara — Planet of Wishes")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# Intara wish routers — try load, fallback if missing
+try:
+    from routers.wishes import router as wishes_router
+    app.include_router(wishes_router, prefix="/api")
+    app.include_router(wishes_router, prefix="")  # also mount without prefix for /wish
+except Exception as e:
+    print(f"wishes router not loaded: {e}")
 
 class PromptIn(BaseModel):
     prompt: str
@@ -87,4 +95,8 @@ def rag(inp: RagIn):
 @app.get("/health")
 @app.get("/api/health")
 def health():
-    return {"ok": True, "model": MODEL, "supabase": bool(supabase)}
+    return {"ok": True, "model": MODEL, "supabase": bool(supabase), "planet": "intara"}
+
+@app.get("/api/wishes/health")
+def wishes_health():
+    return {"ok": True, "wishes": True}
