@@ -25,17 +25,22 @@ def chunk(text: str, size=400, overlap=50):
     return chunks
 
 def embed(texts: list[str]):
+    # OpenRouter-first embeddings (per user choice: OpenRouter embeddings)
+    try:
+        from services.llm import embed_texts
+        # embed_texts already handles OpenRouter → Gemini fallback and 3072 normalization
+        return embed_texts(texts)
+    except Exception as e:
+        print(f"embed via llm failed, fallback to gemini direct: {e}")
     if not client:
-        # fallback: fake embedding — match existing Supabase docs dim 1536 (truncate 3072)
+        # fallback: fake embedding — match existing Supabase docs dim 1536
         return [[0.0]*1536 for _ in texts]
-    # Gemini embeddings: gemini-embedding-001 is 3072d, but Supabase docs may be 1536 (legacy) or 3072 (new)
-    # Return 3072 full, but caller should handle dim mismatch via fallback truncation
+    # Gemini direct fallback (if llm embed failed)
     out=[]
     for t in texts:
         r=client.models.embed_content(model="gemini-embedding-001", contents=t)
         vals=getattr(r, 'embeddings', [{}])[0]
         vals=getattr(vals, 'values', [0]*3072) if hasattr(vals,'values') else vals.get('values',[0]*3072) if isinstance(vals, dict) else [0]*3072
-        # keep 3072 full
         if len(vals) > 3072: vals = vals[:3072]
         elif len(vals) < 3072: vals = vals + [0.0]*(3072-len(vals))
         out.append(vals)
@@ -44,37 +49,34 @@ def embed(texts: list[str]):
 def _embed_for_supabase(texts: list[str]):
     """Return embeddings truncated to 1536 to match legacy Supabase docs table if needed."""
     full = embed(texts)
-    # If Supabase docs is 1536 (most common), truncate to 1536 for inserts
-    # We try 3072 first, fallback to 1536 handled in seed_docs
     return [v[:1536] for v in full]
 
 def answer(question: str, top_k=5):
-    if not supabase or not client:
-        return {"answer": "Demo mode: configure GEMINI_API_KEY + SUPABASE to enable RAG. Question was: "+question, "cites": []}
+    has_llm = bool(os.getenv("OPENROUTER_API_KEY") or os.getenv("GEMINI_API_KEY"))
+    if not supabase or not has_llm:
+        return {"answer": "Demo mode: configure OPENROUTER_API_KEY or GEMINI_API_KEY + SUPABASE to enable RAG. Question was: "+question, "cites": []}
     try:
-        # 1. embed question (3072d)
         q_emb = embed([question])[0]
-        # 2. vector search — handle dim mismatch fallback to 1536
         try:
             res = supabase.rpc("match_docs", {"query_embedding": q_emb, "match_count": top_k}).execute()
         except Exception as e:
             msg = str(e).lower()
             if "dimensions" in msg or "3072" in msg or "1536" in msg:
-                # fallback: try truncated 1536 if docs are still 1536
                 try:
                     q_emb_1536 = q_emb[:1536]
                     res = supabase.rpc("match_docs", {"query_embedding": q_emb_1536, "match_count": top_k}).execute()
                 except Exception as e2:
                     print(f"match_docs both dims failed: {e2}, using empty docs")
-                    # fallback to direct table fetch without vector
                     try:
                         fallback = supabase.table("docs").select("content").limit(top_k).execute()
                         docs = [{"content": row["content"]} for row in (fallback.data or [])]
                         context = "\n\n".join([d["content"] for d in docs]) or "No docs found."
                         cites = [d["content"][:120] for d in docs]
                         prompt = f"Context:\n{context}\n\nQuestion: {question}\n\nAnswer concisely and cite sources. If no context, say you don't know."
-                        resp = client.models.generate_content(model=MODEL, contents=prompt, config={"temperature": 0.2})
-                        return {"answer": resp.text.strip(), "cites": cites}
+                        from services.llm import call_llm
+                        text = call_llm(prompt, temperature=0.2).strip()
+                        # strip json wrapper if any
+                        return {"answer": text, "cites": cites}
                     except Exception as e3:
                         print(f"fallback docs fetch failed: {e3}")
                         raise e
@@ -83,18 +85,17 @@ def answer(question: str, top_k=5):
         docs = res.data or []
         context = "\n\n".join([d["content"] for d in docs]) or "No docs found."
         cites = [d["content"][:120] for d in docs]
-        # 3. synthesize with citations
         prompt = f"Context:\n{context}\n\nQuestion: {question}\n\nAnswer concisely and cite sources. If no context, say you don't know."
-        resp = client.models.generate_content(model=MODEL, contents=prompt, config={"temperature": 0.2})
-        text = resp.text.strip()
+        from services.llm import call_llm
+        text = call_llm(prompt, temperature=0.2).strip()
         return {"answer": text, "cites": cites}
     except Exception as e:
         print(f"RAG answer failed, fallback: {e}")
-        # ultimate fallback: no RAG, just answer directly
         try:
             prompt = f"Question: {question}\n\nAnswer concisely. If you don't know, say you don't know."
-            resp = client.models.generate_content(model=MODEL, contents=prompt, config={"temperature": 0.2})
-            return {"answer": resp.text.strip(), "cites": []}
+            from services.llm import call_llm
+            text = call_llm(prompt, temperature=0.2).strip()
+            return {"answer": text, "cites": []}
         except Exception as e2:
             return {"answer": f"RAG failed: {e2}", "cites": []}
 

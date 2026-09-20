@@ -1,11 +1,20 @@
 export function PlanetOrb({ pulsing = false, size = 220 }: { pulsing?: boolean; size?: number }) {
   return (
     <div style={{ position: 'relative', width: size, height: size, display: 'grid', placeItems: 'center' }}>
-      {/* nebula glow behind */}
+      {/* premium fluid glow */}
       <div style={{
-        position: 'absolute', inset: -26, borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(139,92,246,0.32) 0%, rgba(99,102,241,0.18) 45%, transparent 72%)',
-        filter: 'blur(18px)',
+        position: 'absolute', inset: -32, borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(139,92,246,0.22) 0%, rgba(124,58,237,0.12) 42%, transparent 70%)',
+        filter: 'blur(24px)',
+        opacity: pulsing ? 0.9 : 0.7,
+        transition: 'opacity 0.6s var(--ease-premium)',
+      }} />
+      {/* outer whisper ring */}
+      <div style={{
+        position: 'absolute', inset: -14, borderRadius: '50%',
+        border: '1px solid rgba(255,255,255,0.04)',
+        boxShadow: '0 0 40px rgba(139,92,246,0.08) inset',
+        pointerEvents: 'none',
       }} />
       <img
         src="/assets/planet-intara.png"
@@ -13,7 +22,6 @@ export function PlanetOrb({ pulsing = false, size = 220 }: { pulsing?: boolean; 
         className={pulsing ? 'planet-orb pulsing' : 'planet-orb'}
         style={{ width: size, height: size }}
         onError={(e) => {
-          // fallback to CSS gradient orb if asset missing
           (e.target as HTMLImageElement).style.display = 'none'
           const fallback = document.getElementById('planet-fallback')
           if (fallback) fallback.style.display = 'grid'
@@ -21,16 +29,15 @@ export function PlanetOrb({ pulsing = false, size = 220 }: { pulsing?: boolean; 
       />
       <div id="planet-fallback" style={{
         display: 'none', width: size, height: size, borderRadius: '50%',
-        background: 'radial-gradient(circle at 30% 30%, #a78bfa 0%, #7c3aed 32%, #1e1b4b 72%, #0a0a12 100%)',
-        boxShadow: '0 0 60px rgba(139,92,246,0.5)',
+        background: 'radial-gradient(circle at 32% 28%, #C4B5FD 0%, #8B5CF6 28%, #4C1D95 62%, #07070B 100%)',
+        boxShadow: '0 0 50px rgba(139,92,246,0.32)',
         placeItems: 'center',
-        fontSize: size * 0.42, filter: 'brightness(1.1)',
+        fontSize: size * 0.42, filter: 'brightness(1.05)',
       }}>◉</div>
-      {/* subtle ring */}
+      {/* inner highlight */}
       <div style={{
-        position: 'absolute', inset: -8, borderRadius: '50%',
-        border: '1px solid rgba(255,255,255,0.08)',
-        boxShadow: '0 0 30px rgba(139,92,246,0.15) inset',
+        position: 'absolute', inset: 0, borderRadius: '50%',
+        background: 'radial-gradient(ellipse 60% 40% at 30% 22%, rgba(255,255,255,0.10) 0%, transparent 60%)',
         pointerEvents: 'none',
       }} />
     </div>

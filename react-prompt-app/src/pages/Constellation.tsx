@@ -36,21 +36,24 @@ export function Constellation() {
 
   const filtered = rows.filter(r => !q || r.prompt.toLowerCase().includes(q.toLowerCase()) || (r.prd?.appName || '').toLowerCase().includes(q.toLowerCase()))
 
-  if (loading) return <div className="glass" style={{ padding: 24, textAlign: 'center', color: 'var(--intara-muted)' }}>Charting constellation…</div>
+  if (loading) return <div className="glass" style={{ padding: 40, textAlign: 'center', color: 'var(--intara-faint)', borderRadius: 20 }}>
+    <div style={{ width: 28, height: 28, border: '2px solid rgba(255,255,255,0.06)', borderTopColor: 'var(--intara-nebula)', borderRadius: '50%', animation: 'spin 0.9s var(--ease-fluid) infinite', margin: '0 auto' }} />
+    <div style={{ marginTop: 12, fontSize: 12.5, fontWeight: 450, letterSpacing: '-0.01em' }}>Charting constellation…</div>
+  </div>
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+    <div style={{ animation: 'fade-in-fluid 0.5s var(--ease-premium) both' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
         <div>
-          <div style={{ fontFamily: 'Space Grotesk', fontSize: 22, fontWeight: 800 }}>My Constellation</div>
-          <div style={{ color: 'var(--intara-muted)', fontSize: 12, marginTop: 4 }}>{filtered.length} wishes • Each wish is a star</div>
+          <div style={{ fontFamily: 'Space Grotesk', fontSize: 26, fontWeight: 400, letterSpacing: '-0.03em', color: 'var(--intara-text)' }}>Constellation</div>
+          <div style={{ color: 'var(--intara-faint)', fontSize: 12.5, fontWeight: 400, marginTop: 6, letterSpacing: '-0.01em' }}><span style={{ color: 'var(--intara-nebula-light)', fontWeight: 600 }}>{filtered.length}</span> wishes · each a star</div>
         </div>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter wishes..." style={{ padding: '9px 12px', borderRadius: 999, border: '1px solid var(--intara-border)', background: 'rgba(255,255,255,0.06)', color: 'var(--intara-text)', fontSize: 12, width: 220 }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter wishes…" style={{ padding: '10px 14px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', color: 'var(--intara-text)', fontSize: 12.5, fontWeight: 400, width: 240, outline: 'none', transition: 'all 0.3s var(--ease-premium)' }} />
       </div>
 
-      {/* Star map SVG */}
-      <div className="glass" style={{ padding: 12, marginBottom: 16, overflow: 'hidden' }}>
-        <div style={{ position: 'relative', height: 280, borderRadius: 12, overflow: 'hidden', background: 'radial-gradient(ellipse 600px 300px at 50% 20%, rgba(139,92,246,0.18), transparent), #0f0f1a', border: '1px solid var(--intara-border)' }}>
+      {/* Star map — premium fluid */}
+      <div className="glass" style={{ padding: 12, marginBottom: 16, overflow: 'hidden', borderRadius: 20 }}>
+        <div style={{ position: 'relative', height: 300, borderRadius: 14, overflow: 'hidden', background: 'radial-gradient(ellipse 700px 360px at 50% 18%, rgba(139,92,246,0.14), transparent 65%), #08080C', border: '1px solid rgba(255,255,255,0.04)' }}>
           <img src="/assets/constellation.png" alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.18, pointerEvents: 'none' }} onError={(e) => (e.currentTarget.style.display = 'none')} />
           <svg viewBox="0 0 1000 280" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
             {/* constellation lines */}
@@ -78,24 +81,24 @@ export function Constellation() {
         </div>
       </div>
 
-      {/* List */}
-      <div className="glass" style={{ overflow: 'hidden' }}>
-        <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--intara-border)', fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--intara-muted)' }}>Wishes • {filtered.length}</div>
+      {/* List — premium minimal */}
+      <div className="glass" style={{ overflow: 'hidden', borderRadius: 16 }}>
+        <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)' }}>Wishes · {filtered.length}</div>
         <div style={{ maxHeight: 420, overflow: 'auto' }}>
           {filtered.map((r) => (
-            <Link key={r.id} to={`/wish/${r.id}`} style={{ display: 'block', padding: 14, borderBottom: '1px solid rgba(255,255,255,0.06)', textDecoration: 'none' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--intara-text)' }}>{r.prd?.appName || 'Wish'}</div>
-              <div style={{ fontSize: 12, color: 'var(--intara-muted)', marginTop: 4 }}>{r.prompt}</div>
-              <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <Link key={r.id} to={`/wish/${r.id}`} style={{ display: 'block', padding: 16, borderBottom: '1px solid rgba(255,255,255,0.03)', textDecoration: 'none', transition: 'background 0.3s var(--ease-premium)' }}>
+              <div style={{ fontSize: 13.5, fontWeight: 550, letterSpacing: '-0.02em', color: 'var(--intara-text)' }}>{r.prd?.appName || 'Wish'}</div>
+              <div style={{ fontSize: 12, fontWeight: 400, color: 'var(--intara-faint)', marginTop: 4, lineHeight: 1.5 }}>{r.prompt}</div>
+              <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {(r.prd?.tables || []).map((t: any) => (
-                  <span key={t.name} style={{ fontSize: 11, border: '1px solid var(--intara-border)', padding: '3px 7px', borderRadius: 999, background: 'rgba(255,255,255,0.04)', color: 'var(--intara-muted)' }}>
-                    <b style={{ color: 'var(--intara-text)' }}>{t.name}</b> — {(t.fields || []).map((f: any) => `${f.name}:${f.type}`).join(', ')}
+                  <span key={t.name} style={{ fontSize: 10.5, fontWeight: 450, border: '1px solid rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: 999, background: 'rgba(255,255,255,0.02)', color: 'var(--intara-faint)' }}>
+                    <span style={{ color: 'var(--intara-muted)', fontWeight: 600 }}>{t.name}</span> · {(t.fields || []).map((f: any) => `${f.name}`).join(' · ')}
                   </span>
                 ))}
               </div>
             </Link>
           ))}
-          {!filtered.length && <div style={{ padding: 24, textAlign: 'center', color: 'var(--intara-faint)', fontSize: 13 }}>No matches. Try another query.</div>}
+          {!filtered.length && <div style={{ padding: 28, textAlign: 'center', color: 'var(--intara-dim)', fontSize: 12.5, fontWeight: 400 }}>No matches — try another filter.</div>}
         </div>
       </div>
     </div>

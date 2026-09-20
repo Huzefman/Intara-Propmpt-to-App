@@ -27,17 +27,17 @@ export function ArtifactVault({ wish }: { wish: any }) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
-        <div className="vault-tabs">
+        <div className="vault-tabs" role="tablist" aria-label="Artifact vault">
           {tabs.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)} className={`vault-tab ${tab === t.id ? 'active' : ''}`}>
-              <img src={t.glyph} alt="" onError={(e) => (e.currentTarget.style.display = 'none')} />
+            <button key={t.id} role="tab" aria-selected={tab === t.id} aria-label={t.label} onClick={() => setTab(t.id)} className={`vault-tab ${tab === t.id ? 'active' : ''}`}>
+              <img src={t.glyph} alt={t.label + ' icon'} onError={(e) => (e.currentTarget.style.display = 'none')} />
               {t.label}
             </button>
           ))}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn-ghost" onClick={() => navigator.clipboard.writeText(window.location.href)}>Copy link</button>
-          <button className="btn-primary" onClick={onZip}>Download zip ✦</button>
+          <button className="btn-ghost" aria-label="Copy wish link" onClick={() => navigator.clipboard.writeText(window.location.href)}>Copy link</button>
+          <button className="btn-primary" aria-label="Download runnable zip" onClick={onZip}>Download zip ✦</button>
         </div>
       </div>
 
@@ -56,12 +56,12 @@ export function ArtifactVault({ wish }: { wish: any }) {
 
 function Code({ title, content, lang }: { title: string; content: string; lang?: string }) {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--intara-muted)' }}>{title} {lang && <span style={{ fontWeight: 400, textTransform: 'none' }}>• {lang}</span>}</span>
-        <button className="btn-ghost" style={{ padding: '6px 10px', fontSize: 11 }} onClick={() => navigator.clipboard.writeText(content)}>Copy</button>
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)' }}>{title} {lang && <span style={{ fontWeight: 400, textTransform: 'none', opacity: 0.7 }}>· {lang}</span>}</span>
+        <button className="btn-ghost" style={{ padding: '6px 12px', fontSize: 11, fontWeight: 450 }} onClick={() => navigator.clipboard.writeText(content)}>Copy</button>
       </div>
-      <pre className="code-block">{content || '// empty'}</pre>
+      <pre className="code-block" style={{ background: '#08080C', border: '1px solid rgba(255,255,255,0.04)' }}>{content || '// empty'}</pre>
     </div>
   )
 }
@@ -98,7 +98,7 @@ function FrontendTab({ artifacts }: any) {
   const [active, setActive] = useState(0)
   if (!files.length) return <div className="glass" style={{ padding: 20, textAlign: 'center', color: 'var(--intara-muted)' }}>No frontend files — Intara is still weaving.</div>
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 14, alignItems: 'start' }}>
+    <div className="vault-file-grid" style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 14, alignItems: 'start' }}>
       <div className="glass" style={{ padding: 8 }}>
         <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--intara-muted)', padding: '8px 8px 6px' }}>Files • {files.length}</div>
         {files.map((f, i) => (
@@ -121,7 +121,7 @@ function BackendTab({ artifacts }: any) {
   const [active, setActive] = useState(0)
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 14, alignItems: 'start', marginBottom: 16 }}>
+      <div className="vault-file-grid" style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 14, alignItems: 'start', marginBottom: 16 }}>
         <div className="glass" style={{ padding: 8 }}>
           <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--intara-muted)', padding: '8px 8px 6px' }}>Files • {files.length}</div>
           {files.map((f, i) => (

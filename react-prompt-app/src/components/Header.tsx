@@ -10,16 +10,16 @@ export function Header() {
   return (
     <header style={{
       position: 'sticky', top: 0, zIndex: 20,
-      backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-      background: 'rgba(10,10,18,0.65)', borderBottom: '1px solid var(--intara-border)',
+      backdropFilter: 'blur(24px) saturate(1.2)', WebkitBackdropFilter: 'blur(24px) saturate(1.2)',
+      background: 'rgba(7,7,11,0.72)', borderBottom: '1px solid rgba(255,255,255,0.05)',
     }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 18 }}>
-        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-          <img src="/assets/planet-intara.png" alt="" width={28} height={28} style={{ borderRadius: '50%', objectFit: 'cover', boxShadow: '0 0 12px rgba(139,92,246,0.5)' }} onError={(e) => (e.currentTarget.style.display = 'none')} />
-          <span className="text-display" style={{ fontWeight: 800, letterSpacing: '-.03em', color: 'var(--intara-text)', fontSize: 16 }}>INTARA</span>
-          <span style={{ fontSize: 11, color: 'var(--intara-muted)', border: '1px solid var(--intara-border)', padding: '2px 7px', borderRadius: 999 }}>Planet of Wishes</span>
+      <div style={{ maxWidth: 1080, margin: '0 auto', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
+        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
+          <img src="/assets/planet-intara.png" alt="" width={26} height={26} style={{ borderRadius: '50%', objectFit: 'cover', boxShadow: '0 0 16px rgba(139,92,246,0.32)' }} onError={(e) => (e.currentTarget.style.display = 'none')} />
+          <span className="text-display" style={{ fontWeight: 500, letterSpacing: '-0.03em', color: 'var(--intara-text)', fontSize: 15 }}>INTARA</span>
+          <span style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', border: '1px solid rgba(255,255,255,0.06)', padding: '3px 8px', borderRadius: 999, background: 'rgba(255,255,255,0.02)' }}>Planet of Wishes</span>
         </Link>
-        <nav style={{ display: 'flex', gap: 6, marginLeft: 12 }}>
+        <nav style={{ display: 'flex', gap: 2, marginLeft: 16 }}>
           {[
             { to: '/', label: 'Wish' },
             { to: '/constellation', label: 'Constellation' },
@@ -29,21 +29,23 @@ export function Header() {
               key={l.to}
               to={l.to}
               style={{
-                padding: '7px 12px', borderRadius: 999, fontSize: 12, fontWeight: 600, textDecoration: 'none',
-                color: isActive(l.to) ? 'var(--intara-bg)' : 'var(--intara-muted)',
-                background: isActive(l.to) ? 'var(--intara-text)' : 'transparent',
-                border: `1px solid ${isActive(l.to) ? 'var(--intara-text)' : 'transparent'}`,
+                padding: '8px 14px', borderRadius: 999, fontSize: 12.5, fontWeight: isActive(l.to) ? 600 : 450, textDecoration: 'none',
+                letterSpacing: '-0.01em',
+                color: isActive(l.to) ? 'var(--intara-text)' : 'var(--intara-faint)',
+                background: isActive(l.to) ? 'rgba(255,255,255,0.08)' : 'transparent',
+                border: `1px solid ${isActive(l.to) ? 'rgba(255,255,255,0.08)' : 'transparent'}`,
+                transition: 'all 0.35s var(--ease-premium)',
               }}
             >{l.label}</Link>
           ))}
         </nav>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           {isSupabaseDemo ? (
-            <span style={{ fontSize: 11, color: 'var(--intara-faint)', border: '1px solid var(--intara-border)', padding: '5px 9px', borderRadius: 999 }}>Demo • MEM store</span>
+            <span style={{ fontSize: 11, fontWeight: 450, color: 'var(--intara-faint)', border: '1px solid rgba(255,255,255,0.05)', padding: '6px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.02)' }}>Demo · MEM</span>
           ) : user ? (
-            <span style={{ fontSize: 11, color: 'var(--intara-muted)', border: '1px solid var(--intara-border)', padding: '5px 9px', borderRadius: 999 }}>{user.email?.slice(0, 18)}</span>
+            <span style={{ fontSize: 11, color: 'var(--intara-muted)', border: '1px solid rgba(255,255,255,0.06)', padding: '6px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.02)' }}>{user.email?.slice(0, 18)}</span>
           ) : null}
-          <button onClick={() => nav('/')} className="btn-ghost" style={{ fontSize: 12 }}>New wish ✦</button>
+          <button onClick={() => nav('/')} className="btn-ghost" style={{ fontSize: 12.5, padding: '9px 16px', fontWeight: 500 }}>New wish ✦</button>
         </div>
       </div>
     </header>

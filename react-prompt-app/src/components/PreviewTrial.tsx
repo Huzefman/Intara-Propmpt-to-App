@@ -12,27 +12,30 @@ export function PreviewTrial({ artifacts, appName }: { artifacts: any; appName: 
   }, [tables, activeTable])
 
   if (!artifacts.preview) {
-    return <div className="glass" style={{ padding: 20, textAlign: 'center', color: 'var(--intara-muted)' }}>No preview — regenerate wish for trial</div>
+    return <div className="glass" style={{ padding: 20, textAlign: 'center', color: 'var(--intara-muted)', border: '1px dashed var(--intara-border)' }} role="status" aria-live="polite">No preview — regenerate wish for trial. Old wishes from before runnable upgrade lack <code>src/mock/*</code>.</div>
   }
 
   // custom bundler: Sandpack will auto-install from package.json
   return (
-    <div>
-      <div className="glass" style={{ padding: 12, marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: '#8B5CF6' }}>● Trial — Sandpack instant</span>
-        <span style={{ fontSize: 11, color: 'var(--intara-muted)' }}>Runs entirely in your browser • IndexedDB relational • No Supabase needed</span>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--intara-faint)', border: '1px solid var(--intara-border)', padding: '4px 8px', borderRadius: 999 }}>Mock DB: {tables.length} tables • Seed 3 rows each • Try Create</span>
+    <div style={{ animation: 'fade-in-fluid 0.5s var(--ease-premium) both' }}>
+      <div className="glass" style={{ padding: '12px 14px', marginBottom: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', borderRadius: 14 }}>
+        <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-nebula-light)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--intara-nebula)', boxShadow: '0 0 8px rgba(139,92,246,0.5)', display: 'inline-block' }} />
+          Trial — Sandpack instant
+        </span>
+        <span style={{ fontSize: 11.5, fontWeight: 400, color: 'var(--intara-faint)', letterSpacing: '-0.01em' }}>Browser only · IndexedDB · No Supabase</span>
+        <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 450, color: 'var(--intara-faint)', border: '1px solid rgba(255,255,255,0.06)', padding: '5px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.02)' }}>{tables.length} tables · 3 seeds · Try Create</span>
       </div>
 
-      <div style={{ border: '1px solid var(--intara-border)', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.32)' }}>
         <SandpackProvider
           template="react-ts"
           files={files}
           options={{ autorun: true, recompileMode: 'delayed', recompileDelay: 600 }}
           style={{}}
         >
-          <SandpackLayout style={{ border: 'none' }}>
-            <div style={{ flex: 1, minHeight: 380 }}>
+          <SandpackLayout className="sandpack-trial-layout" style={{ border: 'none', flexWrap: 'wrap' }}>
+            <div className="sandpack-trial-preview" style={{ flex: 1, minHeight: 380 }}>
               <SandpackPreview
                 style={{ height: 380, borderRight: '1px solid var(--intara-border)' }}
                 showNavigator={false}
@@ -40,43 +43,45 @@ export function PreviewTrial({ artifacts, appName }: { artifacts: any; appName: 
                 showRefreshButton
               />
             </div>
-            <div style={{ width: 280, background: '#0f0f1a', padding: 12, overflow: 'auto', maxHeight: 380 }}>
-              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--intara-muted)', marginBottom: 8 }}>Tables (IndexedDB)</div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+            <div className="sandpack-trial-sidebar" style={{ width: 300, background: '#0A0A0F', padding: 16, overflow: 'auto', maxHeight: 400 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 10 }}>Tables — IndexedDB</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
                 {tables.map((t: any) => (
                   <button
                     key={t.name}
                     onClick={() => setActiveTable(t.name)}
                     style={{
-                      padding: '5px 9px', borderRadius: 999, fontSize: 11, border: '1px solid var(--intara-border)',
-                      background: activeTable === t.name ? '#8B5CF6' : 'rgba(255,255,255,0.06)',
-                      color: activeTable === t.name ? 'white' : 'var(--intara-muted)', cursor: 'pointer'
+                      padding: '6px 10px', borderRadius: 999, fontSize: 11, fontWeight: activeTable === t.name ? 600 : 450, border: '1px solid ' + (activeTable === t.name ? 'rgba(139,92,246,0.9)' : 'rgba(255,255,255,0.06)'),
+                      background: activeTable === t.name ? 'linear-gradient(180deg, #8B5CF6, #7C3AED)' : 'rgba(255,255,255,0.03)',
+                      color: activeTable === t.name ? 'white' : 'var(--intara-faint)', cursor: 'pointer', transition: 'all 0.3s var(--ease-premium)'
                     }}
                   >{t.name}</button>
                 ))}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--intara-faint)', lineHeight: 1.6 }}>
-                Preview DB is local to your browser. <b>Supabase not required.</b> Create items in the preview, refresh — they persist in IndexedDB. Connect Supabase later: set `VITE_API_MODE=supabase` + `VITE_SUPABASE_URL` and point `VITE_API_URL` to your backend.
+              <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--intara-faint)', lineHeight: 1.65, letterSpacing: '-0.01em' }}>
+                Local to your browser. <span style={{ color: 'var(--intara-muted)', fontWeight: 500 }}>No Supabase needed.</span> Create, refresh — persists in IndexedDB. Connect later via <code style={{ background: 'rgba(255,255,255,0.04)', padding: '1px 5px', borderRadius: 6, fontSize: 10.5 }}>VITE_API_MODE=supabase</code>.
               </div>
-              <div style={{ marginTop: 12, fontSize: 11, color: 'var(--intara-muted)' }}>
-                <div style={{ fontWeight: 700, marginBottom: 4 }}>How trial works</div>
-                <div>• `src/mock/db.ts` Dexie stores per table</div>
-                <div>• `src/mock/seed.ts` 3 rows</div>
-                <div>• `src/mock/server.ts` intercepts `/api/*` → Dexie</div>
+              <div style={{ marginTop: 14, padding: '12px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 12 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 6 }}>How trial works</div>
+                <div style={{ fontSize: 11, color: 'var(--intara-dim)', lineHeight: 1.6, fontFamily: 'JetBrains Mono, monospace' }}>
+                  <div>· src/mock/db.ts</div>
+                  <div>· src/mock/seed.ts</div>
+                  <div>· src/mock/server.ts → /api/*</div>
+                </div>
               </div>
             </div>
           </SandpackLayout>
         </SandpackProvider>
       </div>
 
-      <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, color: 'var(--intara-faint)' }}>Tip: Click Create in preview, then check Network tab — no request leaves browser. Backend `backend/` still runs standalone with SQLite: <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: 6 }}>pip install -r requirements.txt && uvicorn main:app --port 8000</code></span>
+      <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--intara-dim)', letterSpacing: '-0.01em' }}>Tip: Create in preview — Network tab shows no outbound request. Backend <code style={{ background: 'rgba(255,255,255,0.04)', padding: '2px 6px', borderRadius: 6, fontSize: 11, border: '1px solid rgba(255,255,255,0.04)' }}>backend/</code> runs standalone: <code style={{ background: 'rgba(255,255,255,0.04)', padding: '2px 6px', borderRadius: 6, fontSize: 11 }}>pip install -r requirements.txt && uvicorn main:app --port 8000</code></span>
       </div>
 
-      <div className="glass" style={{ marginTop: 12, padding: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--intara-muted)' }}>Connect Supabase</span>
-        <code style={{ fontSize: 11, background: '#0f0f1a', padding: '6px 8px', borderRadius: 8, border: '1px solid var(--intara-border)', color: '#e2e8f0' }}>VITE_API_MODE=supabase VITE_SUPABASE_URL=https://... SUPABASE_URL=... SUPABASE_KEY=...</code>
-        <span style={{ fontSize: 11, color: 'var(--intara-faint)' }}>No regen needed — just env swap</span>
+      <div className="glass" style={{ marginTop: 12, padding: '12px 14px', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', borderRadius: 14 }}>
+        <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)' }}>Connect Supabase</span>
+        <code style={{ fontSize: 11, fontWeight: 400, background: '#0A0A0F', padding: '7px 10px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.05)', color: '#CBD5E1', letterSpacing: '-0.01em' }}>VITE_API_MODE=supabase · VITE_SUPABASE_URL · SUPABASE_KEY</code>
+        <span style={{ fontSize: 11, color: 'var(--intara-dim)' }}>No regen · env swap only</span>
       </div>
     </div>
   )

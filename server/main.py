@@ -61,14 +61,23 @@ def call_gemini(prompt: str):
 @app.post("/generate")
 @app.post("/api/generate")
 def generate(inp: PromptIn):
-    raw = call_gemini(PROMPT.format(prompt=inp.prompt))
+    # OpenRouter-first via call_llm, fallback to Gemini
+    try:
+        from services.llm import call_llm
+        raw = call_llm(PROMPT.format(prompt=inp.prompt))
+    except Exception:
+        raw = call_gemini(PROMPT.format(prompt=inp.prompt))
     try:
         data = parse_json(raw)
         if "tables" not in data:
             raise ValueError("no tables")
     except Exception as e:
-        # repair pass
-        raw2 = call_gemini(f"Fix this to valid JSON with tables: {raw}")
+        # repair pass — OpenRouter first
+        try:
+            from services.llm import call_llm
+            raw2 = call_llm(f"Fix this to valid JSON with tables: {raw}")
+        except Exception:
+            raw2 = call_gemini(f"Fix this to valid JSON with tables: {raw}")
         try:
             data = parse_json(raw2)
         except:
@@ -95,7 +104,12 @@ def rag(inp: RagIn):
 @app.get("/health")
 @app.get("/api/health")
 def health():
-    return {"ok": True, "model": MODEL, "supabase": bool(supabase), "planet": "intara"}
+    try:
+        from services.llm import get_llm_status
+        llm = get_llm_status()
+    except Exception as e:
+        llm = {"error": str(e)[:200]}
+    return {"ok": True, "model": MODEL, "supabase": bool(supabase), "planet": "intara", "llm": llm}
 
 @app.get("/api/wishes/health")
 def wishes_health():

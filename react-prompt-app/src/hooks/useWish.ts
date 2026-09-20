@@ -15,8 +15,11 @@ export function useWish(id: string | undefined) {
       .catch((e) => { if (!cancelled) setErr(e.message) })
       .finally(() => { if (!cancelled) setLoading(false) })
 
-    // poll if weaving
+    // poll if weaving — backoff + timeout to avoid hammering free-tier
+    let attempts = 0
     const iv = setInterval(async () => {
+      attempts += 1
+      if (attempts > 30) { clearInterval(iv); return } // 60s max
       try {
         const w = await getWish(id)
         if (!cancelled) {

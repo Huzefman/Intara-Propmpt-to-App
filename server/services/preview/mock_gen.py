@@ -28,11 +28,20 @@ def generate_mock(prd: dict):
     if not tables:
         tables = [{"name": "items", "fields": [{"name": "title", "type": "text"}]}]
 
-    # Build Dexie schema stores: users: '++id,email,created_at' etc
+    # Build Dexie schema stores: include FKs from entities
+    entities = prd.get("entities", [])
+    fk_for_table = {}
+    for ent in entities:
+        for rel in ent.get("relationships", []):
+            if rel.get("type") == "belongs_to":
+                fk = rel.get("fk", f"{rel['target']}_id")
+                fk_for_table.setdefault(ent["name"], []).append((fk, rel["target"]))
     dexie_stores = {}
     for t in tables:
         fields = [f["name"] for f in t.get("fields", [])]
-        # Dexie needs primary key; we use ++id auto-increment
+        for fk, _ in fk_for_table.get(t["name"], []):
+            if fk not in fields:
+                fields.append(fk)
         dexie_stores[t["name"]] = "++id," + ",".join(fields[:6])
 
     # db.ts
@@ -54,19 +63,32 @@ export class PreviewDB extends Dexie {{
 export const db = new PreviewDB()
 '''
 
-    # seed.ts
+    # seed.ts — FK-aware
     seed_entries = []
     for t in tables:
+        fks = fk_for_table.get(t["name"], [])
         for i in range(1, 4):
             obj_fields = []
             for f in t.get("fields", [])[:4]:
-                val = _seed_value(f, i)
-                if isinstance(val, str):
-                    obj_fields.append(f'"{f["name"]}": "{val}"')
-                elif isinstance(val, bool):
-                    obj_fields.append(f'"{f["name"]}": {str(val).lower()}')
-                else:
+                # Check if this field is an FK
+                is_fk = any(f["name"] == fk for fk, _ in fks)
+                if is_fk:
+                    # Reference seeded user IDs (1,2,3)
+                    val = (i % 3) + 1
                     obj_fields.append(f'"{f["name"]}": {val}')
+                else:
+                    val = _seed_value(f, i)
+                    if isinstance(val, str):
+                        obj_fields.append(f'"{f["name"]}": "{val}"')
+                    elif isinstance(val, bool):
+                        obj_fields.append(f'"{f["name"]}": {str(val).lower()}')
+                    else:
+                        obj_fields.append(f'"{f["name"]}": {val}')
+            # Also add FK fields that may not be in t["fields"] but in relationships (e.g. author_id not in fields but needed)
+            for fk, target in fks:
+                if not any(f["name"] == fk for f in t.get("fields", [])):
+                    # FK not in fields list, add it
+                    obj_fields.append(f'"{fk}": {(i % 3) + 1}')
             seed_entries.append(f"  await db.{t['name']}.put({{{', '.join(obj_fields)}}})")
 
     seed_ts = f'''import {{ db }} from './db'
@@ -98,11 +120,21 @@ export async function seedPreview() {{
             base = path.replace("/:id", "")
             route_cases.append(f'  if (method === "DELETE" && pathname.startsWith("{base}/")) {{ const id = Number(pathname.split("/").pop()); await db.{tbl}.delete(id); return Response.json({{ ok: true }}) }}')
 
-    # Fallback generic CRUD for tables not in OpenAPI
+    # Generic CRUD for all tables (ensures detail/edit/delete work even if not in OpenAPI)
     for t in tables:
-        if not any(t["name"] in c for c in route_cases):
-            route_cases.append(f'  if (pathname === "/api/{t["name"]}" && method === "GET") {{ return Response.json(await db.{t["name"]}.toArray()) }}')
-            route_cases.append(f'  if (pathname === "/api/{t["name"]}" && method === "POST") {{ const b = await req.json().catch(()=>({{}})); const id = await db.{t["name"]}.put(b); return Response.json(await db.{t["name"]}.get(id)) }}')
+        tbl = t["name"]
+        # Use unique markers to avoid duplicate check issues, always add full CRUD
+        has_get = any(f'"/api/{tbl}"' in c and 'method === "GET"' in c for c in route_cases)
+        has_post = any(f'"/api/{tbl}"' in c and 'POST' in c for c in route_cases)
+        has_get_id = any(tbl in c and ':id' in c or f'"/api/{tbl}/"' in c for c in route_cases)
+        if not has_get:
+            route_cases.append(f'  if (pathname === "/api/{tbl}" && method === "GET") {{ return Response.json(await db.{tbl}.toArray()) }}')
+        if not has_post:
+            route_cases.append(f'  if (pathname === "/api/{tbl}" && method === "POST") {{ const b = await req.json().catch(()=>({{}})); const id = await db.{tbl}.put(b); return Response.json(await db.{tbl}.get(id)) }}')
+        # Detail GET /:id, PATCH, DELETE for all tables
+        route_cases.append(f'  if (pathname.startsWith("/api/{tbl}/") && method === "GET") {{ const id = Number(pathname.split("/").pop()); const row = await db.{tbl}.get(id); return row ? Response.json(row) : Response.json({{error:"not found"}}, {{status:404}}) }}')
+        route_cases.append(f'  if (pathname.startsWith("/api/{tbl}/") && method === "PATCH") {{ const id = Number(pathname.split("/").pop()); const b = await req.json().catch(()=>({{}})); await db.{tbl}.update(id, b); return Response.json(await db.{tbl}.get(id)) }}')
+        route_cases.append(f'  if (pathname.startsWith("/api/{tbl}/") && method === "DELETE") {{ const id = Number(pathname.split("/").pop()); await db.{tbl}.delete(id); return Response.json({{ok:true}}) }}')
 
     server_ts = f'''import {{ db }} from './db'
 

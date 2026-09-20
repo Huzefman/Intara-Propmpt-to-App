@@ -12,21 +12,21 @@ export function Archives() {
     finally { setLoading(false) }
   }
   return (
-    <div>
-      <div style={{ fontFamily: 'Space Grotesk', fontSize: 22, fontWeight: 800 }}>Intara Archives</div>
-      <div style={{ color: 'var(--intara-muted)', fontSize: 12, marginTop: 4 }}>RAG over docs • pgvector <code>match_docs</code> • citations • groundedness</div>
-      <div className="glass" style={{ marginTop: 16, padding: 14 }}>
-        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--intara-muted)' }}>Ask Intara archives</div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask docs..." style={{ flex: 1, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--intara-border)', background: 'rgba(255,255,255,0.06)', color: 'var(--intara-text)', fontSize: 13, outline: 'none' }} />
-          <button onClick={onAsk} disabled={loading} className="btn-primary" style={{ padding: '10px 16px' }}>{loading ? '...' : 'Ask'}</button>
+    <div style={{ animation: 'fade-in-fluid 0.5s var(--ease-premium) both' }}>
+      <div style={{ fontFamily: 'Space Grotesk', fontSize: 26, fontWeight: 400, letterSpacing: '-0.03em', color: 'var(--intara-text)' }}>Archives</div>
+      <div style={{ color: 'var(--intara-faint)', fontSize: 12.5, fontWeight: 400, marginTop: 6, letterSpacing: '-0.01em' }}>RAG · pgvector · <code style={{ background: 'rgba(255,255,255,0.04)', padding: '2px 6px', borderRadius: 6, fontSize: 11 }}>match_docs</code> · citations · groundedness</div>
+      <div className="glass" style={{ marginTop: 18, padding: 18, borderRadius: 20 }}>
+        <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)' }}>Ask Intara archives</div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="What stack does Intara use?" style={{ flex: 1, padding: '12px 14px', borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', color: 'var(--intara-text)', fontSize: 13, fontWeight: 400, outline: 'none', transition: 'all 0.3s var(--ease-premium)' }} />
+          <button onClick={onAsk} disabled={loading} className="btn-primary" style={{ padding: '12px 18px', fontSize: 12.5 }}>{loading ? '…' : 'Ask'}</button>
         </div>
-        {ans && <pre className="code-block" style={{ marginTop: 12, background: 'rgba(255,255,255,0.04)', whiteSpace: 'pre-wrap' }}>{ans}</pre>}
+        {ans && <pre className="code-block" style={{ marginTop: 14, background: '#08080C', border: '1px solid rgba(255,255,255,0.04)' }}>{ans}</pre>}
       </div>
-      <div className="glass" style={{ marginTop: 14, padding: 14 }}>
-        <div style={{ fontSize: 12, fontWeight: 700 }}>How RAG works</div>
-        <div style={{ fontSize: 12, color: 'var(--intara-muted)', marginTop: 6, lineHeight: 1.6 }}>
-          Docs chunked 400 chars + 50 overlap → embed <code>gemini-embedding-001</code> (3072d, truncated/padded 1536 legacy) → pgvector <code>docs</code> → RPC <code>match_docs(query_embedding, match_count)</code> cosine via <code>&lt;=&gt;</code> → top 5 → Gemini synthesize with <code>Context + Q + Cite</code>. Cites are first 120 chars of docs.
+      <div className="glass" style={{ marginTop: 14, padding: 16, borderRadius: 16 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)' }}>How RAG works</div>
+        <div style={{ fontSize: 12, fontWeight: 400, color: 'var(--intara-faint)', marginTop: 8, lineHeight: 1.7, letterSpacing: '-0.01em' }}>
+          Docs <span style={{ color: 'var(--intara-muted)' }}>400</span> + overlap <span style={{ color: 'var(--intara-muted)' }}>50</span> → embed <code style={{ background: 'rgba(255,255,255,0.04)', padding: '1px 5px', borderRadius: 6 }}>gemini-embedding-001</code> 3072 → pgvector <code style={{ background: 'rgba(255,255,255,0.04)', padding: '1px 5px', borderRadius: 6 }}>docs</code> → <code style={{ background: 'rgba(255,255,255,0.04)', padding: '1px 5px', borderRadius: 6 }}>match_docs</code> cosine <code>&lt;=&gt;</code> top 5 → Gemini synthesize.
         </div>
       </div>
     </div>

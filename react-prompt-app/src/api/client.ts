@@ -13,13 +13,14 @@ export async function askRag(question: string): Promise<{ answer: string; cites:
   return res.json()
 }
 
-// Intara wishes
+// Intara wishes — staged sequential + one-shot legacy
+export type WishStatus = 'planning' | 'awaiting_approval' | 'approved' | 'building' | 'weaving' | 'ready' | 'failed'
 export type Wish = {
   id: string
   prompt: string
   prd: any
   artifacts: any
-  status: 'weaving' | 'ready' | 'failed'
+  status: WishStatus
   created_at: string
 }
 
@@ -29,6 +30,46 @@ export async function createWish(prompt: string): Promise<Wish> {
     const t = await res.text().catch(() => '')
     throw new Error(`wish failed ${res.status} ${t}`)
   }
+  return res.json()
+}
+
+export async function createPlan(prompt: string): Promise<Wish> {
+  const controller = new AbortController()
+  const t = setTimeout(() => controller.abort(), 35000)
+  try {
+    const res = await fetch('/api/wish/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }), signal: controller.signal })
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '')
+      throw new Error(`plan failed ${res.status} ${txt}`)
+    }
+    return res.json()
+  } finally { clearTimeout(t) }
+}
+
+export async function patchPlan(id: string, prd: any): Promise<Wish> {
+  const res = await fetch(`/api/wish/${id}/plan`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prd }) })
+  if (!res.ok) throw new Error(`patch plan failed ${res.status}`)
+  return res.json()
+}
+
+export async function approvePlan(id: string): Promise<{ok:boolean}> {
+  const res = await fetch(`/api/wish/${id}/approve`, { method: 'POST' })
+  if (!res.ok) throw new Error(`approve failed ${res.status}`)
+  return res.json()
+}
+
+export function streamBuild(id: string, onEvent: (ev:any)=>void): () => void {
+  const es = new EventSource(`/api/wish/${id}/stream`)
+  es.onmessage = (e) => {
+    try { onEvent(JSON.parse(e.data)) } catch { onEvent({event:'message', data:e.data}) }
+  }
+  es.onerror = () => { /* will fallback to polling */ }
+  return () => es.close()
+}
+
+export async function retryStep(id: string, stepId: string): Promise<any> {
+  const res = await fetch(`/api/wish/${id}/retry`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({stepId}) })
+  if (!res.ok) throw new Error(`retry failed ${res.status}`)
   return res.json()
 }
 

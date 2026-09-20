@@ -5,8 +5,9 @@ GET /api/wish/:id
 GET /api/wishes
 POST /api/wish/:id/regenerate
 """
-import os, uuid, time, json
-from fastapi import APIRouter, HTTPException
+import os, uuid, time, json, asyncio
+from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -68,11 +69,217 @@ def make_wish(prompt: str, owner=None):
             print(f"supabase persist failed: {e}")
     return wish
 
+# --- Staged sequential build helpers ---
+class PlanIn(BaseModel):
+    prompt: str
+
+class PatchPlanIn(BaseModel):
+    prd: dict
+
+def make_plan(prompt: str, owner=None):
+    from services.planner_v2 import plan_build
+    # Fail-fast: Supabase is required for staged builds (normalized steps)
+    # Build plan first (may be mock if no Gemini, but still needs DB for persistence)
+    build_plan = plan_build(prompt)
+    # Use DB layer — will raise if Supabase not configured or table missing (no MEM fallback)
+    try:
+        from db.wishes import create_wish_tx
+        wish = create_wish_tx(prompt, build_plan, status="awaiting_approval")
+        # also cache in MEM for fast read-through (but source of truth is DB)
+        MEM[wish["id"]] = wish
+        return wish
+    except Exception as e:
+        # Surface DB error to caller (fail-fast, no silent MEM)
+        print(f"make_plan DB fail-fast: {e}")
+        raise HTTPException(500, f"Supabase required for staged builds: {e}. Run supabase/migrations/002_staged_builds.sql in SQL editor. Status: {e}")
+
+async def _run_staged_build(wid: str):
+    # background task: run orchestrator sequential — DB is source of truth, fail-fast
+    try:
+        from services.orchestrator import run_build_sequential
+        from db.wishes import get_wish_with_steps, set_wish_status
+        # load from DB (fail-fast if not found or DB down)
+        wish = get_wish_with_steps(wid)
+        # update DB status to building (fail-fast)
+        set_wish_status(wid, "building", current_step_id=wish.get("prd",{}).get("buildGraph",[{}])[0].get("id") if wish.get("prd",{}).get("buildGraph") else None)
+        # also update MEM cache
+        MEM[wid] = wish
+        MEM[wid]["status"] = "building"
+        ok = await run_build_sequential(wid, wish["prd"], wish["prompt"])
+        # run_build_sequential now persists final status itself via DB layer; just ensure MEM reflects
+        try:
+            final = get_wish_with_steps(wid)
+            MEM[wid] = final
+        except: pass
+        if not ok:
+            # orchestrator already set failed, ensure MEM
+            try:
+                MEM[wid]["status"] = "failed"
+            except: pass
+    except Exception as e:
+        print(f"staged build failed for {wid}: {e}")
+        try:
+            from db.wishes import set_wish_status
+            set_wish_status(wid, "failed")
+            if wid in MEM:
+                MEM[wid]["status"] = "failed"
+        except: pass
+        # surface via orchestrator emit already
+
+@router.post("/wish/plan")
+def create_plan(body: PlanIn):
+    if not body.prompt or len(body.prompt.strip()) < 4:
+        raise HTTPException(400, "prompt too short")
+    if len(body.prompt) > 500:
+        raise HTTPException(400, "prompt too long (max 500)")
+    try:
+        return make_plan(body.prompt.strip())
+    except HTTPException:
+        raise
+    except Exception as e:
+        msg = str(e)
+        if "429" in msg or "quota" in msg.lower():
+            raise HTTPException(429, f"Gemini quota hit (20/day free). Retry in ~30s or try a smaller prompt. Details: {msg[:300]}")
+        print(f"create_plan error: {e}")
+        raise HTTPException(500, str(e))
+
+@router.patch("/wish/{wid}/plan")
+def patch_plan(wid: str, body: PatchPlanIn):
+    # Fail-fast: must exist in DB
+    try:
+        from db.wishes import get_wish_with_steps, set_wish_status
+        wish = get_wish_with_steps(wid)
+    except Exception as e:
+        raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
+    prd = body.prd
+    if "appName" not in prd or "tables" not in prd:
+        raise HTTPException(400, "prd must have appName and tables")
+    if "buildGraph" not in prd:
+        from services.planner_v2 import mock_build_plan
+        tmp = mock_build_plan(wish["prompt"])
+        prd["buildGraph"] = tmp["buildGraph"]
+        prd["requirements"] = prd.get("requirements", tmp["requirements"])
+        prd["ia"] = prd.get("ia", tmp["ia"])
+    # Update DB: new prd + reset steps to pending, status awaiting_approval
+    try:
+        from db.wishes import set_wish_status, _client
+        # Update wishes row
+        supa = _client()
+        # reset steps: delete old, insert new pending
+        supa.table("wish_steps").delete().eq("wish_id", wid).execute()
+        # insert new steps with prompt from buildGraph
+        steps = []
+        for n in prd.get("buildGraph", []):
+            steps.append({"wish_id": wid, "step_id": n["id"], "kind": n["kind"], "ref": n.get("ref"), "status": "pending", "prompt": n.get("promptHint",""), "depends_on": n.get("dependsOn",[])})
+        if steps:
+            supa.table("wish_steps").insert(steps).execute()
+        supa.table("wishes").update({"prd": prd, "status": "awaiting_approval", "artifacts": {"steps": {n["id"]: {"status":"pending"} for n in prd.get("buildGraph",[])}, "buildGraph": prd.get("buildGraph",[])}, "build_graph": prd.get("buildGraph",[])}).eq("id", wid).execute()
+        # refresh cache
+        MEM[wid] = get_wish_with_steps(wid)
+        return MEM[wid]
+    except Exception as e:
+        raise HTTPException(500, f"patch plan DB failed: {e}")
+
+@router.post("/wish/{wid}/approve")
+async def approve_plan(wid: str, background_tasks: BackgroundTasks):
+    # Fail-fast: load from DB, check status, set to building in DB before background task
+    try:
+        from db.wishes import get_wish_with_steps, set_wish_status
+        wish = get_wish_with_steps(wid)
+        if wish.get("status") not in ("awaiting_approval", "approved", "failed"):
+            raise HTTPException(400, f"cannot approve in status {wish.get('status')}")
+        set_wish_status(wid, "building", current_step_id=wish.get("prd",{}).get("buildGraph",[{}])[0].get("id") if wish.get("prd",{}).get("buildGraph") else None)
+        # update MEM cache
+        MEM[wid] = wish
+        MEM[wid]["status"] = "building"
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"approve DB failed: {e}")
+    background_tasks.add_task(_run_staged_build, wid)
+    return {"ok": True, "status": "building", "wid": wid}
+
+@router.get("/wish/{wid}/stream")
+async def stream_build(wid: str):
+    from services.orchestrator import SSE_QUEUES, BUILD_STATE
+    # DB is source of truth; SSE is live, but snapshot comes from DB
+    async def event_gen():
+        # snapshot from DB (fail-fast: if wish not found, error)
+        try:
+            from db.wishes import get_wish_with_steps
+            wish = get_wish_with_steps(wid)
+            steps = wish.get("artifacts",{}).get("steps",{})
+            # fallback to BUILD_STATE if DB steps empty but in-memory has more
+            if not steps and wid in BUILD_STATE:
+                steps = BUILD_STATE[wid]["steps"]
+            yield f"data: {json.dumps({'event':'snapshot','steps': steps, 'status': wish.get('status')})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'event':'error','error': str(e)})}\n\n"
+            return
+        q: asyncio.Queue = asyncio.Queue()
+        if wid not in SSE_QUEUES:
+            SSE_QUEUES[wid] = []
+        SSE_QUEUES[wid].append(q)
+        try:
+            while True:
+                try:
+                    payload = await asyncio.wait_for(q.get(), timeout=2.0)
+                    yield f"data: {json.dumps(payload)}\n\n"
+                    if payload.get("event") in ("build_done","build_failed"):
+                        break
+                except asyncio.TimeoutError:
+                    # poll DB for status (fail-fast, but don't crash stream)
+                    try:
+                        from db.wishes import get_wish_with_steps
+                        wish = get_wish_with_steps(wid)
+                        if wish.get("status") in ("ready","failed"):
+                            yield f"data: {json.dumps({'event':'heartbeat','status': wish.get('status')})}\n\n"
+                            # check if all steps done in DB
+                            steps = wish.get("artifacts",{}).get("steps",{})
+                            if steps and all(v.get("status") in ("done","failed") for v in steps.values()):
+                                break
+                            if wid in BUILD_STATE and BUILD_STATE[wid]["steps"]:
+                                if all(v["status"] in ("done","failed") for v in BUILD_STATE[wid]["steps"].values()):
+                                    break
+                        else:
+                            yield f": heartbeat\n\n"
+                    except:
+                        yield f": heartbeat\n\n"
+        finally:
+            try: SSE_QUEUES[wid].remove(q)
+            except: pass
+
+    return StreamingResponse(event_gen(), media_type="text/event-stream", headers={"Cache-Control":"no-cache","Connection":"keep-alive"})
+
+@router.post("/wish/{wid}/retry")
+async def retry_step(wid: str, body: dict):
+    step_id = body.get("stepId")
+    if not step_id:
+        raise HTTPException(400, "stepId required")
+    # Fail-fast: must exist in DB
+    try:
+        from db.wishes import get_wish_with_steps, update_step, set_wish_status
+        wish = get_wish_with_steps(wid)
+        steps = wish.get("artifacts",{}).get("steps",{})
+        if step_id not in steps and step_id not in [n["id"] for n in wish.get("prd",{}).get("buildGraph",[])]:
+            raise HTTPException(404, f"step {step_id} not found")
+        # reset step in DB
+        update_step(wid, step_id, status="pending", error=None, attempt=(steps.get(step_id,{}).get("attempt",1)+1 if isinstance(steps.get(step_id),dict) else 1))
+        set_wish_status(wid, "building", current_step_id=step_id)
+        # also update MEM cache
+        if wid in MEM:
+            MEM[wid]["status"] = "building"
+        # trigger rebuild (will resume from pending steps)
+        asyncio.create_task(_run_staged_build(wid))
+        return {"ok": True, "retrying": step_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"retry DB failed: {e}")
+
 @router.post("/wish")
 @router.post("/wishes")
 def create_wish(body: WishIn):
-    # in real, get IP from request; for now per-process
-    # check_rate("demo-ip") # disabled for free demo — uncomment to enforce
     if not body.prompt or len(body.prompt.strip()) < 4:
         raise HTTPException(400, "prompt too short — wish for something, e.g. 'A task tracker with users and tasks'")
     if len(body.prompt) > 500:
@@ -82,53 +289,58 @@ def create_wish(body: WishIn):
     except HTTPException:
         raise
     except Exception as e:
+        msg = str(e)
+        if "429" in msg or "quota" in msg.lower():
+            raise HTTPException(429, f"Gemini quota hit (20/day free). Retry in ~30s. Details: {msg[:300]}")
         print(f"create_wish error: {e}")
         raise HTTPException(500, str(e))
 
 @router.get("/wish/{wid}")
 @router.get("/wishes/{wid}")
 def get_wish(wid: str):
-    # check MEM first (handles wishes table missing case)
-    if wid in MEM:
-        return MEM[wid]
-    supa = get_supabase()
-    if supa:
-        try:
-            res = supa.table("wishes").select("*").eq("id", wid).single().execute()
-            if res.data:
-                d = res.data
-                # cache in MEM
-                MEM[wid] = {"id": d["id"], "prompt": d["prompt"], "prd": d["prd"], "artifacts": d["artifacts"], "status": d.get("status","ready"), "created_at": d.get("created_at")}
+    # DB is source of truth for staged (fail-fast), MEM is cache for one-shot legacy
+    try:
+        from db.wishes import get_wish_with_steps
+        wish = get_wish_with_steps(wid)
+        MEM[wid] = wish  # cache
+        return wish
+    except Exception as e:
+        # Fallback to MEM for legacy one-shot wishes created before migration (no DB row)
+        if wid in MEM:
+            return MEM[wid]
+        # Also try legacy supabase direct for backward compat if DB layer failed due to table missing
+        # but staged should have failed earlier, so surface error for staged
+        msg = str(e).lower()
+        if "not found" in msg or "pgrst" in msg:
+            if wid in MEM:
                 return MEM[wid]
-        except Exception as e:
-            print(f"get wish supabase failed: {e}")
-    raise HTTPException(404, "wish not found")
+        print(f"get_wish DB fail-fast: {e}")
+        raise HTTPException(404 if "not found" in msg else 500, str(e))
 
 @router.get("/wishes")
 def list_wishes():
-    # merge MEM + supabase wishes (supabase may be missing)
-    mem_vals = list(MEM.values())
-    supa = get_supabase()
-    if supa:
-        try:
-            res = supa.table("wishes").select("id,prompt,prd,created_at,status").order("created_at", desc=True).limit(50).execute()
-            data = res.data or []
-            # merge supa + mem, dedupe by id
-            seen = set()
-            merged = []
-            for row in data + [{"id": v["id"], "prompt": v["prompt"], "prd": v["prd"], "created_at": v["created_at"], "status": v["status"]} for v in mem_vals]:
-                if row["id"] not in seen:
-                    seen.add(row["id"])
-                    merged.append(row)
-            merged.sort(key=lambda x: x.get("created_at",""), reverse=True)
-            return merged[:50]
-        except Exception as e:
-            print(f"list wishes supabase failed (fallback to schemas + MEM): {e}")
-            # fallback to schemas + MEM
+    # DB source of truth for staged, MEM cache for one-shot legacy
+    try:
+        from db.wishes import list_wishes_with_steps
+        data = list_wishes_with_steps(limit=50)
+        # merge with MEM for legacy wishes not yet in DB (one-shot created before migration)
+        mem_vals = list(MEM.values())
+        # dedupe
+        seen = set(row["id"] for row in data)
+        for v in mem_vals:
+            if v["id"] not in seen:
+                data.append({"id": v["id"], "prompt": v["prompt"], "prd": v["prd"], "created_at": v["created_at"], "status": v["status"], "build_graph": v.get("prd",{}).get("buildGraph",[])})
+        data.sort(key=lambda x: x.get("created_at",""), reverse=True)
+        return data[:50]
+    except Exception as e:
+        print(f"list_wishes DB fail-fast (fallback to MEM+schemas for backward compat): {e}")
+        # Fallback to MEM+schemas for backward compat when DB not migrated yet (staged will have failed earlier, but list should still work)
+        mem_vals = list(MEM.values())
+        supa = get_supabase()
+        if supa:
             try:
                 r2 = supa.table("schemas").select("id,prompt,tables,created_at").order("created_at", desc=True).limit(20).execute()
                 schemas_rows = [{"id": row["id"], "prompt": row["prompt"], "prd": {"appName": "Legacy", "tables": row["tables"]}, "created_at": row["created_at"], "status":"ready"} for row in (r2.data or [])]
-                # merge with mem
                 seen = set()
                 merged = []
                 for row in schemas_rows + [{"id": v["id"], "prompt": v["prompt"], "prd": v["prd"], "created_at": v["created_at"], "status": v["status"]} for v in mem_vals]:
@@ -136,11 +348,9 @@ def list_wishes():
                         merged.append(row); seen.add(row["id"])
                 merged.sort(key=lambda x: x.get("created_at",""), reverse=True)
                 return merged[:50]
-            except Exception as e2:
-                print(f"schemas fallback failed: {e2}")
-    # MEM only
-    mem_vals.sort(key=lambda x: x["created_at"], reverse=True)
-    return [{"id": v["id"], "prompt": v["prompt"], "prd": v["prd"], "created_at": v["created_at"], "status": v["status"]} for v in mem_vals[:50]]
+            except: pass
+        mem_vals.sort(key=lambda x: x["created_at"], reverse=True)
+        return [{"id": v["id"], "prompt": v["prompt"], "prd": v["prd"], "created_at": v["created_at"], "status": v["status"]} for v in mem_vals[:50]]
 
 @router.post("/wish/{wid}/regenerate")
 def regenerate(wid: str):

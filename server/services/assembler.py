@@ -91,7 +91,6 @@ Intara weaves stardust into code. Make another wish at intara.planet.wish
     openapi = backend.get("openapi", {})
 
     # merge scaffold + mock into frontend/backed artifacts for runnable zip + trial
-    # frontend.files should include scaffold files + mock
     fe_files = frontend["files"]
     for path, content in fe_scaffold.items():
         fe_files.append({"path": path, "content": content})
@@ -101,6 +100,16 @@ Intara weaves stardust into code. Make another wish at intara.planet.wish
     be_files = backend["files"]
     for path, content in be_scaffold.items():
         be_files.append({"path": path, "content": content})
+
+    # Deduplicate by path (last wins)
+    seen = {}
+    for f in fe_files:
+        seen[f["path"]] = f
+    fe_files = list(seen.values())
+    seen = {}
+    for f in be_files:
+        seen[f["path"]] = f
+    be_files = list(seen.values())
 
     artifacts = {
         "schema": schema,
