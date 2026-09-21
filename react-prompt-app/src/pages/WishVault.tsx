@@ -116,7 +116,7 @@ function PlanApprovalView({ wish }: { wish: any }) {
 
       <div className="glass" style={{ padding: 18, marginBottom: 14, borderRadius: 16 }}>
         <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)' }}>Tables & Pages</div>
-        <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="plan-grid" style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--intara-muted)', marginBottom: 6 }}>Tables ({(prd.tables||[]).length})</div>
             {(prd.tables||[]).map((t: any) => (

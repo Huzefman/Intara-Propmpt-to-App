@@ -1,6 +1,28 @@
-export function PlanetOrb({ pulsing = false, size = 220 }: { pulsing?: boolean; size?: number }) {
+import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
+
+export function PlanetOrb({ pulsing = false, size = 220, interactive = false }: { pulsing?: boolean; size?: number; interactive?: boolean }) {
+  const mx = useMotionValue(0.5)
+  const my = useMotionValue(0.5)
+  const rx = useSpring(useTransform(my, [0, 1], [7, -7]), { stiffness: 120, damping: 18 })
+  const ry = useSpring(useTransform(mx, [0, 1], [-7, 7]), { stiffness: 120, damping: 18 })
+
+  function onMove(e: React.MouseEvent<HTMLDivElement>) {
+    if (!interactive) return
+    const r = e.currentTarget.getBoundingClientRect()
+    mx.set((e.clientX - r.left) / r.width)
+    my.set((e.clientY - r.top) / r.height)
+  }
+  function onLeave() {
+    mx.set(0.5)
+    my.set(0.5)
+  }
+
   return (
-    <div style={{ position: 'relative', width: size, height: size, display: 'grid', placeItems: 'center' }}>
+    <motion.div
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+      style={{ position: 'relative', width: size, height: size, display: 'grid', placeItems: 'center', rotateX: interactive ? rx : 0, rotateY: interactive ? ry : 0, transformPerspective: 800 }}
+    >
       {/* premium fluid glow */}
       <div style={{
         position: 'absolute', inset: -32, borderRadius: '50%',
@@ -40,6 +62,6 @@ export function PlanetOrb({ pulsing = false, size = 220 }: { pulsing?: boolean; 
         background: 'radial-gradient(ellipse 60% 40% at 30% 22%, rgba(255,255,255,0.10) 0%, transparent 60%)',
         pointerEvents: 'none',
       }} />
-    </div>
+    </motion.div>
   )
 }

@@ -367,6 +367,7 @@ p { letter-spacing: -0.01em; }
 @media (max-width: 700px) {
   .vault-file-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
   .vault-file-grid > div:first-child { max-height: 180px; overflow: auto; }
+  .plan-grid { grid-template-columns: 1fr !important; }
 }
 
 /* Sandpack trial: fluid */
@@ -398,3 +399,83 @@ p { letter-spacing: -0.01em; }
 .glass:nth-child(1) { animation-delay: 0.02s; }
 .glass:nth-child(2) { animation-delay: 0.06s; }
 .glass:nth-child(3) { animation-delay: 0.10s; }
+
+/* ———————————————————— Interactive showcase ———————————————————— */
+
+/* Starfield slow drift */
+.intara-shell::before {
+  animation: starfield-drift 90s linear infinite;
+}
+@keyframes starfield-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-1.5%, 1%, 0) scale(1.03); }
+  to { transform: translate3d(0, 0, 0) scale(1); }
+}
+
+/* Constellation star twinkle */
+.star-twinkle {
+  animation: star-twinkle 3s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.star-twinkle:hover circle:nth-of-type(2) {
+  fill: #A78BFA;
+  filter: drop-shadow(0 0 6px rgba(139,92,246,0.8));
+}
+@keyframes star-twinkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/* Scroll reveal (driven by useReveal hook) */
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  filter: blur(4px);
+  transition: opacity 0.7s var(--ease-premium), transform 0.7s var(--ease-premium), filter 0.7s var(--ease-premium);
+}
+.reveal.revealed {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+
+/* Sandpack loading shimmer */
+.sandpack-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.sandpack-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(139,92,246,0.10) 50%, transparent 70%);
+  animation: shimmer-slide 1.6s var(--ease-gentle) infinite;
+}
+@keyframes shimmer-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+/* Global spin (shared loader) */
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Reduced motion — respect sensitive users */
+@media (prefers-reduced-motion: reduce) {
+  .planet-orb, .planet-orb.pulsing,
+  .intara-shell::before,
+  .star-twinkle,
+  .sandpack-shimmer::after,
+  .glass, .vault-tabs, .btn-primary, .btn-ghost {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+  .reveal { opacity: 1; transform: none; filter: none; transition: none; }
+  html { scroll-behavior: auto; }
+}
+
+/* Mobile interactivity fixes */
+@media (max-width: 700px) {
+  .sandpack-trial-preview { min-height: 300px !important; }
+  .sandpack-trial-sidebar { max-height: none !important; }
+}

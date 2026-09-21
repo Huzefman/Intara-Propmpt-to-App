@@ -39,6 +39,7 @@ export function Constellation() {
   if (loading) return <div className="glass" style={{ padding: 40, textAlign: 'center', color: 'var(--intara-faint)', borderRadius: 20 }}>
     <div style={{ width: 28, height: 28, border: '2px solid rgba(255,255,255,0.06)', borderTopColor: 'var(--intara-nebula)', borderRadius: '50%', animation: 'spin 0.9s var(--ease-fluid) infinite', margin: '0 auto' }} />
     <div style={{ marginTop: 12, fontSize: 12.5, fontWeight: 450, letterSpacing: '-0.01em' }}>Charting constellation…</div>
+    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
   </div>
 
   return (
@@ -68,12 +69,16 @@ export function Constellation() {
               const x = (hashString(r.id) % 900) + 50
               const y = (hashString(r.id + 'y') % 180) + 50
               const size = 4 + (hashString(r.prd?.appName || r.prompt) % 5)
+              const twinkle = 2.4 + ((hashString(r.id + 't') % 20) / 10)
               return (
-                <g key={r.id}>
-                  <circle cx={x} cy={y} r={size + 6} fill="rgba(139,92,246,0.12)" />
-                  <circle cx={x} cy={y} r={size} fill="#f8fafc" stroke="rgba(139,92,246,0.7)" strokeWidth={1.5} />
-                  <text x={x} y={y - size - 10} textAnchor="middle" fill="rgba(255,255,255,0.75)" fontSize={9} fontFamily="Space Grotesk, sans-serif">{(r.prd?.appName || r.prompt.slice(0, 18)).slice(0, 18)}</text>
-                </g>
+                <Link key={r.id} to={`/wish/${r.id}`} style={{ textDecoration: 'none' }}>
+                  <g className="star-twinkle" style={{ animationDelay: `${(hashString(r.id) % 24) / 10}s`, animationDuration: `${twinkle}s`, cursor: 'pointer' } as React.CSSProperties}>
+                    <title>{r.prd?.appName || 'Wish'} — {r.prompt.slice(0, 80)}</title>
+                    <circle cx={x} cy={y} r={size + 6} fill="rgba(139,92,246,0.12)" />
+                    <circle cx={x} cy={y} r={size} fill="#f8fafc" stroke="rgba(139,92,246,0.7)" strokeWidth={1.5} />
+                    <text x={x} y={y - size - 10} textAnchor="middle" fill="rgba(255,255,255,0.75)" fontSize={9} fontFamily="Space Grotesk, sans-serif">{(r.prd?.appName || r.prompt.slice(0, 18)).slice(0, 18)}</text>
+                  </g>
+                </Link>
               )
             })}
           </svg>

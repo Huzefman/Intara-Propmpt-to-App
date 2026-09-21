@@ -1,5 +1,6 @@
 import { useState, lazy, Suspense } from 'react'
-import { buildWishZip, downloadBlob } from '../lib/zip'
+import { AnimatePresence, motion } from 'framer-motion'
+import type { Artifacts } from '../lib/zip'
 const PreviewTrial = lazy(() => import('./PreviewTrial').then(m => ({ default: m.PreviewTrial })))
 
 type Tab = 'trial' | 'schema' | 'frontend' | 'backend' | 'scroll'
@@ -12,7 +13,8 @@ export function ArtifactVault({ wish }: { wish: any }) {
 
   async function onZip() {
     if (!artifacts.schema) return
-    const { blob, filename } = await buildWishZip(artifacts, appName)
+    const { buildWishZip, downloadBlob } = await import('../lib/zip')
+    const { blob, filename } = await buildWishZip(artifacts as Artifacts, appName)
     downloadBlob(blob, filename)
   }
 
@@ -41,15 +43,25 @@ export function ArtifactVault({ wish }: { wish: any }) {
         </div>
       </div>
 
-      {tab === 'trial' && (
-        <Suspense fallback={<div className="glass" style={{ padding: 20, textAlign: 'center', color: 'var(--intara-muted)' }}>Loading trial…</div>}>
-          <PreviewTrial artifacts={artifacts} appName={appName} />
-        </Suspense>
-      )}
-      {tab === 'schema' && <SchemaTab artifacts={artifacts} prd={prd} />}
-      {tab === 'frontend' && <FrontendTab artifacts={artifacts} />}
-      {tab === 'backend' && <BackendTab artifacts={artifacts} />}
-      {tab === 'scroll' && <ScrollTab artifacts={artifacts} prd={prd} wish={wish} />}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={tab}
+          initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
+          animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+          exit={{ opacity: 0, y: -8, filter: 'blur(4px)' }}
+          transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+        >
+          {tab === 'trial' && (
+            <Suspense fallback={<div className="glass sandpack-shimmer" style={{ padding: 20, textAlign: 'center', color: 'var(--intara-muted)' }}>Warming up the trial sandbox…</div>}>
+              <PreviewTrial artifacts={artifacts} appName={appName} />
+            </Suspense>
+          )}
+          {tab === 'schema' && <SchemaTab artifacts={artifacts} prd={prd} />}
+          {tab === 'frontend' && <FrontendTab artifacts={artifacts} />}
+          {tab === 'backend' && <BackendTab artifacts={artifacts} />}
+          {tab === 'scroll' && <ScrollTab artifacts={artifacts} prd={prd} wish={wish} />}
+        </motion.div>
+      </AnimatePresence>
     </div>
   )
 }
