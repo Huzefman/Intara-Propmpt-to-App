@@ -368,6 +368,11 @@ p { letter-spacing: -0.01em; }
   .vault-file-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
   .vault-file-grid > div:first-child { max-height: 180px; overflow: auto; }
   .plan-grid { grid-template-columns: 1fr !important; }
+  .pillars-grid { grid-template-columns: 1fr !important; }
+  .steps-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+@media (max-width: 480px) {
+  .steps-grid { grid-template-columns: 1fr !important; }
 }
 
 /* Sandpack trial: fluid */

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useSpring, useTransform } from 'framer-motion'
 import { PlanetOrb } from '../components/PlanetOrb'
 import { WishInput } from '../components/WishInput'
+import { Pillars, HowItWorks } from '../components/RocketSections'
 import { createWish, createPlan, askRag } from '../api/client'
 import { supabase } from '../supabase'
 import { useReveal } from '../hooks/useReveal'
@@ -49,6 +50,10 @@ export function Landing() {
   }, [])
 
   const [staged, setStaged] = useState(true)
+  const wishRef = useRef<HTMLDivElement>(null)
+  function scrollToWish() {
+    wishRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
 
   async function onWeave() {
     if (!prompt.trim()) return
@@ -95,6 +100,10 @@ export function Landing() {
               <><span style={{ color: 'var(--intara-nebula-light)', fontWeight: 600 }}><CountUp value={count} /></span> wishes granted <span style={{ opacity: 0.3, margin: '0 8px' }}>·</span> 3.7 light years away</>
             ) : 'Intara listens from 3.7 light years away'}
           </motion.div>
+          <motion.div variants={heroItem} style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+            <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={scrollToWish} className="btn-primary" style={{ fontSize: 12.5, padding: '11px 20px' }}>Start weaving</motion.button>
+            <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => nav('/constellation')} className="btn-ghost" style={{ fontSize: 12.5 }}>View constellation</motion.button>
+          </motion.div>
         </div>
         <motion.div variants={heroItem} style={{ display: 'grid', placeItems: 'center', padding: 8 }}>
           <PlanetOrb pulsing={loading} size={240} interactive />
@@ -107,8 +116,13 @@ export function Landing() {
         <button onClick={() => setStaged(false)} style={{ padding: '6px 12px', borderRadius: 999, fontSize: 11.5, fontWeight: !staged ? 600 : 450, border: !staged ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(255,255,255,0.06)', background: !staged ? 'rgba(255,255,255,0.06)' : 'transparent', color: !staged ? 'var(--intara-text)' : 'var(--intara-faint)', cursor: 'pointer' }}>One-shot quick</button>
         <span style={{ fontSize: 10.5, color: 'var(--intara-dim)', marginLeft: 6 }}>{staged ? 'Plan approval → sequential per-page build → SSE' : 'Single prompt → artifacts'}</span>
       </div>
-      <WishInput value={prompt} onChange={setPrompt} onSubmit={onWeave} loading={loading} placeholder={staged ? "I wish for a hackathon manager with teams, projects, votes..." : "I wish for a..."} autoFocus />
+      <div ref={wishRef} style={{ scrollMarginTop: 90 }}>
+        <WishInput value={prompt} onChange={setPrompt} onSubmit={onWeave} loading={loading} placeholder={staged ? "I wish for a hackathon manager with teams, projects, votes..." : "I wish for a..."} autoFocus />
+      </div>
       {err && <div style={{ marginTop: 12, fontSize: 12.5, fontWeight: 450, color: '#FCA5A5', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.14)', padding: '12px 14px', borderRadius: 14, backdropFilter: 'blur(12px)' }}>{err}</div>}
+
+      <Pillars />
+      <HowItWorks onStart={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
 
       {/* Lore — scroll reveal */}
       <div ref={loreRef} className="glass reveal" style={{ marginTop: 20, padding: 16, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
