@@ -5,8 +5,8 @@ const PreviewTrial = lazy(() => import('./PreviewTrial').then(m => ({ default: m
 
 type Tab = 'trial' | 'schema' | 'frontend' | 'backend' | 'scroll'
 
-export function ArtifactVault({ wish }: { wish: any }) {
-  const [tab, setTab] = useState<Tab>('trial')
+export function ArtifactVault({ wish, hideTrial = false }: { wish: any; hideTrial?: boolean }) {
+  const [tab, setTab] = useState<Tab>(hideTrial ? 'schema' : 'trial')
   const artifacts = wish.artifacts || {}
   const prd = wish.prd || {}
   const appName = prd.appName || 'Intara Wish'
@@ -19,7 +19,7 @@ export function ArtifactVault({ wish }: { wish: any }) {
   }
 
   const tabs: { id: Tab; label: string; glyph: string }[] = [
-    { id: 'trial', label: 'Trial', glyph: '/assets/glyphs/frontend.png' },
+    ...(hideTrial ? [] : [{ id: 'trial' as Tab, label: 'Trial', glyph: '/assets/glyphs/frontend.png' }]),
     { id: 'schema', label: 'Schemas', glyph: '/assets/glyphs/schema.png' },
     { id: 'frontend', label: 'Frontend', glyph: '/assets/glyphs/frontend.png' },
     { id: 'backend', label: 'Backend', glyph: '/assets/glyphs/backend.png' },

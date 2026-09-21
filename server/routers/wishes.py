@@ -72,22 +72,53 @@ def make_wish(prompt: str, owner=None):
 # --- Staged sequential build helpers ---
 class PlanIn(BaseModel):
     prompt: str
+    answers: dict | None = None
+    skip_clarify: bool = False
 
 class PatchPlanIn(BaseModel):
     prd: dict
 
-def make_plan(prompt: str, owner=None):
+class AnswerIn(BaseModel):
+    answers: dict
+
+def make_plan(prompt: str, owner=None, answers: dict | None = None, skip_clarify: bool = False):
     from services.planner_v2 import plan_build
+    from services.prompt_enhance import clarify_prompt, redraft_prompt, READY_THRESHOLD
     # Fail-fast: Supabase is required for staged builds (normalized steps)
-    # Build plan first (may be mock if no Gemini, but still needs DB for persistence)
-    build_plan = plan_build(prompt)
-    # Use DB layer — will raise if Supabase not configured or table missing (no MEM fallback)
     try:
         from db.wishes import create_wish_tx
+        clarify = None
+        effective = prompt
+        if answers:
+            # User already answered clarifying questions: fold in, then plan
+            effective = redraft_prompt(prompt, answers)
+            clarify = {"answers": answers, "redrafted": effective}
+        elif not skip_clarify:
+            # Clarify-first: one advisory call (never 429s — degrades to templates)
+            clarify = clarify_prompt(prompt)
+            if clarify.get("score", 0) < READY_THRESHOLD:
+                # Persist a clarifying shell (empty buildGraph) so answers can resume it
+                shell = {
+                    "appName": "Draft", "tagline": prompt[:120],
+                    "tables": [], "pages": [], "apis": [], "auth": False,
+                    "requirements": {"functional": [], "nonFunctional": []},
+                    "ia": {"entities": [], "relations": [], "nav": []},
+                    "buildGraph": [],
+                    "clarify": {k: v for k, v in clarify.items() if not k.startswith("_")},
+                    "_meta": {"source": clarify.get("_meta", {}).get("source", "clarify"), "analyzer": False},
+                }
+                wish = create_wish_tx(prompt, shell, status="planning")
+                MEM[wish["id"]] = wish
+                return wish
+        build_plan = plan_build(effective)
+        if clarify:
+            build_plan.setdefault("_meta", {})["clarify"] = clarify if answers else {k: v for k, v in clarify.items() if not k.startswith("_")}
         wish = create_wish_tx(prompt, build_plan, status="awaiting_approval")
         # also cache in MEM for fast read-through (but source of truth is DB)
         MEM[wish["id"]] = wish
         return wish
+    except HTTPException:
+        raise
     except Exception as e:
         # Surface DB error to caller (fail-fast, no silent MEM)
         print(f"make_plan DB fail-fast: {e}")
@@ -133,7 +164,7 @@ def create_plan(body: PlanIn):
     if len(body.prompt) > 500:
         raise HTTPException(400, "prompt too long (max 500)")
     try:
-        return make_plan(body.prompt.strip())
+        return make_plan(body.prompt.strip(), answers=body.answers, skip_clarify=body.skip_clarify)
     except HTTPException:
         raise
     except Exception as e:
@@ -179,6 +210,58 @@ def patch_plan(wid: str, body: PatchPlanIn):
         return MEM[wid]
     except Exception as e:
         raise HTTPException(500, f"patch plan DB failed: {e}")
+
+@router.post("/wish/{wid}/answer")
+def answer_clarify(wid: str, body: AnswerIn):
+    """User answered clarifying questions: redraft the wish, build the plan, move to awaiting_approval."""
+    try:
+        from db.wishes import get_wish_with_steps
+        wish = get_wish_with_steps(wid)
+    except Exception as e:
+        raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
+    if wish.get("status") != "planning":
+        raise HTTPException(400, f"cannot answer in status {wish.get('status')}")
+    try:
+        from services.prompt_enhance import redraft_prompt
+        from services.planner_v2 import plan_build
+        prior = (wish.get("prd") or {}).get("clarify", {})
+        questions = prior.get("questions", [])
+        effective = redraft_prompt(wish["prompt"], body.answers, questions)
+        build_plan = plan_build(effective)
+        build_plan.setdefault("_meta", {})["clarify"] = {
+            "score": prior.get("score"), "questions": questions,
+            "answers": body.answers, "redrafted": effective,
+        }
+        from db.wishes import _client
+        supa = _client()
+        supa.table("wish_steps").delete().eq("wish_id", wid).execute()
+        steps = []
+        for n in build_plan.get("buildGraph", []):
+            steps.append({"wish_id": wid, "step_id": n["id"], "kind": n["kind"], "ref": n.get("ref"), "status": "pending", "prompt": n.get("promptHint", ""), "depends_on": n.get("dependsOn", [])})
+        if steps:
+            supa.table("wish_steps").insert(steps).execute()
+        supa.table("wishes").update({"prd": build_plan, "status": "awaiting_approval", "artifacts": {"steps": {n["id"]: {"status": "pending"} for n in build_plan.get("buildGraph", [])}, "buildGraph": build_plan.get("buildGraph", [])}, "build_graph": build_plan.get("buildGraph", [])}).eq("id", wid).execute()
+        from db.wishes import get_wish_with_steps as _reload
+        MEM[wid] = _reload(wid)
+        return MEM[wid]
+    except HTTPException:
+        raise
+    except Exception as e:
+        msg = str(e)
+        if "429" in msg or "quota" in msg.lower():
+            raise HTTPException(429, f"LLM quota hit — answers saved, retry shortly. Details: {msg[:300]}")
+        raise HTTPException(500, f"answer failed: {e}")
+
+@router.get("/wish/{wid}/suggest")
+def suggest_next_steps(wid: str):
+    """Deterministic next-step suggestions from the AppSpec (no LLM cost)."""
+    try:
+        from db.wishes import get_wish_with_steps
+        wish = get_wish_with_steps(wid)
+    except Exception as e:
+        raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
+    from services.suggest import suggest_next
+    return {"suggestions": suggest_next(wish.get("prd") or {})}
 
 @router.post("/wish/{wid}/approve")
 async def approve_plan(wid: str, background_tasks: BackgroundTasks):

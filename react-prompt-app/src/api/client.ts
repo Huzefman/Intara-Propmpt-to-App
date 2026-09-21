@@ -58,6 +58,24 @@ export async function approvePlan(id: string): Promise<{ok:boolean}> {
   return res.json()
 }
 
+export async function answerClarify(id: string, answers: Record<string,string>): Promise<Wish> {
+  const res = await fetch(`/api/wish/${id}/answer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers }) })
+  if (!res.ok) {
+    const t = await res.text().catch(() => '')
+    throw new Error(`answer failed ${res.status} ${t}`)
+  }
+  return res.json()
+}
+
+export type Suggestion = { label: string; detail: string; prompt_suffix: string }
+
+export async function getSuggest(id: string): Promise<Suggestion[]> {
+  const res = await fetch(`/api/wish/${id}/suggest`)
+  if (!res.ok) throw new Error(`suggest failed ${res.status}`)
+  const data = await res.json()
+  return data.suggestions ?? []
+}
+
 export function streamBuild(id: string, onEvent: (ev:any)=>void): () => void {
   const es = new EventSource(`/api/wish/${id}/stream`)
   es.onmessage = (e) => {
