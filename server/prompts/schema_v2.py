@@ -23,6 +23,18 @@ create index if not exists idx_recipes_author_id on recipes(author_id);
 
     entities_str = "\n".join([f"- {e['name']}: fields {e.get('fields')} relationships {e.get('relationships')} businessRules {e.get('businessRules')}" for e in source])
 
+    # Contract: exact FK columns the rest of the pipeline (mock seeds, backend
+    # models, SQLite DDL) already assumes. Output is REJECTED without them.
+    try:
+        from services.contract import table_fks
+        fk_lines = []
+        for t in tables:
+            for fk in table_fks(t["name"], entities):
+                fk_lines.append(f"- {t['name']}.{fk['col']} uuid references {fk['ref_table']}(id)")
+        fk_block = "\n".join(fk_lines) if fk_lines else "- (no belongs_to relationships)"
+    except Exception:
+        fk_block = "- (unavailable)"
+
     return f"""You are Intara schema weaver — generate SQL + Prisma with FKs, indexes, RLS.
 
 App: {app_spec.get('appName')}
@@ -32,11 +44,14 @@ Entities:
 {example}
 
 Return ONLY JSON: {{"tables": [{{"name": "...", "fields": [...]}}], "prisma": "...full prisma schema...", "sql": "...full migration SQL..."}}
+REQUIRED FK columns (output is rejected if any is missing from BOTH sql and prisma):
+{fk_block}
 Rules:
 - Include FK columns (author_id uuid references users(id)) for belongs_to relationships
 - Add indexes on FKs and frequently filtered fields
 - Generate RLS policies per table (enable RLS, owner can read/write own rows)
 - SQL: CREATE TABLE with proper types (text, integer, timestamp, boolean, uuid), FKs, indexes
 - Prisma: model with @id, @relation, @@index
+- tables[] must include every input table (same names); fields keep input names verbatim
 - No markdown, JSON only
 """

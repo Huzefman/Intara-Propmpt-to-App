@@ -23,30 +23,22 @@ def _seed_value(field, idx):
     return f"val{idx}"
 
 def generate_mock(prd: dict):
-    tables = prd.get("tables", [])
-    apis = prd.get("apis", [])
+    # Canonical contract: string UUID ids everywhere (SQLite TEXT PK agrees).
+    # Dexie stores use string `id` keys — no Number() casts anywhere.
+    from services.contract import build_contract
+    contract = build_contract(prd)
+    tables = contract["tables"]
     if not tables:
-        tables = [{"name": "items", "fields": [{"name": "title", "type": "text"}]}]
+        tables = [{"name": "items", "fields": [{"name": "title", "type": "text"}], "fks": []}]
 
-    # Build Dexie schema stores: include FKs from entities
-    entities = prd.get("entities", [])
-    fk_for_table = {}
-    for ent in entities:
-        for rel in ent.get("relationships", []):
-            if rel.get("type") == "belongs_to":
-                fk = rel.get("fk", f"{rel['target']}_id")
-                fk_for_table.setdefault(ent["name"], []).append((fk, rel["target"]))
     dexie_stores = {}
     for t in tables:
-        fields = [f["name"] for f in t.get("fields", [])]
-        for fk, _ in fk_for_table.get(t["name"], []):
-            if fk not in fields:
-                fields.append(fk)
-        dexie_stores[t["name"]] = "++id," + ",".join(fields[:6])
+        fields = [f["name"] for f in t.get("fields", []) if f["name"] != "id"]
+        dexie_stores[t["name"]] = "id," + ",".join(fields[:7])
 
     # db.ts
     stores_str = ",\n    ".join([f"'{k}': '{v}'" for k, v in dexie_stores.items()])
-    table_props = "\n".join([f"  {t['name']}: Dexie.Table<any, number>" for t in tables])
+    table_props = "\n".join([f"  {t['name']}!: Dexie.Table<any, string>" for t in tables])
 
     db_ts = f'''import Dexie from 'dexie'
 
@@ -63,19 +55,18 @@ export class PreviewDB extends Dexie {{
 export const db = new PreviewDB()
 '''
 
-    # seed.ts — FK-aware
+    # seed.ts — FK-aware, string ids ("<table>-1..3", FKs reference parent ids)
     seed_entries = []
     for t in tables:
-        fks = fk_for_table.get(t["name"], [])
+        fks = t.get("fks", []) or []
         for i in range(1, 4):
-            obj_fields = []
-            for f in t.get("fields", [])[:4]:
-                # Check if this field is an FK
-                is_fk = any(f["name"] == fk for fk, _ in fks)
-                if is_fk:
-                    # Reference seeded user IDs (1,2,3)
-                    val = (i % 3) + 1
-                    obj_fields.append(f'"{f["name"]}": {val}')
+            obj_fields = [f'"id": "{t["name"]}-{i}"']
+            for f in t.get("fields", [])[:7]:
+                if f["name"] == "id":
+                    continue
+                fk_target = next((fk["ref_table"] for fk in fks if fk["col"] == f["name"]), None)
+                if fk_target:
+                    obj_fields.append(f'"{f["name"]}": "{fk_target}-{(i % 3) + 1}"')
                 else:
                     val = _seed_value(f, i)
                     if isinstance(val, str):
@@ -84,11 +75,6 @@ export const db = new PreviewDB()
                         obj_fields.append(f'"{f["name"]}": {str(val).lower()}')
                     else:
                         obj_fields.append(f'"{f["name"]}": {val}')
-            # Also add FK fields that may not be in t["fields"] but in relationships (e.g. author_id not in fields but needed)
-            for fk, target in fks:
-                if not any(f["name"] == fk for f in t.get("fields", [])):
-                    # FK not in fields list, add it
-                    obj_fields.append(f'"{fk}": {(i % 3) + 1}')
             seed_entries.append(f"  await db.{t['name']}.put({{{', '.join(obj_fields)}}})")
 
     seed_ts = f'''import {{ db }} from './db'
@@ -101,40 +87,16 @@ export async function seedPreview() {{
 }}
 '''
 
-    # server.ts — fetch interceptor that mimics OpenAPI
-    # Build route handlers
+    # server.ts — fetch interceptor serving the contract route matrix (string ids)
     route_cases = []
-    for api in apis[:6]:
-        method = api["method"]
-        path = api["path"]
-        # infer table from path e.g. /api/tasks -> tasks
-        tbl = path.replace("/api/", "").split("/")[0].replace(":id", "").strip() or (tables[0]["name"] if tables else "items")
-        if method == "GET" and ":id" not in path:
-            route_cases.append(f'  if (method === "GET" && pathname === "{path}") {{ const rows = await db.{tbl}.toArray(); return Response.json(rows) }}')
-        elif method == "POST":
-            route_cases.append(f'  if (method === "POST" && pathname === "{path}") {{ const body = await req.json().catch(()=>({{}})); const id = await db.{tbl}.put(body); const row = await db.{tbl}.get(id); return Response.json(row) }}')
-        elif method == "PATCH" and ":id" in path:
-            base = path.replace("/:id", "")
-            route_cases.append(f'  if (method === "PATCH" && pathname.startsWith("{base}/")) {{ const id = Number(pathname.split("/").pop()); const body = await req.json().catch(()=>({{}})); await db.{tbl}.update(id, body); const row = await db.{tbl}.get(id); return Response.json(row) }}')
-        elif method == "DELETE" and ":id" in path:
-            base = path.replace("/:id", "")
-            route_cases.append(f'  if (method === "DELETE" && pathname.startsWith("{base}/")) {{ const id = Number(pathname.split("/").pop()); await db.{tbl}.delete(id); return Response.json({{ ok: true }}) }}')
-
-    # Generic CRUD for all tables (ensures detail/edit/delete work even if not in OpenAPI)
     for t in tables:
         tbl = t["name"]
-        # Use unique markers to avoid duplicate check issues, always add full CRUD
-        has_get = any(f'"/api/{tbl}"' in c and 'method === "GET"' in c for c in route_cases)
-        has_post = any(f'"/api/{tbl}"' in c and 'POST' in c for c in route_cases)
-        has_get_id = any(tbl in c and ':id' in c or f'"/api/{tbl}/"' in c for c in route_cases)
-        if not has_get:
-            route_cases.append(f'  if (pathname === "/api/{tbl}" && method === "GET") {{ return Response.json(await db.{tbl}.toArray()) }}')
-        if not has_post:
-            route_cases.append(f'  if (pathname === "/api/{tbl}" && method === "POST") {{ const b = await req.json().catch(()=>({{}})); const id = await db.{tbl}.put(b); return Response.json(await db.{tbl}.get(id)) }}')
-        # Detail GET /:id, PATCH, DELETE for all tables
-        route_cases.append(f'  if (pathname.startsWith("/api/{tbl}/") && method === "GET") {{ const id = Number(pathname.split("/").pop()); const row = await db.{tbl}.get(id); return row ? Response.json(row) : Response.json({{error:"not found"}}, {{status:404}}) }}')
-        route_cases.append(f'  if (pathname.startsWith("/api/{tbl}/") && method === "PATCH") {{ const id = Number(pathname.split("/").pop()); const b = await req.json().catch(()=>({{}})); await db.{tbl}.update(id, b); return Response.json(await db.{tbl}.get(id)) }}')
-        route_cases.append(f'  if (pathname.startsWith("/api/{tbl}/") && method === "DELETE") {{ const id = Number(pathname.split("/").pop()); await db.{tbl}.delete(id); return Response.json({{ok:true}}) }}')
+        route_cases.append(f'  if (pathname === "/api/{tbl}" && method === "GET") {{ return Response.json(await db.{tbl}.toArray()) }}')
+        route_cases.append(f'  if (pathname === "/api/{tbl}" && method === "POST") {{ const b = await req.json().catch(()=>({{}})); if (!b.id) b.id = "{tbl}-" + Math.random().toString(36).slice(2, 10); await db.{tbl}.put(b); return Response.json(await db.{tbl}.get(b.id)) }}')
+        route_cases.append(f'  if (pathname.startsWith("/api/{tbl}/") && method === "GET") {{ const id = String(pathname.split("/").pop()); const row = await db.{tbl}.get(id); return row ? Response.json(row) : Response.json({{error:"not found"}}, {{status:404}}) }}')
+        route_cases.append(f'  if (pathname.startsWith("/api/{tbl}/") && method === "PUT") {{ const id = String(pathname.split("/").pop()); const b = await req.json().catch(()=>({{}})); b.id = id; await db.{tbl}.put(b); return Response.json(await db.{tbl}.get(id)) }}')
+        route_cases.append(f'  if (pathname.startsWith("/api/{tbl}/") && method === "PATCH") {{ const id = String(pathname.split("/").pop()); const b = await req.json().catch(()=>({{}})); await db.{tbl}.update(id, b); return Response.json(await db.{tbl}.get(id)) }}')
+        route_cases.append(f'  if (pathname.startsWith("/api/{tbl}/") && method === "DELETE") {{ const id = String(pathname.split("/").pop()); await db.{tbl}.delete(id); return Response.json({{ok:true}}) }}')
 
     server_ts = f'''import {{ db }} from './db'
 

@@ -6,7 +6,7 @@ GET /api/wishes
 POST /api/wish/:id/regenerate
 """
 import os, uuid, time, json, asyncio
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -31,6 +31,39 @@ def check_rate(ip: str):
         raise HTTPException(429, "Intara is crowded — 10 wishes per day per IP. Try tomorrow or upgrade.")
     lst.append(now)
     RATE[ip] = lst
+
+# chat rate limit: 20 per day per IP in-memory (shares the free LLM pool with builds)
+CHAT_RATE = {}
+
+def check_chat_rate(ip: str):
+    now = time.time()
+    for k, lst in list(CHAT_RATE.items()):
+        CHAT_RATE[k] = [t for t in lst if now - t < 86400]
+    lst = CHAT_RATE.get(ip, [])
+    if len(lst) >= 20:
+        raise HTTPException(429, "Chat stardust spent — 20 chats per day per IP (builds share the same free pool). Back tomorrow.")
+    lst.append(now)
+    CHAT_RATE[ip] = lst
+
+class ChatIn(BaseModel):
+    message: str
+
+def _chat_store(wid: str, role: str, content: str):
+    """Persist one chat turn; fail-open (table missing → session-only)."""
+    try:
+        from db.wishes import _client
+        _client().table("wish_messages").insert({"wish_id": wid, "role": role, "content": content}).execute()
+    except Exception as e:
+        print(f"chat persist skipped: {e}")
+
+def _chat_history(wid: str, limit: int = 20) -> list[dict]:
+    try:
+        from db.wishes import _client
+        res = _client().table("wish_messages").select("role,content,created_at").eq("wish_id", wid).order("created_at").limit(limit).execute()
+        return res.data or []
+    except Exception as e:
+        print(f"chat history skipped: {e}")
+        return []
 
 class WishIn(BaseModel):
     prompt: str
@@ -262,6 +295,131 @@ def suggest_next_steps(wid: str):
         raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
     from services.suggest import suggest_next
     return {"suggestions": suggest_next(wish.get("prd") or {})}
+
+@router.get("/wish/{wid}/chat")
+def get_chat(wid: str):
+    try:
+        from db.wishes import get_wish_with_steps
+        get_wish_with_steps(wid)
+    except Exception as e:
+        # MEM fallback for legacy one-shot wishes (same as get_wish); truly unknown ids still 404
+        if wid not in MEM:
+            raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
+    return {"messages": _chat_history(wid)}
+
+@router.post("/wish/{wid}/chat")
+def post_chat(wid: str, body: ChatIn, request: Request):
+    msg = (body.message or "").strip()
+    if len(msg) < 1:
+        raise HTTPException(400, "message too short")
+    if len(msg) > 1000:
+        raise HTTPException(400, "message too long (max 1000)")
+    ip = request.client.host if request.client else "unknown"
+    check_chat_rate(ip)
+    try:
+        from db.wishes import get_wish_with_steps
+        wish = get_wish_with_steps(wid)
+    except Exception as e:
+        # MEM fallback for legacy one-shot wishes (same as get_wish); truly unknown ids still 404
+        if wid in MEM:
+            wish = MEM[wid]
+        else:
+            raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
+    history = _chat_history(wid)
+    _chat_store(wid, "user", msg)
+    from services.chat import answer_chat
+    try:
+        result = answer_chat(wish, history + [{"role": "user", "content": msg}], msg)
+    except Exception as e:
+        print(f"chat failed: {e}")
+        result = {"reply": "I stumbled reading the stars just now — try asking again in a few seconds.", "actions": []}
+    _chat_store(wid, "agent", result.get("reply", ""))
+    return {"reply": result.get("reply", ""), "actions": result.get("actions", []), "degraded": bool(result.get("degraded"))}
+
+class IterateIn(BaseModel):
+    instruction: str
+    stepId: str | None = None
+
+def _load_wish_for_iterate(wid: str):
+    try:
+        from db.wishes import get_wish_with_steps
+        return get_wish_with_steps(wid)
+    except Exception as e:
+        if wid in MEM:
+            return MEM[wid]
+        raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
+
+@router.post("/wish/{wid}/iterate")
+def preview_iterate(wid: str, body: IterateIn, request: Request):
+    """Diff-first rewrite preview: costs 1 shared-cap unit + 1-4 LLM calls. Persists nothing."""
+    ins = (body.instruction or "").strip()
+    if len(ins) < 1:
+        raise HTTPException(400, "instruction too short")
+    if len(ins) > 500:
+        raise HTTPException(400, "instruction too long (max 500)")
+    ip = request.client.host if request.client else "unknown"
+    check_chat_rate(ip)  # shared 20/day cap with chat
+    wish = _load_wish_for_iterate(wid)
+    from services.iterate import resolve_step, preview_iteration, store_preview, _is_quota_msg
+    try:
+        node = resolve_step(wish, (body.stepId or "").strip() or None, ins)
+    except RuntimeError as e:
+        if _is_quota_msg(str(e)):
+            raise HTTPException(429, str(e))
+        raise HTTPException(500, str(e)[:500])
+    if not node:
+        if body.stepId:
+            raise HTTPException(404, f"step {body.stepId} not found")
+        raise HTTPException(400, "could not map that to a build step — name a page or table (e.g. 'fix the Tasks page')")
+    try:
+        prev = preview_iteration(wish, wid, node, ins)
+    except RuntimeError as e:
+        msg = str(e)
+        if msg.startswith("429"):
+            raise HTTPException(429, msg[3:].strip())
+        raise HTTPException(500, msg[:500])
+    iid = store_preview(wid, prev["step_id"], ins, prev["files"])
+    _chat_store(wid, "user", f"[iterate] {ins}")
+    _chat_store(wid, "agent", f"Previewed change — {prev['summary']}. Accept to apply.")
+    return {"iteration_id": iid, "step_id": prev["step_id"], "files": prev["files"], "summary": prev["summary"]}
+
+@router.post("/wish/{wid}/iterate/{iid}/apply")
+def apply_iterate(wid: str, iid: str):
+    """Accept a preview: snapshot, patch artifacts, bump step. No LLM cost."""
+    from services.iterate import get_iteration, apply_iteration
+    it = get_iteration(iid)
+    if not it or it.get("wish_id") != wid:
+        raise HTTPException(404, "iteration not found")
+    if it.get("status") == "applied":
+        return _load_wish_for_iterate(wid)
+    wish = _load_wish_for_iterate(wid)
+    try:
+        fresh = apply_iteration(wish, wid, it)
+    except RuntimeError as e:
+        raise HTTPException(400, str(e)[:500])
+    except Exception as e:
+        raise HTTPException(500, f"apply failed: {e}")
+    MEM[wid] = fresh
+    _chat_store(wid, "agent", f"Applied change to {it.get('step_id')} — {len(it.get('files_changed') or [])} file(s). Revert available.")
+    return fresh
+
+@router.post("/wish/{wid}/iterate/{iid}/revert")
+def revert_iterate(wid: str, iid: str):
+    """One-click undo of an applied iteration. No LLM cost."""
+    from services.iterate import get_iteration, revert_iteration
+    it = get_iteration(iid)
+    if not it or it.get("wish_id") != wid:
+        raise HTTPException(404, "iteration not found")
+    wish = _load_wish_for_iterate(wid)
+    try:
+        fresh = revert_iteration(wish, wid, it)
+    except RuntimeError as e:
+        raise HTTPException(400, str(e)[:500])
+    except Exception as e:
+        raise HTTPException(500, f"revert failed: {e}")
+    MEM[wid] = fresh
+    _chat_store(wid, "agent", f"Reverted change to {it.get('step_id')}.")
+    return fresh
 
 @router.post("/wish/{wid}/approve")
 async def approve_plan(wid: str, background_tasks: BackgroundTasks):

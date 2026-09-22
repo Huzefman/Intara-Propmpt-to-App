@@ -8,7 +8,7 @@ function Icon({ d }: { d: string }) {
   )
 }
 
-export function StudioRail() {
+export function StudioRail({ collapsed = false, onToggle }: { collapsed?: boolean; onToggle?: () => void }) {
   const loc = useLocation()
   const nav = useNavigate()
   const items = [
@@ -17,15 +17,24 @@ export function StudioRail() {
     { to: '/archives', label: 'Archives', d: 'M4 4h16v5H4zM6 9v11h12V9M10 13h4' },
   ]
   return (
-    <nav className="studio-rail glass" aria-label="Studio navigation">
+    <nav className={`studio-rail glass ${collapsed ? 'collapsed' : ''}`} aria-label="Studio navigation">
       <button className="studio-rail-logo" onClick={() => nav('/')} aria-label="Intara home" title="Intara home">✦</button>
       {items.map((it) => (
         <Link key={it.to} to={it.to} title={it.label} aria-label={it.label} className={`studio-rail-btn ${loc.pathname === it.to ? 'active' : ''}`}>
           <Icon d={it.d} />
+          {!collapsed && <span className="studio-rail-label">{it.label}</span>}
         </Link>
       ))}
       <div style={{ flex: 1 }} />
-      <button className="studio-rail-btn studio-rail-new" onClick={() => nav('/')} title="New wish" aria-label="New wish">+</button>
+      <button className="studio-rail-btn studio-rail-new" onClick={() => nav('/')} title="New wish" aria-label="New wish">
+        <span aria-hidden="true" style={{ fontSize: 18, lineHeight: 1 }}>+</span>
+        {!collapsed && <span className="studio-rail-label">New wish</span>}
+      </button>
+      {onToggle && (
+        <button className="studio-rail-toggle" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed}>
+          {collapsed ? '›' : '‹'}
+        </button>
+      )}
     </nav>
   )
 }

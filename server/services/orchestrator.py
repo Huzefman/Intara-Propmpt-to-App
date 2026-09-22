@@ -221,7 +221,9 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
         try:
             if kind == "schema":
                 step_prompt = f"Generate schema for tables: {json.dumps(build_plan['tables'])}"
-                schema = generate_schema({"tables": build_plan["tables"]})
+                # pass entities so FK columns land in prisma/sql (contract parity with mock)
+                schema = generate_schema({"tables": build_plan["tables"],
+                                          "entities": build_plan.get("entities")})
                 step_output = {"tables": schema["tables"], "prisma": schema["prisma"][:500], "sql": schema["sql"][:500]}
                 BUILD_STATE[wid]["steps"][nid]["status"] = "done"
             elif kind == "backend_table":
@@ -253,16 +255,22 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
             elif kind == "wiring":
                 step_prompt = f"Wiring scaffold + mock for {build_plan.get('appName')} with tables {len(build_plan.get('tables',[]))} pages {len(build_plan.get('pages',[]))}"
                 app_name = build_plan.get("appName","IntaraApp")
+                from services.contract import build_contract, ddl_for
+                _contract = build_contract(build_plan, (schema or {}).get("tables"))
                 fe_scaffold = frontend_scaffold(app_name)
-                be_scaffold = backend_scaffold(app_name, (schema or {"tables": build_plan["tables"]})["tables"])
+                be_scaffold = backend_scaffold(app_name, (schema or {"tables": build_plan["tables"]})["tables"],
+                                               ddl_for(_contract))
                 preview = generate_mock(build_plan)
                 step_output = {"fe_scaffold": list(fe_scaffold.keys())[:5], "be_scaffold": list(be_scaffold.keys())[:5], "preview": list(preview.keys())}
                 BUILD_STATE[wid]["steps"][nid]["status"] = "done"
             elif kind == "validate":
-                step_prompt = "Validate: TSX/Python syntax + frontend↔backend consistency"
-                # Real validation via validator.py (per implementation.md)
+                step_prompt = "Validate: blocking gates (tsc + vite build + import + TestClient CRUD)"
+                # Blocking gates: node→done ONLY on green, else step failed (fail-closed).
+                # Gate trees are regenerated template-only ($0): templates are the guaranteed
+                # fallback, and every systemic TaskNest failure lived in template output.
                 try:
                     from services.validator import validate_tsx, validate_python, validate_imports_consistency
+                    from services.contract import build_contract as _bcv
                     validation_errors = []
                     for frag in frontend_pages.values():
                         for f in frag.get("files", []):
@@ -280,9 +288,61 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                     all_be = [f for frag in backend_tables.values() for f in frag.get("files", [])]
                     cross_errs = validate_imports_consistency(all_fe, all_be)
                     validation_errors.extend(cross_errs)
+                    # --- heavy gates on the deterministic core ---
+                    emit(wid, "validation_started", {"stepId": nid})
+                    _cv = _bcv(build_plan, (schema or {}).get("tables"))
+                    _prev_tpl = os.environ.get("INTARA_TEMPLATE_ONLY")
+                    os.environ["INTARA_TEMPLATE_ONLY"] = "1"
+                    try:
+                        from services.generators.frontend_gen import generate_frontend as _gf
+                        from services.generators.backend_gen import generate_backend as _gb
+                        from services.generators.scaffold_gen import frontend_scaffold as _fsc
+                        from services.preview.mock_gen import generate_mock as _gm
+                        _fe_full = _gf(build_plan)
+                        _be_full = _gb(build_plan)
+                        _mock = _gm(build_plan)
+                    finally:
+                        if _prev_tpl is None:
+                            os.environ.pop("INTARA_TEMPLATE_ONLY", None)
+                        else:
+                            os.environ["INTARA_TEMPLATE_ONLY"] = _prev_tpl
+                    from services.gates import run_fe_gates, run_be_gates, run_contract_checks
+                    _scaf = _fsc(build_plan.get("appName", "IntaraApp"))
+                    _fe_tree = [{"path": p, "content": c} for p, c in _scaf.items()]
+                    _seen = {f["path"] for f in _fe_tree}
+                    for p, c in _mock.items():
+                        if p not in _seen:
+                            _fe_tree.append({"path": p, "content": c}); _seen.add(p)
+                    for f in _fe_full.get("files", []):
+                        if f["path"] not in _seen:
+                            _fe_tree.append(f); _seen.add(f["path"])
+                    _be_tree = [{"path": p, "content": c} for p, c in (be_scaffold or {}).items()]
+                    for f in _be_full.get("files", []):
+                        if f["path"] not in {x["path"] for x in _be_tree}:
+                            _be_tree.append(f)
+                    validation_errors += run_contract_checks(
+                        _cv, _fe_tree, _be_tree, _be_full.get("openapi", {}),
+                        _scaf.get("package.json", ""), _scaf.get("postcss.config.js"))
+                    if not any(e.startswith("DEGRADED") for e in validation_errors):
+                        emit(wid, "validation_gates", {"stepId": nid, "phase": "tsc/vite"})
+                        validation_errors += run_fe_gates(_fe_tree, _scaf)
+                        emit(wid, "validation_gates", {"stepId": nid, "phase": "import/crud"})
+                        validation_errors += run_be_gates(_be_tree, _cv)
+                    # --- one repair attempt per failing file, then re-run that side once ---
+                    from services.gates import repair_gate_files as _rgf
+                    _repaired = _rgf(_cv, validation_errors, _fe_tree, _be_tree)
+                    if _repaired:
+                        _fe_err = [e for e in validation_errors if "src/" in e or "tsc" in e or "vite" in e]
+                        _be_err = [e for e in validation_errors if "server/" in e or "py_compile" in e or "CRUD" in e or "import " in e]
+                        validation_errors = [e for e in validation_errors
+                                             if e not in _fe_err and e not in _be_err]
+                        if _repaired.get("fe"):
+                            validation_errors += run_fe_gates(_fe_tree, _scaf)
+                        if _repaired.get("be"):
+                            validation_errors += run_be_gates(_be_tree, _cv)
                     step_output = {"validated": len(validation_errors) == 0, "errors": validation_errors[:10], "fe_files": sum(len(v.get("files",[])) for v in frontend_pages.values()), "be_tables": len(backend_tables)}
                     if validation_errors:
-                        emit(wid, "validation_warnings", {"errors": validation_errors[:10]})
+                        raise RuntimeError("blocking gates failed: " + "; ".join(validation_errors[:5]))
                     BUILD_STATE[wid]["steps"][nid]["status"] = "done"
                 except Exception as e:
                     # fallback to simple check if validator not available
@@ -299,11 +359,15 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                                 schema = {"tables": build_plan.get("tables", [])}
                         if not fe_scaffold:
                             from services.generators.scaffold_gen import frontend_scaffold, backend_scaffold
+                            from services.contract import build_contract as _bc, ddl_for as _ddl
+                            _c = _bc(build_plan, (schema or {}).get("tables"))
                             fe_scaffold = frontend_scaffold(build_plan.get("appName","IntaraApp"))
-                            be_scaffold = backend_scaffold(build_plan.get("appName","IntaraApp"), (schema or {"tables": build_plan["tables"]})["tables"])
+                            be_scaffold = backend_scaffold(build_plan.get("appName","IntaraApp"), (schema or {"tables": build_plan["tables"]})["tables"], _ddl(_c))
                         if not be_scaffold:
                             from services.generators.scaffold_gen import backend_scaffold
-                            be_scaffold = backend_scaffold(build_plan.get("appName","IntaraApp"), (schema or {"tables": build_plan["tables"]})["tables"])
+                            from services.contract import build_contract as _bc2, ddl_for as _ddl2
+                            _c2 = _bc2(build_plan, (schema or {}).get("tables"))
+                            be_scaffold = backend_scaffold(build_plan.get("appName","IntaraApp"), (schema or {"tables": build_plan["tables"]})["tables"], _ddl2(_c2))
                     step_output = {"validated": True, "fe_files": sum(len(v.get("files",[])) for v in frontend_pages.values()), "be_tables": len(backend_tables)}
                     BUILD_STATE[wid]["steps"][nid]["status"] = "done"
             else:
@@ -334,40 +398,56 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
         update_wish_partial()
         await asyncio.sleep(0.2)
 
-    # Final assembly: merge all fragments into single runnable artifacts
+    # Final assembly: merge all fragments into single runnable artifacts.
+    # Self-healing: accumulators may hold EMPTY content after a resume (skipped steps
+    # restore paths only). Regenerate deterministic inputs fresh and fill any gap
+    # from a fresh full generation — then fail closed if anything is still empty.
     try:
-        # Build final frontend files: scaffold + all page fragments (dedupe types/api)
+        from services.generators.scaffold_gen import frontend_scaffold as _fs2, backend_scaffold as _bs2
+        from services.preview.mock_gen import generate_mock as _gm2
+        from services.contract import build_contract as _bc3, ddl_for as _ddl3
+        app_name = build_plan.get("appName", "IntaraApp")
+        _c3 = _bc3(build_plan, (schema or {}).get("tables"))
+        fe_scaffold = _fs2(app_name)
+        _scaf_tables = (schema or {"tables": build_plan["tables"]})["tables"]
+        be_scaffold = _bs2(app_name, _scaf_tables, _ddl3(_c3))
+        preview = _gm2(build_plan)
+        # pool of non-empty frag contents from this run (LLM pages included)
+        pool: dict[str, str] = {}
+        for frag in list(frontend_pages.values()) + list(backend_tables.values()):
+            for f in frag.get("files", []):
+                if f.get("path") and f.get("content"):
+                    pool.setdefault(f["path"], f["content"])
+        # gap-fill from fresh full generation (same mode as the build itself)
+        from services.generators.frontend_gen import generate_frontend as _gf2
+        _fresh_fe = _gf2(build_plan).get("files", [])
+        for f in _fresh_fe:
+            if f.get("path") and f.get("content"):
+                pool.setdefault(f["path"], f["content"])
+        # Build final frontend files: scaffold + mock + pool (last non-empty wins)
         fe_files = []
-        # scaffold first
-        for path, content in (fe_scaffold or {}).items():
+        for path, content in list(fe_scaffold.items()) + list(preview.items()):
             fe_files.append({"path": path, "content": content})
-        # add mock
-        for path, content in (preview or {}).items():
-            fe_files.append({"path": path, "content": content})
-        # collect unique files from frontend_pages, but deduplicate src/api.ts, src/types.ts, src/App.tsx
-        seen_paths = set(f["path"] for f in fe_files)
-        # we want to merge pages and components, but use the last App.tsx that includes all pages
-        # So collect all page files and components, then generate final App.tsx that includes all pages
-        all_page_files = []
-        all_component_files = {}
+        seen_paths = {f["path"] for f in fe_files}
         for frag in frontend_pages.values():
             for f in frag.get("files", []):
-                if f["path"].startswith("src/pages/") and f["path"] not in seen_paths:
-                    all_page_files.append(f)
-                    seen_paths.add(f["path"])
-                elif f["path"].startswith("src/components/"):
-                    if f["path"] not in all_component_files:
-                        all_component_files[f["path"]] = f
-                elif f["path"] in ("src/api.ts", "src/types.ts"):
-                    # keep first occurrence, already have scaffold's versions? Actually scaffold doesn't have these, so add first
-                    if f["path"] not in seen_paths:
-                        fe_files.append(f)
-                        seen_paths.add(f["path"])
-        # add page files
-        fe_files.extend(all_page_files)
-        for f in all_component_files.values():
-            if f["path"] not in seen_paths:
-                fe_files.append(f)
+                p = f.get("path", "")
+                if p.startswith("src/pages/") and p not in seen_paths and pool.get(p):
+                    fe_files.append({"path": p, "content": pool[p]})
+                    seen_paths.add(p)
+                elif p.startswith("src/components/"):
+                    if p not in seen_paths and pool.get(p):
+                        fe_files.append({"path": p, "content": pool[p]})
+                        seen_paths.add(p)
+                elif p in ("src/api.ts", "src/types.ts"):
+                    if p not in seen_paths and pool.get(p):
+                        fe_files.append({"path": p, "content": pool[p]})
+                        seen_paths.add(p)
+        # any expected page/component/api file still missing → fill from pool
+        for f in _fresh_fe:
+            if f.get("path") not in seen_paths and pool.get(f["path"]):
+                fe_files.append({"path": f["path"], "content": pool[f["path"]]})
+                seen_paths.add(f["path"])
 
         # Re-generate final App.tsx that includes all pages with nav (deterministic, not LLM)
         pages = build_plan.get("pages", [])
@@ -409,23 +489,26 @@ export default function App() {{
             fe_files = [f for f in fe_files if f["path"] != "src/pages/index.ts"]
             fe_files.append({"path": "src/pages/index.ts", "content": "\n".join([f"export {{ default as {p['name']} }} from './{p['name']}'" for p in pages[:6]])})
 
-        # Backend files: merge per-table fragments + scaffold
+        # Backend files: fresh scaffold + full backend regen (single canonical modules).
+        # be_openapi is rebuilt from the regen so resumed (skipped) steps can't leave it partial.
         be_files = []
         for path, content in (be_scaffold or {}).items():
-            be_files.append({"path": path, "content": content})
-        # also need db.py duplicate already in be_scaffold
-        # Merge backend table fragments: each frag has server/models.py fragment, server/main.py fragment, etc
-        # For simplicity, generate final backend via single generate_backend with full tables (deterministic)
+            if content:
+                be_files.append({"path": path, "content": content})
         from services.generators.backend_gen import generate_backend
         final_be = generate_backend(build_plan)
         for f in final_be["files"]:
-            if f["path"] not in [x["path"] for x in be_files]:
+            if f["path"] not in [x["path"] for x in be_files] and f.get("content"):
                 be_files.append(f)
-        # openapi already merged
+        be_openapi = final_be.get("openapi") or be_openapi
         # schema already
         if schema is None:
             from services.generators.schema_gen import generate_schema
             schema = generate_schema(build_plan)
+        # fail closed: never ship empty files (resume shells, truncations)
+        _empty = [f["path"] for f in fe_files + be_files if not (f.get("content") or "").strip()]
+        if _empty:
+            raise RuntimeError(f"assembly refused: empty content in {', '.join(_empty[:6])}")
 
         # README + cites
         app_name = build_plan.get("appName","IntaraApp")
@@ -452,7 +535,7 @@ npm run dev
 ```bash
 cd backend
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+uvicorn server.main:app --reload --port 8000
 ```
 
 ## Tables
@@ -493,19 +576,20 @@ Staged sequential build — one prompt per page/component, wired as single app.
             "buildGraph": graph
         }
 
-        # persist to wish
-        from routers.wishes import MEM
-        if wid in MEM:
-            MEM[wid]["artifacts"] = final_artifacts
-            MEM[wid]["prd"] = build_plan
-            MEM[wid]["status"] = "ready"
-            # also update supabase if possible (best effort)
-            try:
-                from routers.wishes import get_supabase
-                supa = get_supabase()
-                if supa:
-                    supa.table("wishes").update({"prd": build_plan, "artifacts": final_artifacts, "status":"ready"}).eq("id", wid).execute()
-            except: pass
+        # persist to wish — via the DB layer unconditionally (MEM-only persist loses
+        # the build if the worker restarted mid-flight; steps are in DB, artifacts must be too)
+        try:
+            from db.wishes import set_wish_status
+            set_wish_status(wid, "ready", prd=build_plan, artifacts=final_artifacts)
+        except Exception as e:
+            print(f"final persist failed for {wid}: {e}")
+            raise
+        try:
+            from routers.wishes import MEM
+            MEM[wid] = {"id": wid, "prompt": prompt, "prd": build_plan,
+                        "artifacts": final_artifacts, "status": "ready"}
+        except Exception:
+            pass
 
         emit(wid, "build_done", {"wid": wid})
         return True

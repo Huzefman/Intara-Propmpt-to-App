@@ -108,3 +108,67 @@ export async function regenerateWish(id: string): Promise<Wish> {
   if (!res.ok) throw new Error(`regenerate failed ${res.status}`)
   return res.json()
 }
+
+// Wish-scoped custom chat (Q&A + action chips), persisted history, 20/day per IP
+export type ChatMessage = { role: 'user' | 'agent'; content: string; created_at?: string }
+export type ChatAction = { label: string; kind: 'retry' | 'fork' | 'fix'; stepId?: string; suffix?: string }
+
+function apiError(path: string, res: Response, body: string): Error {
+  let msg = body
+  try {
+    const j = JSON.parse(body)
+    if (typeof j?.detail === 'string' && j.detail) msg = j.detail
+  } catch { /* keep raw body */ }
+  return new Error(msg || `${path} failed ${res.status}`)
+}
+
+export async function getChat(id: string): Promise<ChatMessage[]> {
+  const res = await fetch(`/api/wish/${id}/chat`)
+  if (!res.ok) throw apiError('chat history', res, await res.text().catch(() => ''))
+  const data = await res.json()
+  return data.messages ?? []
+}
+
+export async function postChat(id: string, message: string): Promise<{ reply: string; actions: ChatAction[]; degraded?: boolean }> {
+  const res = await fetch(`/api/wish/${id}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  })
+  if (!res.ok) {
+    const err: any = apiError('chat', res, await res.text().catch(() => ''))
+    err.status = res.status
+    throw err
+  }
+  return res.json()
+}
+
+// Chat-driven rewrites (diff-first, one-click revert). Previews share the 20/day chat cap.
+export type IterFile = { path: string; before: string; after: string; area?: string }
+export type IterPreview = { iteration_id: string; step_id: string; files: IterFile[]; summary: string }
+
+export async function previewIterate(id: string, instruction: string, stepId?: string): Promise<IterPreview> {
+  const res = await fetch(`/api/wish/${id}/iterate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ instruction, stepId: stepId ?? null }),
+  })
+  if (!res.ok) {
+    const err: any = apiError('iterate', res, await res.text().catch(() => ''))
+    err.status = res.status
+    throw err
+  }
+  return res.json()
+}
+
+export async function applyIterate(id: string, iterId: string): Promise<Wish> {
+  const res = await fetch(`/api/wish/${id}/iterate/${iterId}/apply`, { method: 'POST' })
+  if (!res.ok) throw apiError('apply', res, await res.text().catch(() => ''))
+  return res.json()
+}
+
+export async function revertIterate(id: string, iterId: string): Promise<Wish> {
+  const res = await fetch(`/api/wish/${id}/iterate/${iterId}/revert`, { method: 'POST' })
+  if (!res.ok) throw apiError('revert', res, await res.text().catch(() => ''))
+  return res.json()
+}

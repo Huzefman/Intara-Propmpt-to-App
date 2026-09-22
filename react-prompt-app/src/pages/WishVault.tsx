@@ -5,9 +5,10 @@ import { AgentThread } from '../components/AgentThread'
 import { StudioPreview } from '../components/StudioPreview'
 import { StudioRail } from '../components/StudioRail'
 import { ArtifactVault } from '../components/ArtifactVault'
+import { ErrorBoundary } from '../components/ErrorBoundary'
 import { streamBuild } from '../api/client'
 import { getWish } from '../api/client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 export function WishVault() {
   const { id } = useParams()
@@ -16,6 +17,50 @@ export function WishVault() {
     if (!id) return
     try { setWish(await getWish(id)) } catch { /* keep current */ }
   }, [id, setWish])
+  // All hooks above every early return (Rules of Hooks)
+  const [railCollapsed, setRailCollapsed] = useState(() => { try { return localStorage.getItem('studio.rail') === '1' } catch { return false } })
+  const [chatCollapsed, setChatCollapsed] = useState(false)
+  const clampW = (w: number) => Math.min(720, Math.max(280, Math.round(w)))
+  const [chatWidth, setChatWidth] = useState(() => { try { const v = parseInt(localStorage.getItem('studio.chatw') || '400', 10); return clampW(Number.isFinite(v) ? v : 400) } catch { return 400 } })
+  const [dragging, setDragging] = useState(false)
+  const dragRef = useRef<{ startX: number; startW: number } | null>(null)
+  const widthRef = useRef(chatWidth)
+  function toggleRail() {
+    setRailCollapsed(v => { try { localStorage.setItem('studio.rail', v ? '0' : '1') } catch {} return !v })
+  }
+  function onDividerDown(e: React.PointerEvent<HTMLDivElement>) {
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+    dragRef.current = { startX: e.clientX, startW: widthRef.current }
+    setDragging(true)
+  }
+  function onDividerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const d = dragRef.current
+    if (!d) return
+    const w = clampW(d.startW + (e.clientX - d.startX))
+    widthRef.current = w
+    setChatWidth(w)
+  }
+  function endDrag() {
+    if (!dragRef.current) return
+    dragRef.current = null
+    setDragging(false)
+    try { localStorage.setItem('studio.chatw', String(widthRef.current)) } catch {}
+  }
+  function onDividerKey(e: React.KeyboardEvent<HTMLDivElement>) {
+    const step = e.shiftKey ? 48 : 16
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault()
+      const w = clampW(widthRef.current + (e.key === 'ArrowRight' ? step : -step))
+      widthRef.current = w
+      setChatWidth(w)
+      try { localStorage.setItem('studio.chatw', String(w)) } catch {}
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      widthRef.current = 400
+      setChatWidth(400)
+      try { localStorage.setItem('studio.chatw', '400') } catch {}
+    }
+  }
 
   if (loading && !wish) return <div className="glass" style={{ padding: 40, textAlign: 'center', borderRadius: 20 }}>
     <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.06)', borderTopColor: 'var(--intara-nebula)', borderRadius: '50%', animation: 'spin 0.9s var(--ease-fluid) infinite', margin: '0 auto' }} />
@@ -51,23 +96,61 @@ export function WishVault() {
             <div style={{ color: 'var(--intara-faint)', fontSize: 12.5, fontWeight: 400, marginTop: 6, maxWidth: 640, lineHeight: 1.6, letterSpacing: '-0.01em' }}>{wish.prompt}</div>
           </div>
         </div>
-        <ArtifactVault wish={wish} />
+        <ErrorBoundary label="artifact vault" key={`vault-${wish.id}`}>
+          <ArtifactVault wish={wish} />
+        </ErrorBoundary>
       </div>
     )
   }
 
-  // Staged Studio: rail + agent thread + live preview
+  // Staged Studio: collapsible rail + chat + preview, edge-to-edge
+  const appName = wish?.prd?.appName && wish.status !== 'planning' ? wish.prd.appName : 'New wish'
   return (
-    <div className="studio-grid">
-      <StudioRail />
-      <div className="studio-thread-col">
-        <div className="studio-thread-head">
-          <strong>{wish.prd?.appName && wish.status !== 'planning' ? wish.prd.appName : 'New wish'}</strong>
-          <span className={`pill status-${wish.status}`}>{wish.status.replace('_', ' ')}</span>
+    <div
+      className={`studio-shell ${railCollapsed ? 'rail-collapsed' : ''} ${chatCollapsed ? 'chat-collapsed' : ''}`}
+      style={chatCollapsed ? undefined : { gridTemplateColumns: `auto ${chatWidth}px 8px minmax(0, 1fr)` }}
+    >
+      <StudioRail collapsed={railCollapsed} onToggle={toggleRail} />
+      {!chatCollapsed ? (
+        <div className="studio-thread-col">
+          <div className="studio-thread-head">
+            <div>
+              <div className="studio-eyebrow">Studio&nbsp;&nbsp;›&nbsp;&nbsp;{wish.status === 'planning' ? 'Clarifying' : wish.status === 'awaiting_approval' ? 'Plan approval' : building ? 'Building' : wish.status.replace('_', ' ')}</div>
+              <strong>{appName} <span className="studio-title-caret" aria-hidden="true">▾</span></strong>
+            </div>
+            <span className={`pill status-${wish.status}`}>{wish.status.replace('_', ' ')}</span>
+            <button className="studio-collapse-btn" onClick={() => setChatCollapsed(true)} title="Collapse chat" aria-label="Collapse chat">‹‹</button>
+          </div>
+          <ErrorBoundary label="agent thread" key={`thread-${wish.id}-${wish.status}`}>
+            <AgentThread wish={wish} onChanged={refresh} buildView={building ? <BuildingView wish={wish} compact /> : undefined} />
+          </ErrorBoundary>
         </div>
-        <AgentThread wish={wish} onChanged={refresh} buildView={building ? <BuildingView wish={wish} compact /> : undefined} />
-      </div>
-      <StudioPreview wish={wish} />
+      ) : (
+        <button className="studio-chat-reopen" onClick={() => setChatCollapsed(false)} aria-label="Reopen chat">
+          <span aria-hidden="true">››</span>
+          <span className="studio-chat-reopen-label">{appName}</span>
+        </button>
+      )}
+      {!chatCollapsed && (
+        <div
+          className={`studio-divider ${dragging ? 'dragging' : ''}`}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize chat and preview (arrow keys work too)"
+          aria-valuenow={chatWidth}
+          aria-valuemin={280}
+          aria-valuemax={720}
+          tabIndex={0}
+          onPointerDown={onDividerDown}
+          onPointerMove={onDividerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onKeyDown={onDividerKey}
+        />
+      )}
+      <ErrorBoundary label="preview pane" key={`preview-${wish.id}-${wish.status}`}>
+        <StudioPreview wish={wish} />
+      </ErrorBoundary>
     </div>
   )
 }
@@ -113,8 +196,8 @@ function BuildingView({ wish, compact = false }: { wish: any; compact?: boolean 
     <div className="build-compact">
       <div style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <strong style={{ fontFamily: 'Space Grotesk', fontWeight: 500 }}>{wish.prd?.appName || 'Building'}</strong>
-          <span style={{ fontSize: 11, padding: '4px 8px', borderRadius: 999, background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.18)', color: 'var(--intara-nebula-light)' }}>building {done}/{total}</span>
+          <strong style={{ fontFamily: 'Space Grotesk', fontWeight: 500 }}>Building {wish.prd?.appName || 'app'}</strong>
+          <span style={{ marginLeft: 'auto', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--intara-faint)' }}>{done} / {total}</span>
         </div>
         {!compact && <div style={{ color: 'var(--intara-faint)', fontSize: 12, marginTop: 4 }}>{wish.prompt}</div>}
         <div style={{ marginTop: 10, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 999, overflow: 'hidden' }}>

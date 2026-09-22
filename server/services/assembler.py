@@ -16,7 +16,9 @@ def assemble(prd: dict, prompt: str = ""):
     # scaffolds make zip runnable
     app_name = prd.get("appName", "IntaraApp")
     fe_scaffold = frontend_scaffold(app_name)
-    be_scaffold = backend_scaffold(app_name, schema["tables"])
+    from services.contract import build_contract, ddl_for
+    be_scaffold = backend_scaffold(app_name, schema["tables"],
+                                   ddl_for(build_contract(prd, schema["tables"])))
     # preview mock (IndexedDB)
     preview = generate_mock(prd)
 

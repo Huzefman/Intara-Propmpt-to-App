@@ -1,5 +1,11 @@
 """
-BackendGen — PRD -> {files, requirements, openapi} with LLM-first + template fallback
+BackendGen — PRD -> {files, requirements, openapi} with LLM-first + template fallback.
+
+Canonical layout (see services/contract.py — single source of truth):
+- ALL routes live inline in server/main.py (no server/routers/ stubs)
+- Full CRUD per table: GET list, GET {id}, POST, PUT, PATCH, DELETE
+- {id} path params (never :id), string UUID ids, real CREATE TABLE in init_db
+- Run from backend/ as: uvicorn server.main:app
 """
 from utils.json_parse import parse_json as _parse_json, is_quota_error
 
@@ -35,13 +41,165 @@ def generate_backend_table_llm(table: dict, app_spec: dict) -> dict | None:
         print(f"LLM backend table {table.get('name')} failed: {e}")
         return None
 
+
+def _template_backend(contract: dict) -> dict:
+    from services.contract import PY_TYPES, ddl_for  # noqa (contract is source of truth)
+    app_name = contract["appName"]
+    tables = contract["tables"]
+
+    # models.py — includes FK columns so SQLite/Dexie/PRD agree
+    models = ["from pydantic import BaseModel", "from typing import Optional", "from datetime import datetime", ""]
+    for t in tables:
+        cname = t["name"].capitalize().replace("_", "")
+        if cname.endswith("s"):
+            cname = cname[:-1]
+        models.append(f"class {cname}(BaseModel):")
+        models.append("    id: Optional[str] = None")
+        for fk in t.get("fks", []):
+            models.append(f"    {fk['col']}: Optional[str] = None")
+        for f in t["fields"]:
+            if f["name"] == "id" or any(f["name"] == fk["col"] for fk in t.get("fks", [])):
+                continue
+            typ = PY_TYPES.get(f["type"], "str")
+            if f["type"] in ("timestamp", "integer") and "created" not in f["name"]:
+                models.append(f"    {f['name']}: Optional[{typ}] = None")
+            else:
+                models.append(f"    {f['name']}: {typ}")
+        models.append("")
+    models.append(f"# App: {app_name}")
+
+    # main.py — full CRUD per table, Supabase-first with SQLite fallthrough
+    main = [
+        f'""" {app_name} — FastAPI — Intara forged """',
+        "import uuid",
+        "from fastapi import FastAPI, HTTPException",
+        "from fastapi.middleware.cors import CORSMiddleware",
+        "from server.db import get_engine, init_db, supabase",
+        "from sqlalchemy import text",
+        "",
+        f'app = FastAPI(title="{app_name}")',
+        'app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])',
+        "init_db()  # ensure SQLite tables exist",
+        "",
+        "def _new_id() -> str:",
+        "    return uuid.uuid4().hex[:12]",
+        "",
+        "def _row_or_404(table: str, rid: str) -> dict:",
+        "    if supabase:",
+        "        try:",
+        '            r = supabase.table(table).select(\"*\").eq(\"id\", rid).single().execute()',
+        "            if r.data: return r.data",
+        "        except Exception: pass",
+        "    try:",
+        "        with get_engine().connect() as conn:",
+        '            r = conn.execute(text(\"select * from \" + table + \" where id = :id\"), {\"id\": rid}).mappings().first()',
+        "            if r: return dict(r)",
+        "    except Exception: pass",
+        '    raise HTTPException(404, f\"{table} {rid} not found\")',
+        "",
+    ]
+    for t in tables:
+        name = t["name"]
+        main.append("")
+        main.append(f"# {name} — full CRUD (Supabase when env set, else SQLite)")
+        main.append(f'@app.get("/api/{name}")')
+        main.append(f"def list_{name}():")
+        main.append("    if supabase:")
+        main.append("        try:")
+        main.append(f'            return supabase.table("{name}").select("*").execute().data or []')
+        main.append("        except Exception as e: print(e)")
+        main.append("    try:")
+        main.append("        with get_engine().connect() as conn:")
+        main.append(f'            rows = conn.execute(text("select * from {name}")).mappings().all()')
+        main.append("            return [dict(r) for r in rows]")
+        main.append("    except Exception as e: raise HTTPException(500, str(e))")
+        main.append(f'@app.post("/api/{name}")')
+        main.append(f"def create_{name}(body: dict):")
+        main.append('    body = dict(body or {})')
+        main.append('    body.setdefault("id", _new_id())')
+        main.append("    if supabase:")
+        main.append("        try:")
+        main.append(f'            return supabase.table("{name}").insert(body).execute().data[0]')
+        main.append("        except Exception as e: print(e)")
+        main.append("    try:")
+        main.append("        with get_engine().begin() as conn:")
+        main.append('            cols = ", ".join(body.keys())')
+        main.append('            vals = ", ".join([f":{k}" for k in body.keys()])')
+        main.append(f'            conn.execute(text(f"insert into {name} ({{cols}}) values ({{vals}})"), body)')
+        main.append("    except HTTPException: raise")
+        main.append("    except Exception as e: raise HTTPException(500, str(e))")
+        # read AFTER commit (SQLite has no dirty reads across connections)
+        main.append(f'    return _row_or_404("{name}", body["id"])')
+        for method, fname in (("get", f"get_{name}_by_id"), ("put", f"put_{name}"),
+                              ("patch", f"patch_{name}"), ("delete", f"delete_{name}")):
+            main.append(f'@app.{method}("/api/{name}/{{id}}")')
+            if method == "get":
+                main.append(f"def {fname}(id: str):")
+                main.append(f'    return _row_or_404("{name}", id)')
+            elif method == "delete":
+                main.append(f"def {fname}(id: str):")
+                main.append(f'    _row_or_404("{name}", id)')
+                main.append("    if supabase:")
+                main.append("        try:")
+                main.append(f'            supabase.table("{name}").delete().eq("id", id).execute()')
+                main.append(f'            return {{"ok": True}}')
+                main.append("        except Exception as e: print(e)")
+                main.append("    try:")
+                main.append("        with get_engine().begin() as conn:")
+                main.append(f'            conn.execute(text("delete from {name} where id = :id"), {{"id": id}})')
+                main.append('        return {"ok": True}')
+                main.append("    except HTTPException: raise")
+                main.append("    except Exception as e: raise HTTPException(500, str(e))")
+            else:
+                main.append(f"def {fname}(id: str, body: dict):")
+                main.append(f'    _row_or_404("{name}", id)')
+                main.append('    body = {k: v for k, v in dict(body or {}).items() if k != "id"}')
+                main.append('    if not body: raise HTTPException(400, "empty update")')
+                main.append("    if supabase:")
+                main.append("        try:")
+                main.append(f'            return supabase.table("{name}").update(body).eq("id", id).execute().data[0]')
+                main.append("        except Exception as e: print(e)")
+                main.append("    try:")
+                main.append("        with get_engine().begin() as conn:")
+                main.append('            sets = ", ".join([f"{k} = :{k}" for k in body.keys()])')
+                main.append(f'            conn.execute(text(f"update {name} set {{sets}} where id = :id"), {{**body, "id": id}})')
+                main.append("    except HTTPException: raise")
+                main.append("    except Exception as e: raise HTTPException(500, str(e))")
+                # read AFTER commit (SQLite has no dirty reads across connections)
+                main.append(f'    return _row_or_404("{name}", id)')
+    main.append("")
+    main.append('@app.get("/health")')
+    main.append(f'def health(): return {{"ok": True, "app": "{app_name}", "db": "supabase" if supabase else "sqlite"}}')
+
+    files = [
+        {"path": "server/__init__.py", "content": ""},
+        {"path": "server/models.py", "content": "\n".join(models)},
+        {"path": "server/main.py", "content": "\n".join(main)},
+    ]
+
+    requirements = "fastapi==0.110.1\nuvicorn==0.29.0\npydantic>=2.9.0\nsupabase==2.31.0\npython-dotenv==1.0.1\nsqlalchemy==2.0.23\nhttpx>=0.27.0\n"
+
+    paths = {}
+    for r in contract["routes"]:
+        method = r["method"]
+        want = "get" if method == "GET_ID" else method.lower()
+        paths.setdefault(r["path"], {})[want] = {"responses": {"200": {"description": "ok"}}}
+    openapi = {"openapi": "3.0.0", "info": {"title": app_name, "version": "1.0.0"}, "paths": paths}
+
+    return {"files": files, "requirements": requirements, "openapi": openapi,
+            "ddl": ddl_for(contract)}
+
+
 def generate_backend(prd: dict):
+    from services.contract import build_contract, check_backend_routes, check_placeholders
     tables = prd.get("tables", [])
     apis = prd.get("apis", [])
     app_name = prd.get("appName", "IntaraApp")
+    contract = build_contract(prd)
 
-    # Try LLM per table if app_spec has entities (from analyzer)
-    if prd.get("entities"):
+    # Try LLM per table if app_spec has entities (skipped under INTARA_TEMPLATE_ONLY)
+    import os as _os
+    if prd.get("entities") and not _os.getenv("INTARA_TEMPLATE_ONLY"):
         llm_files = []
         llm_openapi = {"openapi": "3.0.0", "info": {"title": app_name, "version": "1.0.0"}, "paths": {}}
         success = True
@@ -55,96 +213,30 @@ def generate_backend(prd: dict):
                 success = False
                 break
         if success and llm_files:
-            # LLM succeeded for all tables, return it with scaffold
-            # Add scaffold files that LLM might have missed
-            from services.generators.scaffold_gen import backend_scaffold
-            scaffold = backend_scaffold(app_name, tables)
-            for path, content in scaffold.items():
-                if not any(f["path"] == path for f in llm_files):
-                    llm_files.append({"path": path, "content": content})
-            # Ensure requirements and openapi from LLM + fallback apis
-            requirements = "fastapi==0.110.1\nuvicorn==0.29.0\npydantic>=2.9.0\nsupabase==2.31.0\npython-dotenv==1.0.1\nsqlalchemy==2.0.23\n"
-            # Merge apis into openapi if LLM missed some
-            for api in apis:
-                path = api["path"]
-                method = api["method"].lower()
-                if path not in llm_openapi["paths"]:
-                    llm_openapi["paths"][path] = {}
-                if method not in llm_openapi["paths"][path]:
-                    llm_openapi["paths"][path][method] = {"summary": api.get("desc", ""), "responses": {"200": {"description": "ok"}}}
-            return {"files": llm_files, "requirements": requirements, "openapi": llm_openapi}
+            # Contract-conformance filter: LLM output must serve the route matrix
+            # with no stubs/placeholders, else fall through to the template.
+            probe = [{"path": f.get("path", ""), "content": f.get("content", "")} for f in llm_files]
+            problems = check_backend_routes(probe, contract) + check_placeholders(probe)
+            if not problems:
+                from services.generators.scaffold_gen import backend_scaffold
+                from services.contract import ddl_for
+                scaffold = backend_scaffold(app_name, tables, ddl_for(contract))
+                for path, content in scaffold.items():
+                    if not any(f["path"] == path for f in llm_files):
+                        llm_files.append({"path": path, "content": content})
+                requirements = "fastapi==0.110.1\nuvicorn==0.29.0\npydantic>=2.9.0\nsupabase==2.31.0\npython-dotenv==1.0.1\nsqlalchemy==2.0.23\nhttpx>=0.27.0\n"
+                # openapi follows the contract matrix ({id} canonical), not raw PRD paths
+                from services.contract import canon_path as _canon
+                for r in contract["routes"]:
+                    want = "get" if r["method"] == "GET_ID" else r["method"].lower()
+                    llm_openapi["paths"].setdefault(r["path"], {}).setdefault(
+                        want, {"responses": {"200": {"description": "ok"}}})
+                for api in apis:
+                    path = _canon(api["path"])
+                    method = api["method"].lower()
+                    llm_openapi["paths"].setdefault(path, {}).setdefault(
+                        method, {"summary": api.get("desc", ""), "responses": {"200": {"description": "ok"}}})
+                return {"files": llm_files, "requirements": requirements, "openapi": llm_openapi}
+            print(f"LLM backend failed contract conformance, template fallback: {problems[:4]}")
 
-    files = []
-    # models.py — fallback template (handles up to 5 tables, including uuid FKs)
-    models = ["from pydantic import BaseModel", "from typing import Optional", "from datetime import datetime", ""]
-    for t in tables[:5]:
-        cname = t["name"].capitalize().replace("_","")
-        if cname.endswith("s"): cname = cname[:-1]
-        models.append(f"class {cname}(BaseModel):")
-        models.append(f"    id: Optional[str] = None")
-        for f in t["fields"]:
-            typ = {"text":"str", "integer":"int", "timestamp":"datetime", "boolean":"bool", "uuid":"str"}[f["type"]]
-            if f["type"] == "uuid":
-                models.append(f"    {f['name']}: Optional[str] = None")
-            elif f["type"] in ("timestamp","integer") and "created" not in f["name"]:
-                models.append(f"    {f['name']}: Optional[{typ}] = None")
-            else:
-                models.append(f"    {f['name']}: {typ}")
-        models.append("")
-    models.append(f"# App: {app_name}")
-    files.append({"path": "server/models.py", "content": "\n".join(models)})
-
-    # main.py — SQLite default, Supabase swap via db.py
-    main = [f'""" {app_name} — FastAPI — Intara forged — SQLite default, Supabase swap """', "from fastapi import FastAPI, HTTPException", "from fastapi.middleware.cors import CORSMiddleware", "from pydantic import BaseModel", "import os", "from db import get_engine, init_db, supabase", "from sqlalchemy import text", ""]
-    main.append('app = FastAPI(title="' + app_name + '")')
-    main.append('app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])')
-    main.append('init_db()  # ensure SQLite tables')
-    for t in tables[:5]:
-        main.append("")
-        main.append(f'# {t["name"]} routes — Supabase when env set, else SQLite + in-memory fallback')
-        main.append(f'@app.get("/api/{t["name"]}")')
-        main.append(f'def list_{t["name"]}():')
-        main.append(f'    if supabase:')
-        main.append(f'        try: return supabase.table("{t["name"]}").select("*").execute().data or []')
-        main.append(f'        except Exception as e: print(e)')
-        main.append(f'    try:')
-        main.append(f'        with get_engine().connect() as conn:')
-        main.append(f'            rows = conn.execute(text("select * from {t["name"]}")).mappings().all()')
-        main.append(f'            return [dict(r) for r in rows]')
-        main.append(f'    except: return []')
-        main.append(f'@app.post("/api/{t["name"]}")')
-        main.append(f'def create_{t["name"]}(body: dict):')
-        main.append(f'    if supabase:')
-        main.append(f'        try: return supabase.table("{t["name"]}").insert(body).execute().data[0]')
-        main.append(f'        except Exception as e: print(e)')
-        main.append(f'    try:')
-        main.append(f'        with get_engine().begin() as conn:')
-        main.append(f'            cols = ", ".join(body.keys())')
-        # inner f-string must be escaped — use plain string with single quotes
-        main.append(f'            vals = ", ".join([f":{{k}}" for k in body.keys()])')
-        main.append(f'            conn.execute(text(f"insert into {t["name"]} ({{cols}}) values ({{vals}})"), body)')
-        main.append(f'        return {{"ok": True, **body}}')
-        main.append(f'    except Exception as e: raise HTTPException(500, str(e))')
-    main.append("")
-    main.append('@app.get("/health")')
-    main.append('def health(): return {"ok": True, "app": "' + app_name + '", "db": "supabase" if supabase else "sqlite"}')
-    files.append({"path": "server/main.py", "content": "\n".join(main)})
-
-    # routers per table (up to 5)
-    for t in tables[:5]:
-        cname = t["name"].capitalize().replace("_","")
-        files.append({"path": f"server/routers/{t['name']}.py", "content": f'""" {cname} router """\nfrom fastapi import APIRouter\nrouter = APIRouter(prefix="/api/{t["name"]}")\n\n@router.get("/")\ndef list_{t["name"]}(): return []\n'})
-
-    # requirements — include sqlalchemy for SQLite trial
-    requirements = "fastapi==0.110.1\nuvicorn==0.29.0\npydantic>=2.9.0\nsupabase==2.31.0\npython-dotenv==1.0.1\nsqlalchemy==2.0.23\n"
-
-    # openapi
-    paths = {}
-    for api in apis:
-        path = api["path"]
-        method = api["method"].lower()
-        if path not in paths: paths[path] = {}
-        paths[path][method] = {"summary": api.get("desc",""), "responses": {"200": {"description": "ok"}}}
-    openapi = {"openapi": "3.0.0", "info": {"title": app_name, "version": "1.0.0"}, "paths": paths}
-
-    return {"files": files, "requirements": requirements, "openapi": openapi}
+    return _template_backend(contract)

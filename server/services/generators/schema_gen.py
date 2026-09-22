@@ -92,16 +92,41 @@ def _parse_json(text: str):
     return json.loads(text)
 
 
+def _schema_conforms(data: dict, prd: dict) -> list[str]:
+    """LLM schema output must carry every belongs_to FK column in sql+prisma."""
+    problems = []
+    want_tables = {t["name"].lower() for t in (prd.get("tables") or [])}
+    got_tables = {t.get("name", "").lower() for t in (data.get("tables") or [])}
+    for w in want_tables:
+        if w not in got_tables:
+            problems.append(f"table {w} missing from LLM schema")
+    sql = (data.get("sql") or "").lower()
+    prisma = (data.get("prisma") or "").lower()
+    for ent in prd.get("entities") or []:
+        for rel in ent.get("relationships", []) or []:
+            if rel.get("type") == "belongs_to" and rel.get("target"):
+                fk = (rel.get("fk") or f"{rel['target']}_id").lower()
+                if fk not in sql:
+                    problems.append(f"FK {fk} missing from LLM sql")
+                if fk not in prisma:
+                    problems.append(f"FK {fk} missing from LLM prisma")
+    return problems
+
+
 def generate_schema(prd: dict):
-    # LLM-first if entities present
-    if prd.get("entities"):
+    import os
+    # LLM-first if entities present (skipped under INTARA_TEMPLATE_ONLY for $0 builds/tests)
+    if prd.get("entities") and not os.getenv("INTARA_TEMPLATE_ONLY"):
         try:
             from prompts.schema_v2 import build_schema_prompt
             from services.llm import call_llm
             raw = call_llm(build_schema_prompt(prd), temperature=0.2)
             data = _parse_json(raw)
             if data.get("tables") and data.get("sql") and data.get("prisma"):
-                return data
+                problems = _schema_conforms(data, prd)
+                if not problems:
+                    return data
+                print(f"LLM schema failed contract conformance, template fallback: {problems[:4]}")
         except Exception as e:
             print(f"LLM schema gen failed, template fallback: {e}")
 

@@ -58,7 +58,13 @@ def create_wish_tx(prompt: str, prd: dict, status: str = "awaiting_approval") ->
 
 def get_wish_with_steps(wid: str) -> Dict[str, Any]:
     supa = _client()
-    w = supa.table("wishes").select("*").eq("id", wid).single().execute()
+    try:
+        w = supa.table("wishes").select("*").eq("id", wid).single().execute()
+    except Exception as e:
+        # PostgREST .single() on 0 rows raises PGRST116 — that's "not found", not a 500
+        if "PGRST116" in str(e) or "0 rows" in str(e):
+            raise RuntimeError(f"wish {wid} not found")
+        raise
     if not w.data:
         raise RuntimeError(f"wish {wid} not found")
     wish = w.data

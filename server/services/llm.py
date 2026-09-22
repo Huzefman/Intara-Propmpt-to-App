@@ -1,6 +1,6 @@
 """
-LLM provider — Groq (gsk_*) → Nvidia (nvapi-*) Kimi/vision → OpenRouter (Qwen :free) → Gemini
-All OpenAI-compatible via openai SDK
+LLM provider — OpenRouter (50/day) → Gemini (20/day) → Groq → Nvidia → DeepSeek
+Ordered by available free quota (most first). All OpenAI-compatible via openai SDK
 Embeddings: Gemini (others have no stable free embeddings)
 """
 import os
@@ -37,7 +37,7 @@ def _nvidia_client():
         return None
     try:
         from openai import OpenAI
-        return OpenAI(base_url="https://integrate.api.nvidia.com/v1", api_key=key, timeout=60.0)
+        return OpenAI(base_url="https://integrate.api.nvidia.com/v1", api_key=key, timeout=30.0)
     except Exception as e:
         print(f"nvidia client init failed: {e}")
         return None
@@ -56,7 +56,7 @@ def _call_nvidia(prompt: str, model: str, temperature: float = 0.2, stream: bool
             {"role": "system", "content": "You are a JSON generator. Return ONLY valid JSON, no markdown, no prose."},
             {"role": "user", "content": prompt},
         ]
-    kwargs: dict = {"model": model, "messages": messages, "temperature": temperature, "timeout": 60.0}
+    kwargs: dict = {"model": model, "messages": messages, "temperature": temperature, "timeout": 30.0}
     if is_nemotron:
         # Nemotron uses chat_template_kwargs.enable_thinking and top_p
         kwargs["max_tokens"] = 16384
@@ -113,29 +113,33 @@ def _openrouter_client():
         print(f"openrouter client init failed: {e}")
         return None
 
-def _call_openrouter(prompt: str, model: str, temperature: float = 0.2) -> str:
+def _call_openrouter(prompt: str, model: str, temperature: float = 0.2, max_tokens: int | None = None) -> str:
     client = _openrouter_client()
     if not client:
         raise RuntimeError("Missing OPENROUTER_API_KEY")
     try:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[
+        kwargs: dict = {
+            "model": model,
+            "messages": [
                 {"role": "system", "content": "You are a JSON generator. Return ONLY valid JSON, no markdown, no prose."},
                 {"role": "user", "content": prompt},
             ],
-            temperature=temperature,
-            timeout=30.0,
-        )
+            "temperature": temperature,
+            "timeout": 30.0,
+        }
+        if max_tokens:
+            kwargs["max_tokens"] = max_tokens
+        resp = client.chat.completions.create(**kwargs)  # type: ignore
         content = resp.choices[0].message.content or ""
         return content.strip()
     except Exception as e:
         raise
 
-def call_llm(prompt: str, temperature: float = 0.2) -> str:
+def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = None) -> str:
     """
-    DeepSeek (deepseek-*) → Nvidia Kimi (nvapi-*) → Groq → OpenRouter → Gemini — fail-fast on 429
-    User requested DeepSeek as primary
+    OpenRouter → Gemini → Groq → Nvidia → DeepSeek — fail-fast on 429
+    Ordered by available free quota (most first)
+    max_tokens bounds OpenRouter output ( reasoning dribble guard); other providers ignore it.
     """
     deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
     nvidia_model = os.getenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash-0731")
@@ -143,27 +147,37 @@ def call_llm(prompt: str, temperature: float = 0.2) -> str:
     or_primary = os.getenv("OPENROUTER_MODEL", "openrouter/free")
     or_fallback = os.getenv("OPENROUTER_FALLBACK", "openrouter/free")
 
-    # 0. DeepSeek direct (primary as requested)
-    if os.getenv("DEEPSEEK_API_KEY"):
+    # 0. OpenRouter (most free quota: 50 req/day)
+    if os.getenv("OPENROUTER_API_KEY"):
         try:
-            return _call_deepseek(prompt, deepseek_model, temperature)
+            return _call_openrouter(prompt, or_primary, temperature, max_tokens)
         except Exception as e:
-            print(f"deepseek {deepseek_model} failed: {e}")
-            if "429" in str(e).lower():
-                pass
-            # fall through
+            msg = str(e).lower()
+            is_retryable = "429" in msg or "quota" in msg or "rate" in msg or "402" in msg
+            print(f"openrouter primary {or_primary} failed: {e} (retryable={is_retryable})")
+            if or_fallback and or_fallback != or_primary:
+                try:
+                    print(f"trying openrouter fallback {or_fallback}")
+                    return _call_openrouter(prompt, or_fallback, temperature, max_tokens)
+                except Exception as e2:
+                    print(f"openrouter fallback {or_fallback} failed: {e2}")
+                    if "429" in str(e2) or "429" in str(e):
+                        raise RuntimeError(f"429 OpenRouter quota exhausted: {e2}")
+                    pass
+            if is_retryable and "429" in msg:
+                raise RuntimeError(f"429 OpenRouter quota exhausted: {e}")
 
-    # 1. Nvidia Kimi
-    if os.getenv("NVIDIA_API_KEY"):
-        try:
-            is_analyzer = "AppSpec" in prompt or "Analyzer" in prompt
-            return _call_nvidia(prompt, nvidia_model, temperature, reasoning_effort="high" if is_analyzer else None)
-        except Exception as e:
-            print(f"nvidia {nvidia_model} failed: {e}")
-            if "429" in str(e).lower():
-                pass
+    # 1. Gemini (20 req/day free)
+    try:
+        from main import call_gemini
+        return call_gemini(prompt)
+    except Exception as e:
+        if "429" in str(e) or "quota" in str(e).lower():
+            raise RuntimeError(f"429 Gemini quota exhausted: {e}")
+        # non-quota errors fall through to remaining providers
+        print(f"gemini failed, trying groq: {e}")
 
-    # 2. Groq
+    # 2. Groq (low token budget remaining)
     if os.getenv("GROQ_API_KEY"):
         try:
             return _call_groq(prompt, groq_model, temperature)
@@ -173,65 +187,30 @@ def call_llm(prompt: str, temperature: float = 0.2) -> str:
             if "429" in msg and "quota" in msg:
                 pass
 
-    # 2. OpenRouter
-    if os.getenv("OPENROUTER_API_KEY"):
-        try:
-            return _call_openrouter(prompt, or_primary, temperature)
-        except Exception as e:
-            msg = str(e).lower()
-            is_retryable = "429" in msg or "quota" in msg or "rate" in msg or "402" in msg
-            print(f"openrouter primary {or_primary} failed: {e} (retryable={is_retryable})")
-            if or_fallback and or_fallback != or_primary:
-                try:
-                    print(f"trying openrouter fallback {or_fallback}")
-                    return _call_openrouter(prompt, or_fallback, temperature)
-                except Exception as e2:
-                    print(f"openrouter fallback {or_fallback} failed: {e2}")
-                    if "429" in str(e2) or "429" in str(e):
-                        raise RuntimeError(f"429 OpenRouter quota exhausted: {e2}")
-                    pass
-            if is_retryable and "429" in msg:
-                raise RuntimeError(f"429 OpenRouter quota exhausted: {e}")
-
-    # 3. Gemini
-    try:
-        from main import call_gemini
-        return call_gemini(prompt)
-    except Exception as e:
-        if "429" in str(e) or "quota" in str(e).lower():
-            raise RuntimeError(f"429 Gemini quota exhausted: {e}")
-        raise
-
-def call_llm_with_meta(prompt: str, temperature: float = 0.2) -> tuple[str, dict]:
-    """Returns (text, meta) where meta has source/model for _meta badge — DeepSeek primary"""
-    deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
-    if os.getenv("DEEPSEEK_API_KEY"):
-        try:
-            text = _call_deepseek(prompt, deepseek_model, temperature)
-            return text, {"source": "deepseek", "model": deepseek_model}
-        except Exception as e:
-            if "429" in str(e).lower():
-                raise
-            print(f"deepseek with_meta {deepseek_model} failed: {e}, trying nvidia")
-    nvidia_model = os.getenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash-0731")
+    # 3. Nvidia (degraded: frequent timeouts, capped at 30s)
     if os.getenv("NVIDIA_API_KEY"):
         try:
             is_analyzer = "AppSpec" in prompt or "Analyzer" in prompt
-            text = _call_nvidia(prompt, nvidia_model, temperature, reasoning_effort="high" if is_analyzer else None)
-            return text, {"source": "nvidia", "model": nvidia_model}
+            return _call_nvidia(prompt, nvidia_model, temperature, reasoning_effort="high" if is_analyzer else None)
         except Exception as e:
+            print(f"nvidia {nvidia_model} failed: {e}")
             if "429" in str(e).lower():
-                raise
-            print(f"nvidia with_meta {nvidia_model} failed: {e}, trying groq")
-    groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
-    if os.getenv("GROQ_API_KEY"):
+                pass
+
+    # 4. DeepSeek (inactive unless a key is added — free skip)
+    if os.getenv("DEEPSEEK_API_KEY"):
         try:
-            text = _call_groq(prompt, groq_model, temperature)
-            return text, {"source": "groq", "model": groq_model}
+            return _call_deepseek(prompt, deepseek_model, temperature)
         except Exception as e:
+            print(f"deepseek {deepseek_model} failed: {e}")
             if "429" in str(e).lower():
-                raise
-            print(f"groq with_meta {groq_model} failed: {e}, trying openrouter")
+                pass
+            # fall through
+
+    raise RuntimeError("All LLM providers failed or unconfigured (openrouter→gemini→groq→nvidia→deepseek)")
+
+def call_llm_with_meta(prompt: str, temperature: float = 0.2) -> tuple[str, dict]:
+    """Returns (text, meta) where meta has source/model for _meta badge — ordered by free quota: OpenRouter → Gemini → Groq → Nvidia → DeepSeek"""
     primary = os.getenv("OPENROUTER_MODEL", "openrouter/free")
     if os.getenv("OPENROUTER_API_KEY"):
         try:
@@ -251,7 +230,38 @@ def call_llm_with_meta(prompt: str, temperature: float = 0.2) -> tuple[str, dict
         text = call_gemini(prompt)
         return text, {"source": "gemini", "model": os.getenv("GEMINI_MODEL", "gemini-3.6-flash")}
     except Exception as e:
-        raise
+        if "429" in str(e).lower() or "quota" in str(e).lower():
+            raise
+        print(f"gemini with_meta failed: {e}, trying groq")
+    groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+    if os.getenv("GROQ_API_KEY"):
+        try:
+            text = _call_groq(prompt, groq_model, temperature)
+            return text, {"source": "groq", "model": groq_model}
+        except Exception as e:
+            if "429" in str(e).lower():
+                raise
+            print(f"groq with_meta {groq_model} failed: {e}, trying nvidia")
+    nvidia_model = os.getenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash-0731")
+    if os.getenv("NVIDIA_API_KEY"):
+        try:
+            is_analyzer = "AppSpec" in prompt or "Analyzer" in prompt
+            text = _call_nvidia(prompt, nvidia_model, temperature, reasoning_effort="high" if is_analyzer else None)
+            return text, {"source": "nvidia", "model": nvidia_model}
+        except Exception as e:
+            if "429" in str(e).lower():
+                raise
+            print(f"nvidia with_meta {nvidia_model} failed: {e}, trying deepseek")
+    deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+    if os.getenv("DEEPSEEK_API_KEY"):
+        try:
+            text = _call_deepseek(prompt, deepseek_model, temperature)
+            return text, {"source": "deepseek", "model": deepseek_model}
+        except Exception as e:
+            if "429" in str(e).lower():
+                raise
+            print(f"deepseek with_meta {deepseek_model} failed: {e}")
+    raise RuntimeError("All LLM providers failed or unconfigured (openrouter→gemini→groq→nvidia→deepseek)")
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
     """OpenRouter embeddings first, then Gemini. Returns list of vectors (3072d padded/truncated for pgvector)."""
@@ -344,17 +354,17 @@ def get_llm_status() -> dict:
                 quota = {"raw": j.get("data", j) if isinstance(j, dict) else str(j)[:500]}
         except Exception as e:
             quota = {"error": str(e)[:200]}
-    # Priority: DeepSeek (if DEEPSEEK_API_KEY) -> Nvidia Kimi -> Groq -> OpenRouter -> Gemini
-    if has_deepseek:
-        primary_src = "deepseek"
-    elif has_nvidia:
-        primary_src = "nvidia"
-    elif has_groq:
-        primary_src = "groq"
-    elif has_or:
+    # Priority by available free quota: OpenRouter (50/day) -> Gemini (20/day) -> Groq -> Nvidia -> DeepSeek
+    if has_or:
         primary_src = "openrouter"
     elif has_gem:
         primary_src = "gemini"
+    elif has_groq:
+        primary_src = "groq"
+    elif has_nvidia:
+        primary_src = "nvidia"
+    elif has_deepseek:
+        primary_src = "deepseek"
     else:
         primary_src = "none"
     return {

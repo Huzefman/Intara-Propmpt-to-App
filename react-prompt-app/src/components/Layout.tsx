@@ -1,6 +1,19 @@
 import { Header } from './Header'
+import { useLocation } from 'react-router-dom'
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  const loc = useLocation()
+  const studio = loc.pathname.startsWith('/wish/')
+  if (studio) {
+    // Builder page: true edge-to-edge, no global header/footer (Rocket-style)
+    return (
+      <div className="intara-shell">
+        <main style={{ padding: 0, margin: 0, maxWidth: 'none' }}>
+          {children}
+        </main>
+      </div>
+    )
+  }
   return (
     <div className="intara-shell">
       <Header />

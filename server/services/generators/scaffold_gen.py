@@ -31,7 +31,10 @@ def frontend_scaffold(app_name: str):
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "typescript": "^5.5.3",
-    "vite": "^5.4.2"
+    "vite": "^5.4.2",
+    "tailwindcss": "^3.4.0",
+    "postcss": "^8.4.0",
+    "autoprefixer": "^10.4.0"
   }
 }
 """ % slug
@@ -109,20 +112,25 @@ VITE_API_URL=http://localhost:8000
 }
 """
 
+    files["postcss.config.js"] = """export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+"""
+
     return files
 
 
-def backend_scaffold(app_name: str, tables):
+def backend_scaffold(app_name: str, tables, ddl: str = ""):
+    """Single canonical db.py at server/db.py (imported as `from server.db import ...`
+    with cwd=backend/). init_db executes real CREATE TABLE DDL — no stubs."""
     files = {}
 
-    # db.py — SQLite default, Supabase swap when env set
-    table_inits = "\n".join([
-        f"    # {t['name']} table handled via SQLAlchemy or Supabase; fallback in-memory if no DB"
-        for t in tables[:3]
-    ])
-
-    files["db.py"] = f'''"""
-DB adapter — SQLite default, Supabase when env set
+    db_py = f'''"""
+DB adapter — SQLite default, Supabase when env set.
+Single canonical module: import as `from server.db import ...` with cwd=backend/.
 """
 import os
 from sqlalchemy import create_engine, text
@@ -130,17 +138,21 @@ from sqlalchemy import create_engine, text
 SUPA_URL = os.getenv("SUPABASE_URL", "")
 SUPA_KEY = os.getenv("SUPABASE_KEY", "")
 
-# SQLite fallback (no config needed)
+# SQLite fallback (no config needed) — lives next to backend/ cwd
 engine = create_engine("sqlite:///./app.db", connect_args={{"check_same_thread": False}})
+
+DDL = """{ddl}"""
 
 def get_engine():
     return engine
 
 def init_db():
-    # Create simple tables for each PRD table (text/integer/timestamp/boolean)
-    with engine.begin() as conn:
-        conn.execute(text("SELECT 1"))
-{table_inits}
+    if DDL.strip():
+        with engine.begin() as conn:
+            for stmt in DDL.split(";"):
+                stmt = stmt.strip()
+                if stmt:
+                    conn.execute(text(stmt))
 
 # Supabase client when configured
 supabase = None
@@ -151,23 +163,24 @@ if SUPA_URL and SUPA_KEY:
     except Exception as e:
         print(f"supabase init failed: {{e}}")
 '''
+    files["server/db.py"] = db_py
 
     files[".env.example"] = """SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your-service-role-key
 GEMINI_API_KEY=your_gemini_key
 # Leave empty to use SQLite local DB (no Supabase needed for trial)
-# Backend auto-falls back to SQLite + in-memory if no Supabase
+# Backend auto-falls back to SQLite if no Supabase
 """
-    # also put db.py in server/ for uvicorn server.main:app
-    files["server/db.py"] = files["db.py"]
+    files["server/__init__.py"] = ""
 
     files["README_BACKEND.md"] = f"""# {app_name} Backend
 
 Run without Supabase (SQLite):
 
 ```bash
+cd backend
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+uvicorn server.main:app --reload --port 8000
 ```
 
 With Supabase: set `SUPABASE_URL` and `SUPABASE_KEY` in `.env`, then same command — db.py swaps to Supabase.

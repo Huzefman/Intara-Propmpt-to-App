@@ -66,7 +66,7 @@ export function ArtifactVault({ wish, hideTrial = false }: { wish: any; hideTria
   )
 }
 
-function Code({ title, content, lang }: { title: string; content: string; lang?: string }) {
+export function Code({ title, content, lang }: { title: string; content: string; lang?: string }) {
   return (
     <div style={{ marginBottom: 18 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>

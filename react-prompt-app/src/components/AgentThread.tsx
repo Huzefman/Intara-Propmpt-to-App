@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { answerClarify, approvePlan, createPlan, getSuggest, regenerateWish, type Suggestion, type Wish } from '../api/client'
+import { answerClarify, applyIterate, approvePlan, createPlan, getChat, getSuggest, postChat, previewIterate, regenerateWish, retryStep, revertIterate, type ChatAction, type ChatMessage, type IterPreview, type Suggestion, type Wish } from '../api/client'
 
 /* ---------- small pieces ---------- */
 
@@ -52,7 +52,7 @@ function ClarifyCards({ questions, answers, onPick, submitting, onSubmit, onSkip
       <p style={{ marginTop: 0 }}><strong>Two quick questions so I build the right thing:</strong></p>
       {questions.map((q, i) => (
         <div key={q.id || i} className="thread-q">
-          <p className="thread-q-title">{i + 1}. {q.q}</p>
+          <p className="thread-q-title"><span className="thread-q-num">{String(i + 1).padStart(2, '0')}</span>{q.q}</p>
           <div className="thread-opts">
             {(q.options || []).map((o: any) => (
               <button
@@ -79,6 +79,16 @@ function ClarifyCards({ questions, answers, onPick, submitting, onSubmit, onSkip
   )
 }
 
+function phaseChips(graph: any[]): { label: string }[] {
+  const tables = graph.filter(n => n.kind === 'backend_table').length
+  const pages = graph.filter(n => n.kind === 'frontend_page').length
+  const chips = [{ label: '01 wish' }, { label: '02 schema' }]
+  if (tables) chips.push({ label: `03 ${tables} table${tables === 1 ? '' : 's'}` })
+  if (pages) chips.push({ label: `0${chips.length + 1} ${pages} page${pages === 1 ? '' : 's'}` })
+  chips.push({ label: `0${chips.length + 1} ship` })
+  return chips
+}
+
 function PlanSummary({ prd, onApprove, approving, err }: { prd: any; onApprove: () => void; approving: boolean; err: string | null }) {
   const tables = prd.tables || []
   const pages = prd.pages || []
@@ -100,9 +110,12 @@ function PlanSummary({ prd, onApprove, approving, err }: { prd: any; onApprove: 
       </div>
       {tables.length > 0 && <p className="muted">Data: {tables.map((t: any) => t.name).join(' · ')}</p>}
       {graph.length > 0 && (
-        <div className="thread-graph">
-          {graph.map((n: any, i: number) => (
-            <span key={n.id || i} className="thread-graph-node" title={n.promptHint || n.kind}>{n.kind}{n.ref ? `: ${n.ref}` : ''}</span>
+        <div className="thread-graph" aria-label="Build phases">
+          {phaseChips(graph).map((ph, i, arr) => (
+            <span key={ph.label} className="thread-phase">
+              <span className="thread-graph-node">{ph.label}</span>
+              {i < arr.length - 1 && <span className="thread-phase-sep" aria-hidden="true">›</span>}
+            </span>
           ))}
         </div>
       )}
@@ -121,6 +134,7 @@ function WhatIDid({ prd }: { prd: any }) {
   const tables = prd.tables || []
   const pages = prd.pages || []
   const apis = prd.apis || []
+  const items = tables.length + pages.length + apis.length
   return (
     <div>
       <p style={{ marginTop: 0 }}><strong>✦ Forged {prd.appName || 'your app'} — here's what I did:</strong></p>
@@ -130,6 +144,10 @@ function WhatIDid({ prd }: { prd: any }) {
         <li>Trial runs on mock data in your browser — swap in Supabase anytime</li>
         <li>Runnable zip is packed and ready to download</li>
       </ul>
+      <button className="thread-files-row" onClick={() => window.dispatchEvent(new CustomEvent('studio:code'))} title="Open the Code tab in the preview pane">
+        <span><strong>Files</strong></span>
+        <span className="muted mono">Version 1 · {items} items ›</span>
+      </button>
     </div>
   )
 }
@@ -185,6 +203,256 @@ function SuggestChips({ wish }: { wish: Wish }) {
             {forking === s.label ? 'Forking…' : `+ ${s.label}`}
           </button>
         ))}
+      </div>
+    </div>
+  )
+}
+
+/* ---------- wish-scoped chat (Q&A + action chips, persisted, 20/day/IP) ---------- */
+
+type ChatTurn = ChatMessage & { actions?: ChatAction[]; pending?: boolean }
+
+function ChatThread({ wish, onChanged }: { wish: Wish; onChanged: () => void }) {
+  const nav = useNavigate()
+  const [messages, setMessages] = useState<ChatTurn[]>([])
+  const [input, setInput] = useState('')
+  const [sending, setSending] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [lastFailed, setLastFailed] = useState<string | null>(null)
+  const [chatsLeft, setChatsLeft] = useState<number | null>(null)
+  const [acting, setActing] = useState<string | null>(null)
+  const [pendingFix, setPendingFix] = useState<IterPreview | null>(null)
+  const [appliedFix, setAppliedFix] = useState<{ iid: string; summary: string } | null>(null)
+  const [fixBusy, setFixBusy] = useState(false)
+  const bottomRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    let live = true
+    getChat(wish.id).then((m) => { if (live) setMessages(m) }).catch(() => { if (live) setMessages([]) })
+    return () => { live = false }
+  }, [wish.id])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [messages.length, sending, pendingFix, appliedFix])
+
+  async function send(text?: string) {
+    const msg = (text ?? input).trim()
+    if (!msg || sending) return
+    if (msg.length > 1000) { setErr('Message too long (max 1000 characters).'); return }
+    setSending(true)
+    setErr(null)
+    setLastFailed(null)
+    setMessages((prev) => [...prev, { role: 'user', content: msg }, { role: 'agent', content: '', pending: true }])
+    if (text == null) setInput('')
+    try {
+      const res = await postChat(wish.id, msg)
+      setMessages((prev) => {
+        const next = [...prev]
+        // drop trailing pending placeholder
+        for (let i = next.length - 1; i >= 0; i--) {
+          if (next[i].pending) { next.splice(i, 1); break }
+        }
+        next.push({ role: 'agent', content: res.reply, actions: res.actions })
+        return next
+      })
+      setChatsLeft((prev) => (prev === null ? 19 : Math.max(0, prev - 1)))
+    } catch (e: any) {
+      setMessages((prev) => prev.filter((m) => !m.pending))
+      if (e?.status === 429) {
+        setChatsLeft(0)
+        setErr('Chat stardust spent — 20 chats per day per IP (builds share the same free pool). Back tomorrow.')
+      } else {
+        setErr(e?.message || 'Could not send — retry shortly.')
+      }
+      setLastFailed(msg)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  function onKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
+      e.preventDefault()
+      void send()
+    }
+  }
+
+  async function onAction(a: ChatAction) {
+    if (acting || fixBusy) return
+    if (a.kind === 'fix') { await onFixPreview(a); return }
+    setActing(a.label)
+    try {
+      if (a.kind === 'retry' && a.stepId) {
+        await retryStep(wish.id, a.stepId)
+        onChanged()
+      } else if (a.kind === 'fork' && a.suffix) {
+        const next = await createPlan(wish.prompt + a.suffix)
+        nav(`/wish/${next.id}`)
+      }
+    } catch {
+      /* surfaced via thread refresh / navigation */
+    } finally {
+      setActing(null)
+    }
+  }
+
+  async function onFixPreview(a: ChatAction) {
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user' && !m.pending)
+    const instruction = (lastUser?.content || '').replace(/^\[iterate\]\s*/, '').trim()
+    if (!instruction) { setErr('Ask for the change first (e.g. "fix the Tasks page header"), then hit Apply this fix.'); return }
+    setFixBusy(true)
+    setErr(null)
+    setPendingFix(null)
+    try {
+      const prev = await previewIterate(wish.id, instruction, a.stepId)
+      setPendingFix(prev)
+      setChatsLeft((prevLeft) => (prevLeft === null ? 19 : Math.max(0, prevLeft - 1)))
+    } catch (e: any) {
+      if (e?.status === 429) {
+        setChatsLeft(0)
+        setErr('Chat stardust spent — 20 chats per day per IP (builds share the same free pool). Back tomorrow.')
+      } else {
+        setErr(e?.message || 'Could not preview the fix — retry shortly.')
+      }
+    } finally {
+      setFixBusy(false)
+    }
+  }
+
+  async function onFixAccept() {
+    if (!pendingFix || fixBusy) return
+    setFixBusy(true)
+    try {
+      await applyIterate(wish.id, pendingFix.iteration_id)
+      setAppliedFix({ iid: pendingFix.iteration_id, summary: pendingFix.summary })
+      setPendingFix(null)
+      onChanged()
+    } catch (e: any) {
+      setErr(e?.message || 'Apply failed — retry shortly.')
+    } finally {
+      setFixBusy(false)
+    }
+  }
+
+  async function onFixRevert() {
+    if (!appliedFix || fixBusy) return
+    setFixBusy(true)
+    try {
+      await revertIterate(wish.id, appliedFix.iid)
+      setAppliedFix(null)
+      onChanged()
+    } catch (e: any) {
+      setErr(e?.message || 'Revert failed — retry shortly.')
+    } finally {
+      setFixBusy(false)
+    }
+  }
+
+  return (
+    <div className="chat-thread">
+      {messages.map((m, i) =>
+        m.role === 'user' ? (
+          <UserBubble key={i} prompt={m.content} />
+        ) : m.pending ? (
+          <AgentBubble key={i}><span className="chat-shimmer" aria-label="Intara is thinking">✦ thinking…</span></AgentBubble>
+        ) : (
+          <AgentBubble key={i}>
+            <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
+            {m.actions && m.actions.length > 0 && (
+              <div className="thread-suggest" style={{ marginTop: 10 }}>
+                {m.actions.map((a) => (
+                  <button
+                    key={a.label}
+                    className="thread-suggest-chip"
+                    disabled={!!acting || fixBusy}
+                    onClick={() => onAction(a)}
+                    title={a.kind === 'fix' ? 'Preview a diff-first code change' : a.kind === 'retry' ? 'Retry via existing endpoint' : 'Fork via existing plan endpoint'}
+                  >
+                    {acting === a.label || (fixBusy && a.kind === 'fix') ? 'Working…' : a.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </AgentBubble>
+        ),
+      )}
+      {err && (
+        <AgentBubble>
+          <p className="error" role="alert" style={{ marginTop: 0 }}>{err}</p>
+          {lastFailed && (
+            <div className="thread-actions">
+              <button className="btn-ghost btn-sm" onClick={() => send(lastFailed)} disabled={sending}>
+                {sending ? 'Retrying…' : 'Retry send'}
+              </button>
+            </div>
+          )}
+        </AgentBubble>
+      )}
+      {pendingFix && (
+        <AgentBubble>
+          <p style={{ marginTop: 0 }}><strong>✦ Proposed change — {pendingFix.step_id}</strong></p>
+          <p className="muted">{pendingFix.summary}</p>
+          <div className="diff-card">
+            {pendingFix.files.map((f) => (
+              <details key={f.path} className="diff-file">
+                <summary>
+                  <span className="mono">{f.path}</span>
+                  <span className="muted"> {f.before.split('\n').length} → {f.after.split('\n').length} lines</span>
+                </summary>
+                <div className="diff-panes">
+                  <div>
+                    <div className="diff-pane-label">Before</div>
+                    <pre className="diff-pane">{f.before.slice(0, 4000)}</pre>
+                  </div>
+                  <div>
+                    <div className="diff-pane-label">After</div>
+                    <pre className="diff-pane diff-after">{f.after.slice(0, 4000)}</pre>
+                  </div>
+                </div>
+              </details>
+            ))}
+          </div>
+          <div className="thread-actions">
+            <button className="btn-primary btn-sm" onClick={onFixAccept} disabled={fixBusy}>
+              {fixBusy ? 'Applying…' : 'Accept — apply to app'}
+            </button>
+            <button className="btn-ghost btn-sm" onClick={() => setPendingFix(null)} disabled={fixBusy}>Discard</button>
+          </div>
+          <p className="muted">Nothing changes until you Accept. Wiring re-ran with the edit.</p>
+        </AgentBubble>
+      )}
+      {appliedFix && (
+        <AgentBubble>
+          <p style={{ marginTop: 0 }}><strong>✓ Applied</strong> <span className="muted">{appliedFix.summary}</span></p>
+          <div className="thread-actions">
+            <button className="btn-ghost btn-sm" onClick={onFixRevert} disabled={fixBusy}>
+              {fixBusy ? 'Reverting…' : 'Revert this change'}
+            </button>
+          </div>
+        </AgentBubble>
+      )}
+      {fixBusy && !pendingFix && !appliedFix && (
+        <AgentBubble><span className="chat-shimmer" aria-label="Preparing fix preview">✦ preparing fix preview… (up to ~1 min on the free pool)</span></AgentBubble>
+      )}
+      <div ref={bottomRef} />
+      <div className="chat-composer glass">
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={onKey}
+          rows={1}
+          maxLength={1000}
+          placeholder="Ask about this app — plan, steps, errors…"
+          aria-label="Ask about this app"
+          disabled={sending}
+        />
+        <button className="btn-primary btn-sm" onClick={() => send()} disabled={sending || !input.trim()}>
+          {sending ? 'Sending…' : 'Send'}
+        </button>
+      </div>
+      <div className="chat-day-budget" aria-live="polite">
+        {chatsLeft === null ? '20 chats/day · shared free pool' : chatsLeft > 0 ? `${chatsLeft} chats left today` : '0 chats left today'}
       </div>
     </div>
   )
@@ -283,6 +551,8 @@ export function AgentThread({ wish, onChanged, buildView }: { wish: Wish; onChan
       {wish.status === 'weaving' && (
         <AgentBubble><p>Weaving your wish one-shot… the trial appears in the preview pane shortly.</p></AgentBubble>
       )}
+
+      <AgentBubble><ChatThread wish={wish} onChanged={onChanged} /></AgentBubble>
     </div>
   )
 }

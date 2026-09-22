@@ -37,32 +37,34 @@ def generate_frontend_page_llm(page: dict, app_spec: dict) -> dict | None:
 
 
 def generate_frontend(prd: dict):
+    from services.contract import build_contract as _bc, client_fns as _cf
     tables = prd.get("tables", [])
     pages = prd.get("pages", [])
     app_name = prd.get("appName", "IntaraApp")
+    _contract = _bc(prd)
     files = []
-    # api.ts same
+    # api.ts — canonical client from the contract: full CRUD per table, {id} interpolated.
+    # Pages must use these fns (never raw fetch) so client/server/mock cannot drift.
     api_lines = [
         "// Intara Frontend — API client (mock vs real) — Sandpack safe",
+        "// Canonical: one fn per contract route. Pages import these; do not raw-fetch /api.",
         "const MODE = 'mock'",
         "const API_URL = ''",
         "function baseFetch(path: string, init?: RequestInit) {",
         "  const url = MODE === 'mock' ? path : `${API_URL}${path}`",
         "  return fetch(url, init)",
         "}",
+        "const _json = { 'Content-Type': 'application/json' }",
     ]
-    for api in prd.get("apis", []):
-        path = api["path"]
-        method = api["method"]
-        fn = path.replace("/api/","").replace(":id","ById").replace("/","_").replace("-","_") or "root"
-        fn = "".join(p.capitalize() for p in fn.split("_"))
-        fn = fn[0].lower() + fn[1:]
-        if method == "GET":
-            api_lines.append(f"export const {fn} = () => baseFetch('{path}').then(r => r.json())")
-        elif method == "POST":
-            api_lines.append(f"export const create{fn.capitalize()} = (body:any) => baseFetch('{path}', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify(body)}}).then(r => r.json())")
-        else:
-            api_lines.append(f"export const {method.lower()}{fn.capitalize()} = (id:string, body:any) => baseFetch('{path}'.replace(':id', id), {{method:'{method}', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify(body)}}).then(r => r.json())")
+    for t in _contract["tables"]:
+        fns = _cf(t["name"])
+        base = f"/api/{t['name']}"
+        api_lines.append(f"export const {fns['list']} = () => baseFetch('{base}').then(r => r.json())")
+        api_lines.append(f"export const {fns['create']} = (body:any) => baseFetch('{base}', {{method:'POST', headers:_json, body: JSON.stringify(body)}}).then(r => r.json())")
+        api_lines.append(f"export const {fns['get']} = (id:string) => baseFetch(`{base}/${{id}}`).then(r => r.json())")
+        api_lines.append(f"export const {fns['put']} = (id:string, body:any) => baseFetch(`{base}/${{id}}`, {{method:'PUT', headers:_json, body: JSON.stringify(body)}}).then(r => r.json())")
+        api_lines.append(f"export const {fns['patch']} = (id:string, body:any) => baseFetch(`{base}/${{id}}`, {{method:'PATCH', headers:_json, body: JSON.stringify(body)}}).then(r => r.json())")
+        api_lines.append(f"export const {fns['delete']} = (id:string) => baseFetch(`{base}/${{id}}`, {{method:'DELETE'}}).then(r => r.json())")
     api_lines.append("// Preview mock auto-installed via src/mock/server.ts when VITE_API_MODE=mock")
     files.append({"path": "src/api.ts", "content": "\n".join(api_lines)})
 
@@ -100,9 +102,11 @@ def generate_frontend(prd: dict):
     if not pages:
         pages = [{"name":"Dashboard","route":"/","components":["ItemList"]}]
 
+    import os as _os
+    _template_only = bool(_os.getenv("INTARA_TEMPLATE_ONLY"))
     for idx, p in enumerate(pages[:6]):
-        # LLM-first: try one LLM call per page
-        llm_result = generate_frontend_page_llm(p, prd)
+        # LLM-first: try one LLM call per page (skipped under INTARA_TEMPLATE_ONLY)
+        llm_result = None if _template_only else generate_frontend_page_llm(p, prd)
         if llm_result:
             files.append(llm_result)
             # still need to mark table as used for guessing
@@ -111,9 +115,15 @@ def generate_frontend(prd: dict):
         # Template fallback (extracted)
         comp_imports = ", ".join(p.get("components", [])[:2])
         table_guess = guess_table(p, idx)
+        # Explicit plan binding wins over guessing (kills Analytics→wrong-table drift)
+        bound = p.get("table")
+        if isinstance(bound, str) and any(t["name"] == bound for t in tables):
+            used_tables.add(bound)
+            table_guess = bound
         tfields = next((t["fields"] for t in tables if t["name"] == table_guess), tables[0]["fields"] if tables else [{"name":"title","type":"text"}])
-        # Determine page type by route and name
-        is_detail = ":id" in p["route"]
+        fns = _cf(table_guess)
+        # Determine page type by route and name (RR uses :id, specs may say {id})
+        is_detail = ":id" in p["route"] or "{id}" in p["route"]
         is_dashboard = p["route"] == "/" or "dashboard" in p["name"].lower()
 
         # Build inputs with proper types
@@ -122,13 +132,13 @@ def generate_frontend(prd: dict):
             fname = f["name"]
             ftype = f["type"]
             if ftype == "boolean":
-                inputs.append(f'        <label style={{{{ display:"flex", alignItems:"center", gap:6, fontSize:12 }}}}><input type="checkbox" checked={{{{!!form.{fname}}}}} onChange={{e=>setForm(s=>({{...s, {fname}: e.target.checked}}))}} /> {fname}</label>')
+                inputs.append(f'        <label style={{{{ display:"flex", alignItems:"center", gap:6, fontSize:12 }}}}><input type="checkbox" checked={{!!form.{fname}}} onChange={{e=>setForm((s:any)=>({{...s, {fname}: e.target.checked}}))}} /> {fname}</label>')
             elif ftype == "integer":
-                inputs.append(f'        <input type="number" placeholder="{fname}" value={{form.{fname} || ""}} onChange={{e=>setForm(s=>({{...s, {fname}: Number(e.target.value)}}))}} style={{{{ flex:1, minWidth:120, padding:"10px 12px", borderRadius:10, border:"1px solid rgba(255,255,255,0.06)", background:"rgba(255,255,255,0.03)", color:"var(--intara-text)" }}}} />')
+                inputs.append(f'        <input type="number" placeholder="{fname}" value={{form.{fname} || ""}} onChange={{e=>setForm((s:any)=>({{...s, {fname}: Number(e.target.value)}}))}} style={{{{ flex:1, minWidth:120, padding:"10px 12px", borderRadius:10, border:"1px solid rgba(255,255,255,0.06)", background:"rgba(255,255,255,0.03)", color:"var(--intara-text)" }}}} />')
             elif ftype == "timestamp":
-                inputs.append(f'        <input type="date" value={{form.{fname} ? String(form.{fname}).slice(0,10) : ""}} onChange={{e=>setForm(s=>({{...s, {fname}: e.target.value}}))}} style={{{{ flex:1, minWidth:120, padding:"10px 12px", borderRadius:10, border:"1px solid rgba(255,255,255,0.06)", background:"rgba(255,255,255,0.03)", color:"var(--intara-text)" }}}} />')
+                inputs.append(f'        <input type="date" value={{form.{fname} ? String(form.{fname}).slice(0,10) : ""}} onChange={{e=>setForm((s:any)=>({{...s, {fname}: e.target.value}}))}} style={{{{ flex:1, minWidth:120, padding:"10px 12px", borderRadius:10, border:"1px solid rgba(255,255,255,0.06)", background:"rgba(255,255,255,0.03)", color:"var(--intara-text)" }}}} />')
             else:
-                inputs.append(f'        <input placeholder="{fname}" value={{form.{fname} || ""}} onChange={{e=>setForm(s=>({{...s, {fname}: e.target.value}}))}} style={{{{ flex:1, minWidth:120, padding:"10px 12px", borderRadius:10, border:"1px solid rgba(255,255,255,0.06)", background:"rgba(255,255,255,0.03)", color:"var(--intara-text)" }}}} />')
+                inputs.append(f'        <input placeholder="{fname}" value={{form.{fname} || ""}} onChange={{e=>setForm((s:any)=>({{...s, {fname}: e.target.value}}))}} style={{{{ flex:1, minWidth:120, padding:"10px 12px", borderRadius:10, border:"1px solid rgba(255,255,255,0.06)", background:"rgba(255,255,255,0.03)", color:"var(--intara-text)" }}}} />')
         form_inputs = "\n".join(inputs)
 
         # Determine page template
@@ -136,6 +146,7 @@ def generate_frontend(prd: dict):
             # Detail page: fetch single item by ID from URL, show edit / delete
             page_content = f"""import {{ useState, useEffect }} from 'react'
 import {{ useParams, Link }} from 'react-router-dom'
+import {{ {fns['get']}, {fns['patch']}, {fns['delete']}, {fns['list']} }} from '../api'
 
 export default function {p["name"]}() {{
   const {{ id }} = useParams()
@@ -147,14 +158,13 @@ export default function {p["name"]}() {{
   const load = async () => {{
     setLoading(true)
     try {{
-      const res = await fetch(`/api/{table_guess}/${{id}}`)
-      if (res.ok) {{
-        const data = await res.json()
+      const data = await {fns['get']}(String(id))
+      if (data && !data.error) {{
         setItem(data)
         setForm(data)
       }} else {{
         // fallback to list and find
-        const list = await fetch('/api/{table_guess}').then(r=>r.json())
+        const list = await {fns['list']}()
         const found = Array.isArray(list) ? list.find((x:any)=>String(x.id)===String(id)) : null
         if (found) {{ setItem(found); setForm(found) }}
       }}
@@ -165,13 +175,13 @@ export default function {p["name"]}() {{
 
   const save = async () => {{
     setSaving(true)
-    await fetch(`/api/{table_guess}/${{id}}`, {{method:'PATCH', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify(form)}})
+    await {fns['patch']}(String(id), form)
     setSaving(false)
     load()
   }}
   const remove = async () => {{
     if (!confirm('Delete this {table_guess}?')) return
-    await fetch(`/api/{table_guess}/${{id}}`, {{method:'DELETE'}})
+    await {fns['delete']}(String(id))
     window.location.href = '/'
   }}
 
@@ -240,8 +250,11 @@ export default function {p["name"]}() {{
         </div>
       </div>"""
 
+            detail_bits = " · ".join(f"{fn}: {{item.{fn}}}" for fn in [f["name"] for f in tfields[1:2]])
+            req_field = next((f["name"] for f in tfields if f["type"] == "text"), tfields[0]["name"] if tfields else "title")
             page_content = f"""import {{ useState, useEffect, useMemo }} from 'react'
 import {{ Link }} from 'react-router-dom'
+import {{ {fns['list']}, {fns['create']}, {fns['patch']} }} from '../api'
 
 export default function {p["name"]}() {{
   const [items, setItems] = useState<any[]>([])
@@ -249,17 +262,17 @@ export default function {p["name"]}() {{
   const [q, setQ] = useState("")
   const [filter, setFilter] = useState("all")
 
-  const load = () => fetch('/api/{table_guess}').then(r => r.json()).then(d => setItems(Array.isArray(d) ? d : [])).catch(()=>{{}})
+  const load = () => {fns['list']}().then(d => setItems(Array.isArray(d) ? d : [])).catch(()=>{{}})
   useEffect(() => {{ load() }}, [])
 
   const create = async () => {{
-    if (!form.{tfields[0]["name"]}?.trim()) return
-    await fetch('/api/{table_guess}', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify(form)}})
+    if (!form.{req_field}?.trim?.()) return
+    await {fns['create']}(form)
     setForm({{}}); load()
   }}
 
   const toggle = async (id:any, field:string, value:any) => {{
-    await fetch(`/api/{table_guess}/${{id}}`, {{method:'PATCH', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{ [field]: value }})}})
+    await {fns['patch']}(id, {{ [field]: value }})
     load()
   }}
 
@@ -306,7 +319,7 @@ export default function {p["name"]}() {{
                 <Link to={{`/{table_guess}/${{item.id}}`}} style={{{{ fontWeight: 600, fontSize: 13, color: 'var(--intara-text)', textDecoration: 'none' }}}}>{{item.{title_field} || item.name || item.email || 'Untitled'}}</Link>
                 {field_displays_str}
               </div>
-              <div style={{{{ fontSize: 11, color: 'var(--intara-dim)', marginTop: 4 }}}}>{{item.id ? `#${{String(item.id).slice(0,8)}}` : ''}} { ' · '.join([f"{{f['name']}}: {{item.{f['name']}}}" for f in tfields[1:2]]) if len(tfields)>1 else ''}</div>
+              <div style={{{{ fontSize: 11, color: 'var(--intara-dim)', marginTop: 4 }}}}>{{item.id ? `#${{String(item.id).slice(0,8)}}` : ''}} {detail_bits}</div>
             </div>
             <div style={{{{ display: 'flex', gap: 6, alignItems: 'center' }}}}>
               {{item.completed !== undefined && (
