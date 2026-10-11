@@ -53,5 +53,29 @@ Rules:
 - SQL: CREATE TABLE with proper types (text, integer, timestamp, boolean, uuid), FKs, indexes
 - Prisma: model with @id, @relation, @@index
 - tables[] must include every input table (same names); fields keep input names verbatim
+ - No markdown, JSON only
+"""
+
+
+def build_schema_game_prompt(app_spec: dict) -> str:
+    """Scores-only schema for games — no FKs, no RLS owner policies, no indexes
+    beyond the PK. Board/turn state is client state, never DDL."""
+    tables = app_spec.get("tables") or [{"name": "scores", "fields": [
+        {"name": "player", "type": "text"}, {"name": "wins", "type": "integer"},
+        {"name": "losses", "type": "integer"}, {"name": "draws", "type": "integer"}]}]
+    lines = "\n".join(f"- {t['name']}: fields {t.get('fields')}" for t in tables)
+    return f"""You are Intara schema weaver — generate a MINIMAL game schema (SQL + Prisma).
+
+App: {app_spec.get('appName')}
+Tables:
+{lines}
+
+Return ONLY JSON: {{"tables": [{{"name": "...", "fields": [...]}}], "prisma": "...full prisma schema...", "sql": "...full migration SQL..."}}
+Rules:
+- One row per player semantics: player text not null; wins/losses/draws integer default 0
+- No FK columns, no @@index, no RLS policies (scores are shared/arcade data)
+- SQL: CREATE TABLE with proper types (text, integer, timestamp, boolean, uuid)
+- Prisma: model with @id
+- tables[] must include every input table (same names); fields keep input names verbatim
 - No markdown, JSON only
 """

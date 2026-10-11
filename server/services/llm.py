@@ -1,9 +1,85 @@
 """
 LLM provider — OpenRouter (50/day) → Gemini (20/day) → Groq → Nvidia → DeepSeek
 Ordered by available free quota (most first). All OpenAI-compatible via openai SDK
-Embeddings: Gemini (others have no stable free embeddings)
+Fallback chain: if one provider's quota is exhausted, the next is tried automatically
+until all are exhausted; per-provider 60s cooldown avoids hammering, expired entries
+are retried so refreshed quota is reused. Embeddings: Gemini (others have no stable free embeddings)
 """
 import os
+import time
+
+PROVIDER_ORDER = ["gemini", "openrouter", "groq", "nvidia", "deepseek"]
+
+# Per-provider quota-exhaustion cooldown: name -> unix timestamp until which we skip it.
+# In-memory only (resets on restart); keeps latency low when a provider is down while
+# still auto-reusing it once the cooldown expires / quota refreshes.
+_COOLDOWN: dict = {}
+
+
+def _cooldown_seconds() -> float:
+    try:
+        return float(os.getenv("LLM_COOLDOWN_SECONDS", "60"))
+    except Exception:
+        return 60.0
+
+
+def _in_cooldown(name: str) -> bool:
+    try:
+        return time.time() < float(_COOLDOWN.get(name, 0))
+    except Exception:
+        return False
+
+
+def _mark_cooldown(name: str) -> None:
+    try:
+        _COOLDOWN[name] = time.time() + _cooldown_seconds()
+    except Exception:
+        pass
+
+
+def _clear_cooldown(name: str) -> None:
+    try:
+        _COOLDOWN.pop(name, None)
+    except Exception:
+        pass
+
+
+def _is_quota(e: Exception) -> bool:
+    """Single choke point for quota detection (429/quota/rate/402/resource_exhausted)."""
+    try:
+        from utils.json_parse import is_quota_error
+        return is_quota_error(e)
+    except Exception:
+        m = str(e).lower()
+        return "429" in m or "quota" in m or "resource_exhausted" in m or "exhausted" in m
+
+
+def has_any_llm() -> bool:
+    """True if ANY allowed chat provider key is configured (respects LLM_ONLY)."""
+    return any(
+        _allowed(name) and os.getenv(key)
+        for name, key in (
+            ("openrouter", "OPENROUTER_API_KEY"),
+            ("gemini", "GEMINI_API_KEY"),
+            ("groq", "GROQ_API_KEY"),
+            ("nvidia", "NVIDIA_API_KEY"),
+            ("deepseek", "DEEPSEEK_API_KEY"),
+        )
+    )
+
+
+def _only_set() -> set | None:
+    """LLM_ONLY=gemini (or comma list like 'gemini,groq') constrains the chain to
+    those providers. Unset/empty = all configured providers. Unknown names match nothing."""
+    raw = os.getenv("LLM_ONLY", "")
+    if not raw.strip():
+        return None
+    return {p.strip().lower() for p in raw.split(",") if p.strip()}
+
+
+def _allowed(name: str) -> bool:
+    only = _only_set()
+    return True if only is None else name in only
 
 def _groq_client():
     key = os.getenv("GROQ_API_KEY", "")
@@ -31,13 +107,21 @@ def _call_groq(prompt: str, model: str, temperature: float = 0.2) -> str:
     )
     return (resp.choices[0].message.content or "").strip()
 
+def _nvidia_timeout() -> float:
+    # Ultra-550b with thinking mode needs headroom on big prompts (Analyzer).
+    try:
+        return float(os.getenv("NVIDIA_TIMEOUT_SECONDS", "120"))
+    except Exception:
+        return 120.0
+
+
 def _nvidia_client():
     key = os.getenv("NVIDIA_API_KEY", "")
     if not key:
         return None
     try:
         from openai import OpenAI
-        return OpenAI(base_url="https://integrate.api.nvidia.com/v1", api_key=key, timeout=30.0)
+        return OpenAI(base_url="https://integrate.api.nvidia.com/v1", api_key=key, timeout=_nvidia_timeout())
     except Exception as e:
         print(f"nvidia client init failed: {e}")
         return None
@@ -56,7 +140,7 @@ def _call_nvidia(prompt: str, model: str, temperature: float = 0.2, stream: bool
             {"role": "system", "content": "You are a JSON generator. Return ONLY valid JSON, no markdown, no prose."},
             {"role": "user", "content": prompt},
         ]
-    kwargs: dict = {"model": model, "messages": messages, "temperature": temperature, "timeout": 30.0}
+    kwargs: dict = {"model": model, "messages": messages, "temperature": temperature, "timeout": _nvidia_timeout()}
     if is_nemotron:
         # Nemotron uses chat_template_kwargs.enable_thinking and top_p
         kwargs["max_tokens"] = 16384
@@ -137,8 +221,11 @@ def _call_openrouter(prompt: str, model: str, temperature: float = 0.2, max_toke
 
 def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = None) -> str:
     """
-    OpenRouter → Gemini → Groq → Nvidia → DeepSeek — fail-fast on 429
-    Ordered by available free quota (most first)
+    Gemini → OpenRouter → Groq → Nvidia → DeepSeek — fall through until all exhausted.
+    Gemini is primary; others are fallback in that order.
+    Quota-exhausted providers get a 60s cooldown (LLM_COOLDOWN_SECONDS) then are retried,
+    so refreshed quota is reused automatically. Raises 429 only when every configured
+    provider is exhausted/cooldown; raises unconfigured only when no key is set at all.
     max_tokens bounds OpenRouter output ( reasoning dribble guard); other providers ignore it.
     """
     deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
@@ -147,121 +234,216 @@ def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = Non
     or_primary = os.getenv("OPENROUTER_MODEL", "openrouter/free")
     or_fallback = os.getenv("OPENROUTER_FALLBACK", "openrouter/free")
 
-    # 0. OpenRouter (most free quota: 50 req/day)
-    if os.getenv("OPENROUTER_API_KEY"):
+    last_err: Exception | None = None
+    saw_quota = False
+    tried_any = False
+
+    # 0. Gemini first (primary) — falls through on quota/failure
+    if _allowed("gemini") and not _in_cooldown("gemini"):
+        tried_any = True
         try:
-            return _call_openrouter(prompt, or_primary, temperature, max_tokens)
+            from main import call_gemini
+            text = call_gemini(prompt)
+            _clear_cooldown("gemini")
+            return text
         except Exception as e:
-            msg = str(e).lower()
-            is_retryable = "429" in msg or "quota" in msg or "rate" in msg or "402" in msg
-            print(f"openrouter primary {or_primary} failed: {e} (retryable={is_retryable})")
+            last_err = e
+            if _is_quota(e):
+                saw_quota = True
+                _mark_cooldown("gemini")
+                print(f"gemini quota exhausted: {e} — trying next provider")
+            else:
+                print(f"gemini failed, trying openrouter: {e}")
+    elif _allowed("gemini"):
+        print("gemini in cooldown — skipping to next provider")
+
+    # 1. OpenRouter (free daily pool) — primary then fallback model
+    if _allowed("openrouter") and os.getenv("OPENROUTER_API_KEY") and not _in_cooldown("openrouter"):
+        tried_any = True
+        try:
+            text = _call_openrouter(prompt, or_primary, temperature, max_tokens)
+            _clear_cooldown("openrouter")
+            return text
+        except Exception as e:
+            last_err = e
+            if _is_quota(e):
+                saw_quota = True
+            print(f"openrouter primary {or_primary} failed ({type(e).__name__}): {e} — trying fallback/next")
             if or_fallback and or_fallback != or_primary:
                 try:
                     print(f"trying openrouter fallback {or_fallback}")
-                    return _call_openrouter(prompt, or_fallback, temperature, max_tokens)
+                    text = _call_openrouter(prompt, or_fallback, temperature, max_tokens)
+                    _clear_cooldown("openrouter")
+                    return text
                 except Exception as e2:
-                    print(f"openrouter fallback {or_fallback} failed: {e2}")
-                    if "429" in str(e2) or "429" in str(e):
-                        raise RuntimeError(f"429 OpenRouter quota exhausted: {e2}")
-                    pass
-            if is_retryable and "429" in msg:
-                raise RuntimeError(f"429 OpenRouter quota exhausted: {e}")
-
-    # 1. Gemini (20 req/day free)
-    try:
-        from main import call_gemini
-        return call_gemini(prompt)
-    except Exception as e:
-        if "429" in str(e) or "quota" in str(e).lower():
-            raise RuntimeError(f"429 Gemini quota exhausted: {e}")
-        # non-quota errors fall through to remaining providers
-        print(f"gemini failed, trying groq: {e}")
+                    last_err = e2
+                    if _is_quota(e2):
+                        saw_quota = True
+                    print(f"openrouter fallback {or_fallback} failed: {e2} — trying next provider")
+            if _is_quota(last_err):
+                _mark_cooldown("openrouter")
+            # fall through to Groq (do NOT raise yet)
+    elif _allowed("openrouter") and os.getenv("OPENROUTER_API_KEY"):
+        print("openrouter in cooldown — skipping to next provider")
 
     # 2. Groq (low token budget remaining)
-    if os.getenv("GROQ_API_KEY"):
-        try:
-            return _call_groq(prompt, groq_model, temperature)
-        except Exception as e:
-            msg = str(e).lower()
-            print(f"groq {groq_model} failed: {e}")
-            if "429" in msg and "quota" in msg:
-                pass
-
-    # 3. Nvidia (degraded: frequent timeouts, capped at 30s)
-    if os.getenv("NVIDIA_API_KEY"):
-        try:
-            is_analyzer = "AppSpec" in prompt or "Analyzer" in prompt
-            return _call_nvidia(prompt, nvidia_model, temperature, reasoning_effort="high" if is_analyzer else None)
-        except Exception as e:
-            print(f"nvidia {nvidia_model} failed: {e}")
-            if "429" in str(e).lower():
-                pass
-
-    # 4. DeepSeek (inactive unless a key is added — free skip)
-    if os.getenv("DEEPSEEK_API_KEY"):
-        try:
-            return _call_deepseek(prompt, deepseek_model, temperature)
-        except Exception as e:
-            print(f"deepseek {deepseek_model} failed: {e}")
-            if "429" in str(e).lower():
-                pass
-            # fall through
-
-    raise RuntimeError("All LLM providers failed or unconfigured (openrouter→gemini→groq→nvidia→deepseek)")
-
-def call_llm_with_meta(prompt: str, temperature: float = 0.2) -> tuple[str, dict]:
-    """Returns (text, meta) where meta has source/model for _meta badge — ordered by free quota: OpenRouter → Gemini → Groq → Nvidia → DeepSeek"""
-    primary = os.getenv("OPENROUTER_MODEL", "openrouter/free")
-    if os.getenv("OPENROUTER_API_KEY"):
-        try:
-            text = _call_openrouter(prompt, primary, temperature)
-            return text, {"source": "openrouter", "model": primary}
-        except Exception as e:
-            if "429" in str(e).lower():
-                raise
-            fallback = os.getenv("OPENROUTER_FALLBACK", "openrouter/free")
-            if fallback and fallback != primary:
-                try:
-                    text = _call_openrouter(prompt, fallback, temperature)
-                    return text, {"source": "openrouter", "model": fallback}
-                except: pass
-    try:
-        from main import call_gemini
-        text = call_gemini(prompt)
-        return text, {"source": "gemini", "model": os.getenv("GEMINI_MODEL", "gemini-3.6-flash")}
-    except Exception as e:
-        if "429" in str(e).lower() or "quota" in str(e).lower():
-            raise
-        print(f"gemini with_meta failed: {e}, trying groq")
-    groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
-    if os.getenv("GROQ_API_KEY"):
+    if _allowed("groq") and os.getenv("GROQ_API_KEY") and not _in_cooldown("groq"):
+        tried_any = True
         try:
             text = _call_groq(prompt, groq_model, temperature)
-            return text, {"source": "groq", "model": groq_model}
+            _clear_cooldown("groq")
+            return text
         except Exception as e:
-            if "429" in str(e).lower():
-                raise
-            print(f"groq with_meta {groq_model} failed: {e}, trying nvidia")
-    nvidia_model = os.getenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash-0731")
-    if os.getenv("NVIDIA_API_KEY"):
+            last_err = e
+            if _is_quota(e):
+                saw_quota = True
+                _mark_cooldown("groq")
+            print(f"groq {groq_model} failed: {e} — trying next provider")
+    elif _allowed("groq") and os.getenv("GROQ_API_KEY"):
+        print("groq in cooldown — skipping to next provider")
+
+    # 3. Nvidia (degraded: frequent timeouts, capped at 30s)
+    if _allowed("nvidia") and os.getenv("NVIDIA_API_KEY") and not _in_cooldown("nvidia"):
+        tried_any = True
         try:
             is_analyzer = "AppSpec" in prompt or "Analyzer" in prompt
             text = _call_nvidia(prompt, nvidia_model, temperature, reasoning_effort="high" if is_analyzer else None)
-            return text, {"source": "nvidia", "model": nvidia_model}
+            _clear_cooldown("nvidia")
+            return text
         except Exception as e:
-            if "429" in str(e).lower():
-                raise
-            print(f"nvidia with_meta {nvidia_model} failed: {e}, trying deepseek")
-    deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
-    if os.getenv("DEEPSEEK_API_KEY"):
+            last_err = e
+            if _is_quota(e):
+                saw_quota = True
+                _mark_cooldown("nvidia")
+            print(f"nvidia {nvidia_model} failed: {e} — trying next provider")
+    elif _allowed("nvidia") and os.getenv("NVIDIA_API_KEY"):
+        print("nvidia in cooldown — skipping to next provider")
+
+    # 4. DeepSeek (inactive unless a key is added — free skip)
+    if _allowed("deepseek") and os.getenv("DEEPSEEK_API_KEY") and not _in_cooldown("deepseek"):
+        tried_any = True
         try:
             text = _call_deepseek(prompt, deepseek_model, temperature)
+            _clear_cooldown("deepseek")
+            return text
+        except Exception as e:
+            last_err = e
+            if _is_quota(e):
+                saw_quota = True
+                _mark_cooldown("deepseek")
+            print(f"deepseek {deepseek_model} failed: {e}")
+            # fall through
+    elif _allowed("deepseek") and os.getenv("DEEPSEEK_API_KEY"):
+        print("deepseek in cooldown — no providers left")
+
+    if not tried_any and not has_any_llm():
+        raise RuntimeError("All LLM providers unconfigured (gemini→openrouter→groq→nvidia→deepseek)")
+    if saw_quota:
+        raise RuntimeError(f"429 All LLM providers exhausted (gemini→openrouter→groq→nvidia→deepseek): {last_err}")
+    raise RuntimeError(f"All LLM providers failed (gemini→openrouter→groq→nvidia→deepseek): {last_err}")
+
+def call_llm_with_meta(prompt: str, temperature: float = 0.2) -> tuple[str, dict]:
+    """Returns (text, meta) where meta has source/model for _meta badge — Gemini first, then OpenRouter → Groq → Nvidia → DeepSeek. Falls through until all exhausted (same cooldown as call_llm)."""
+    primary = os.getenv("OPENROUTER_MODEL", "openrouter/free")
+    fallback = os.getenv("OPENROUTER_FALLBACK", "openrouter/free")
+    groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+    nvidia_model = os.getenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash-0731")
+    deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+    last_err: Exception | None = None
+    saw_quota = False
+    tried_any = False
+
+    # 0. Gemini first (primary) — falls through on quota/failure
+    try:
+        if _allowed("gemini") and not _in_cooldown("gemini"):
+            tried_any = True
+            from main import call_gemini
+            text = call_gemini(prompt)
+            _clear_cooldown("gemini")
+            return text, {"source": "gemini", "model": os.getenv("GEMINI_MODEL", "gemini-3.6-flash")}
+        if _allowed("gemini"):
+            print("gemini in cooldown — skipping to next provider")
+    except Exception as e:
+        last_err = e
+        if _is_quota(e):
+            saw_quota = True
+            _mark_cooldown("gemini")
+            print(f"gemini quota exhausted: {e} — trying next provider")
+        else:
+            print(f"gemini with_meta failed: {e}, trying openrouter")
+
+    # 1. OpenRouter (free daily pool) — primary then fallback model
+    if _allowed("openrouter") and os.getenv("OPENROUTER_API_KEY") and not _in_cooldown("openrouter"):
+        tried_any = True
+        try:
+            text = _call_openrouter(prompt, primary, temperature)
+            _clear_cooldown("openrouter")
+            return text, {"source": "openrouter", "model": primary}
+        except Exception as e:
+            last_err = e
+            if _is_quota(e):
+                saw_quota = True
+            print(f"openrouter primary {primary} failed: {e} — trying fallback/next")
+            if fallback and fallback != primary:
+                try:
+                    text = _call_openrouter(prompt, fallback, temperature)
+                    _clear_cooldown("openrouter")
+                    return text, {"source": "openrouter", "model": fallback}
+                except Exception as e2:
+                    last_err = e2
+                    if _is_quota(e2):
+                        saw_quota = True
+                    print(f"openrouter fallback {fallback} failed: {e2} — trying next provider")
+            if _is_quota(last_err):
+                _mark_cooldown("openrouter")
+    if _allowed("groq") and os.getenv("GROQ_API_KEY") and not _in_cooldown("groq"):
+        tried_any = True
+        try:
+            text = _call_groq(prompt, groq_model, temperature)
+            _clear_cooldown("groq")
+            return text, {"source": "groq", "model": groq_model}
+        except Exception as e:
+            last_err = e
+            if _is_quota(e):
+                saw_quota = True
+                _mark_cooldown("groq")
+            print(f"groq with_meta {groq_model} failed: {e}, trying nvidia")
+    elif _allowed("groq") and os.getenv("GROQ_API_KEY"):
+        print("groq in cooldown — skipping to next provider")
+    if _allowed("nvidia") and os.getenv("NVIDIA_API_KEY") and not _in_cooldown("nvidia"):
+        tried_any = True
+        try:
+            is_analyzer = "AppSpec" in prompt or "Analyzer" in prompt
+            text = _call_nvidia(prompt, nvidia_model, temperature, reasoning_effort="high" if is_analyzer else None)
+            _clear_cooldown("nvidia")
+            return text, {"source": "nvidia", "model": nvidia_model}
+        except Exception as e:
+            last_err = e
+            if _is_quota(e):
+                saw_quota = True
+                _mark_cooldown("nvidia")
+            print(f"nvidia with_meta {nvidia_model} failed: {e}, trying deepseek")
+    elif _allowed("nvidia") and os.getenv("NVIDIA_API_KEY"):
+        print("nvidia in cooldown — skipping to next provider")
+    if _allowed("deepseek") and os.getenv("DEEPSEEK_API_KEY") and not _in_cooldown("deepseek"):
+        tried_any = True
+        try:
+            text = _call_deepseek(prompt, deepseek_model, temperature)
+            _clear_cooldown("deepseek")
             return text, {"source": "deepseek", "model": deepseek_model}
         except Exception as e:
-            if "429" in str(e).lower():
-                raise
+            last_err = e
+            if _is_quota(e):
+                saw_quota = True
+                _mark_cooldown("deepseek")
             print(f"deepseek with_meta {deepseek_model} failed: {e}")
-    raise RuntimeError("All LLM providers failed or unconfigured (openrouter→gemini→groq→nvidia→deepseek)")
+    elif _allowed("deepseek") and os.getenv("DEEPSEEK_API_KEY"):
+        print("deepseek in cooldown — no providers left")
+    if not tried_any and not has_any_llm():
+        raise RuntimeError("All LLM providers unconfigured (gemini→openrouter→groq→nvidia→deepseek)")
+    if saw_quota:
+        raise RuntimeError(f"429 All LLM providers exhausted (gemini→openrouter→groq→nvidia→deepseek): {last_err}")
+    raise RuntimeError(f"All LLM providers failed (gemini→openrouter→groq→nvidia→deepseek): {last_err}")
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
     """OpenRouter embeddings first, then Gemini. Returns list of vectors (3072d padded/truncated for pgvector)."""
@@ -290,8 +472,11 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
         from google import genai
         key = os.getenv("GEMINI_API_KEY", "")
         if not key:
-            return [[0.0]*1536 for _ in texts]
-        client = genai.Client(api_key=key)
+            return [[0.0]*3072 for _ in texts]
+        try:
+            client = genai.Client(api_key=key, http_options={"timeout": 60000})
+        except Exception:
+            client = genai.Client(api_key=key)
         out = []
         for t in texts:
             r = client.models.embed_content(model="gemini-embedding-001", contents=t)
@@ -354,11 +539,11 @@ def get_llm_status() -> dict:
                 quota = {"raw": j.get("data", j) if isinstance(j, dict) else str(j)[:500]}
         except Exception as e:
             quota = {"error": str(e)[:200]}
-    # Priority by available free quota: OpenRouter (50/day) -> Gemini (20/day) -> Groq -> Nvidia -> DeepSeek
-    if has_or:
-        primary_src = "openrouter"
-    elif has_gem:
+    # Priority: Gemini first, then OpenRouter -> Groq -> Nvidia -> DeepSeek
+    if has_gem:
         primary_src = "gemini"
+    elif has_or:
+        primary_src = "openrouter"
     elif has_groq:
         primary_src = "groq"
     elif has_nvidia:
@@ -367,11 +552,21 @@ def get_llm_status() -> dict:
         primary_src = "deepseek"
     else:
         primary_src = "none"
+    def _cd(name: str):
+        try:
+            until = float(_COOLDOWN.get(name, 0))
+            now = time.time()
+            return {"in_cooldown": now < until, "cooldown_until": until if now < until else None}
+        except Exception:
+            return {"in_cooldown": False, "cooldown_until": None}
     return {
-        "deepseek": {"configured": has_deepseek, "model": deepseek_model},
-        "groq": {"configured": has_groq, "model": groq_model},
-        "nvidia": {"configured": has_nvidia, "model": nvidia_model},
-        "openrouter": {"configured": has_or, "model": primary, "fallback": os.getenv("OPENROUTER_FALLBACK", "openrouter/free") if has_or else None, "quota": quota},
-        "gemini": {"configured": has_gem, "model": gem_model},
-        "primary": primary_src
+        "deepseek": {"configured": has_deepseek, "model": deepseek_model, **_cd("deepseek")},
+        "groq": {"configured": has_groq, "model": groq_model, **_cd("groq")},
+        "nvidia": {"configured": has_nvidia, "model": nvidia_model, **_cd("nvidia")},
+        "openrouter": {"configured": has_or, "model": primary, "fallback": os.getenv("OPENROUTER_FALLBACK", "openrouter/free") if has_or else None, "quota": quota, **_cd("openrouter")},
+        "gemini": {"configured": has_gem, "model": gem_model, **_cd("gemini")},
+        "primary": primary_src,
+        "order": PROVIDER_ORDER,
+        "cooldown_seconds": _cooldown_seconds(),
+        "only": sorted(_only_set()) if _only_set() is not None else None,
     }

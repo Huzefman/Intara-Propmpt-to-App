@@ -7,9 +7,23 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception
 from google import genai
 from supabase import create_client
+
+
+def _gemini_retryable(exc: BaseException) -> bool:
+    # Retry transient errors, but NOT quota exhaustion (falls through to next provider fast).
+    try:
+        from utils.json_parse import is_quota_error
+        if is_quota_error(exc):  # type: ignore[arg-type]
+            return False
+    except Exception:
+        m = str(exc).lower()
+        if "429" in m or "quota" in m or "exhausted" in m:
+            return False
+    return True
+
 
 load_dotenv()
 GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -17,7 +31,17 @@ MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 SUPA_URL = os.getenv("SUPABASE_URL", "")
 SUPA_KEY = os.getenv("SUPABASE_KEY", "")
 
-client = genai.Client(api_key=GEMINI_KEY) if GEMINI_KEY else None
+def _make_gemini_client(api_key: str):
+    # Bounded HTTP (60s): an unbounded generate_content can wedge the single
+    # uvicorn worker forever, freezing every endpoint mid-build.
+    try:
+        return genai.Client(api_key=api_key, http_options={"timeout": 60000})
+    except Exception as e:
+        print(f"gemini client timeout opts unsupported, plain client: {e}")
+        return genai.Client(api_key=api_key)
+
+
+client = _make_gemini_client(GEMINI_KEY) if GEMINI_KEY else None
 supabase = create_client(SUPA_URL, SUPA_KEY) if SUPA_URL and SUPA_KEY else None
 
 app = FastAPI(title="Intara — Planet of Wishes")
@@ -51,7 +75,7 @@ def parse_json(text: str):
     if m: text = m.group(0)
     return json.loads(text)
 
-@retry(wait=wait_exponential(min=1, max=8), stop=stop_after_attempt(3), retry=retry_if_exception_type(Exception))
+@retry(wait=wait_exponential(min=1, max=8), stop=stop_after_attempt(3), retry=retry_if_exception(_gemini_retryable))
 def call_gemini(prompt: str):
     if not client:
         raise RuntimeError("Missing GEMINI_API_KEY")

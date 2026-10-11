@@ -1,0 +1,22 @@
+{
+  "id": "kanban-board",
+  "version": "0.3.0",
+  "kind": "widget",
+  "title": "Kanban board",
+  "description": "Drag-across-columns board for status-grouped entities. Experimental: layout templates only, no dnd engine yet.",
+  "categories": ["dashboard"],
+  "status": "experimental",
+  "requires": ["crud-entity"],
+  "conflicts": [],
+  "params": {
+    "entity": {"type": "string", "required": true},
+    "group_by": {"type": "string", "required": false, "default": "status"}
+  },
+  "generator": {
+    "module": "services.generators.frontend_gen",
+    "prompt": null,
+    "template": null
+  },
+  "gates": [],
+  "capabilities": ["kanban"]
+}

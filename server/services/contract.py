@@ -24,6 +24,36 @@ FE_DEPS = ["react", "react-dom", "react-router-dom", "@supabase/supabase-js", "d
 FE_TAILWIND_DEPS = ["tailwindcss", "postcss", "autoprefixer"]
 BE_DEPS = ["fastapi", "uvicorn", "pydantic", "supabase", "python-dotenv", "sqlalchemy"]
 
+ALLOWED_FIELD_TYPES = {"text", "integer", "timestamp", "boolean", "uuid"}
+
+
+def _infer_type(name: str) -> str:
+    n = (name or "").lower()
+    if n == "id" or n.endswith("_id"):
+        return "uuid"
+    if n.endswith("_at") or n.endswith("_date") or n in ("date", "time", "due_date", "start_time"):
+        return "timestamp"
+    if n.startswith("is_") or n.startswith("has_") or n in ("completed", "available", "active", "published", "returned", "present"):
+        return "boolean"
+    if n in ("price", "count", "quantity", "total", "votes", "level", "duration", "stock", "rating", "score"):
+        return "integer"
+    return "text"
+
+
+def coerce_field(f) -> dict | None:
+    """Coerce one field spec to {name, type}. LLM outputs sometimes use bare
+    strings (["title", ...]) — those become text (with keyword type inference).
+    Returns None when the spec is unusable (caller drops/pads it)."""
+    if isinstance(f, str):
+        name = f.strip().strip(",")
+        if not name:
+            return None
+        return {"name": name, "type": _infer_type(name)}
+    if isinstance(f, dict) and f.get("name"):
+        typ = f.get("type")
+        return {"name": str(f["name"]), "type": typ if typ in ALLOWED_FIELD_TYPES else _infer_type(str(f["name"]))}
+    return None
+
 
 def canon_path(path: str) -> str:
     """:id → {id} everywhere."""
@@ -44,17 +74,45 @@ def client_fns(table: str) -> dict:
     }
 
 
-def table_routes(table: str) -> list[dict]:
+def table_routes(table: str, methods: list[str] | None = None) -> list[dict]:
+    """Full 6-route CRUD matrix per table by default; pass methods subset for
+    minimal modes (e.g. games: ["GET", "POST"] for append-only scores)."""
     base = f"/api/{table}"
     item = f"/api/{table}/{{id}}"
-    return [
+    full = [
         {"method": "GET", "path": base, "table": table},
         {"method": "POST", "path": base, "table": table},
-        {"method": "GET", "path": item, "table": table},
+        {"method": "GET_ID", "path": item, "table": table},
         {"method": "PUT", "path": item, "table": table},
         {"method": "PATCH", "path": item, "table": table},
         {"method": "DELETE", "path": item, "table": table},
     ]
+    if not methods:
+        return full
+    want = {m.upper() for m in methods}
+    # GET on an {id} path means the item getter
+    out = []
+    for r in full:
+        key = "GET_ID" if (r["method"] == "GET_ID") else r["method"]
+        if r["method"] in want or key in want:
+            out.append(r)
+    return out
+
+
+def _canon_api_route(a: dict) -> dict | None:
+    """PRD api entry -> contract route. Used for interactive appKinds where the
+    model declares exactly the routes the game needs (possibly zero)."""
+    method = str(a.get("method", "GET")).upper()
+    path = canon_path(str(a.get("path", "")))
+    if not path.startswith("/api/"):
+        return None
+    segs = [s for s in path.split("/") if s]
+    table = segs[1] if len(segs) > 1 else "items"
+    if "{id}" in path and method == "GET":
+        method = "GET_ID"
+    if method not in ("GET", "POST", "GET_ID", "PUT", "PATCH", "DELETE"):
+        return None
+    return {"method": method, "path": path, "table": table}
 
 
 def table_fks(table: str, entities: list | None) -> list[dict]:
@@ -76,11 +134,16 @@ def table_fks(table: str, entities: list | None) -> list[dict]:
 
 
 def build_contract(prd: dict, schema_tables: list | None = None) -> dict:
+    app_kind = str(prd.get("appKind") or "crud").lower()
     tables_in = schema_tables if schema_tables is not None else (prd.get("tables") or [])
     entities = prd.get("entities") or []
     tables = []
     for t in tables_in[:5]:
-        fields = [{**f} for f in (t.get("fields") or [])][:8]
+        fields = []
+        for f in (t.get("fields") or [])[:8]:
+            c = coerce_field(f)
+            if c:
+                fields.append(c)
         # FK columns are real columns (SQLite + Dexie + models all agree)
         existing = {f["name"] for f in fields}
         for fk in table_fks(t["name"], entities):
@@ -89,11 +152,30 @@ def build_contract(prd: dict, schema_tables: list | None = None) -> dict:
                 existing.add(fk["col"])
         tables.append({"name": t["name"], "fields": fields,
                        "fks": table_fks(t["name"], entities)})
-    routes = []
-    for t in tables:
-        routes.extend(table_routes(t["name"]))
-    return {"appName": prd.get("appName", "IntaraApp"),
-            "tables": tables, "routes": routes, "layout": dict(LAYOUT)}
+    if app_kind in ("interactive", "game"):
+        # Games declare exactly the routes they need (possibly zero for pure
+        # frontend). Never force the CRUD matrix.
+        routes: list[dict] = []
+        seen = set()
+        for a in prd.get("apis") or []:
+            r = _canon_api_route(a) if isinstance(a, dict) else None
+            if r and (r["method"], r["path"]) not in seen:
+                seen.add((r["method"], r["path"]))
+                routes.append(r)
+    else:
+        routes = []
+        for t in tables:
+            routes.extend(table_routes(t["name"]))
+    comp_units = (((prd.get("_components") or {}).get("units")) or [])
+    return {"appName": prd.get("appName", "IntaraApp"), "appKind": app_kind,
+            "tables": tables, "routes": routes, "layout": dict(LAYOUT),
+            "components": [{"component": u.get("component"), "config": u.get("config", {})}
+                           for u in comp_units if u.get("component")]}
+
+
+# contract route method -> client_fns key (for minimal-mode client checks)
+ROUTE_FN_KEYS = {"GET": "list", "POST": "create", "GET_ID": "get",
+                 "PUT": "put", "PATCH": "patch", "DELETE": "delete"}
 
 
 def ddl_for(contract: dict) -> str:
@@ -161,14 +243,20 @@ def check_no_template_tokens(files: list[dict]) -> list[str]:
 
 
 def check_backend_routes(files: list[dict], contract: dict) -> list[str]:
-    """main.py must serve the full route matrix; routers/ must not exist."""
+    """main.py must serve the contract's routes; routers/ must not exist.
+
+    Interactive appKinds with zero routes (pure frontend) are exempt from the
+    server/main.py requirement entirely."""
     errs = []
     paths = [f.get("path") for f in files]
     if any(p.startswith("server/routers/") for p in paths):
         errs.append("server/routers/ stubs present — all routes live in server/main.py")
     main = next((f.get("content", "") for f in files if f.get("path") == "server/main.py"), "")
     if not main:
+        if not contract.get("routes") and str(contract.get("appKind") or "crud").lower() in ("interactive", "game"):
+            return errs
         return errs + ["server/main.py missing"]
+    minimal = str(contract.get("appKind") or "crud").lower() in ("interactive", "game")
     for r in contract["routes"]:
         method = r["method"]
         # GET_ID shares the item path with distinct handler; check path presence per method family
@@ -177,10 +265,15 @@ def check_backend_routes(files: list[dict], contract: dict) -> list[str]:
         needle = f'@app.{method.lower()}("{r["path"]}")'
         if needle not in main:
             errs.append(f"server/main.py: missing route {method} {r['path']}")
-    # item routes (GET/PUT/PATCH/DELETE on {id}) share one path shape — require each decorator
+    # item routes ({id} shape): crud mode requires each decorator; minimal mode only
+    # requires the methods actually declared in the contract.
     item_paths = {r["path"] for r in contract["routes"] if "{id}" in r["path"]}
     for p in item_paths:
-        for m in ("get", "put", "patch", "delete"):
+        want = ("get", "put", "patch", "delete")
+        if minimal:
+            want = tuple(sorted({("get" if r["method"] == "GET_ID" else r["method"].lower())
+                                 for r in contract["routes"] if r["path"] == p}))
+        for m in want:
             if f'@app.{m}("{p}")' not in main:
                 errs.append(f"server/main.py: missing route {m.upper()} {p}")
     if "include_router" in main:
@@ -198,10 +291,24 @@ def check_frontend_client(files: list[dict], contract: dict) -> list[str]:
         return errs + ["src/api.ts missing"]
     if ":id" in api:
         errs.append("src/api.ts: Express-style :id — use ${id} interpolation")
-    for t in contract["tables"]:
-        for fname in client_fns(t["name"]).values():
+    minimal = str(contract.get("appKind") or "crud").lower() in ("interactive", "game")
+    if minimal:
+        # Require only the client fns for routes actually declared in the contract.
+        need: set[str] = set()
+        for r in contract.get("routes") or []:
+            key = ROUTE_FN_KEYS.get(r.get("method", ""))
+            if key:
+                for t in contract.get("tables") or []:
+                    if t.get("name") == r.get("table"):
+                        need.add(client_fns(t["name"])[key])
+        for fname in sorted(need):
             if fname not in api:
-                errs.append(f"src/api.ts: missing client fn {fname} for table {t['name']}")
+                errs.append(f"src/api.ts: missing client fn {fname} (declared route)")
+    else:
+        for t in contract["tables"]:
+            for fname in client_fns(t["name"]).values():
+                if fname not in api:
+                    errs.append(f"src/api.ts: missing client fn {fname} for table {t['name']}")
     # pages must use the client, not raw fetch to /api
     for path, content in by_path.items():
         if path.startswith("src/pages/") and "fetch('/api/" in content.replace('"', "'"):
@@ -220,6 +327,49 @@ def check_openapi(openapi: dict, contract: dict) -> list[str]:
     for p in paths:
         if ":id" in p:
             errs.append(f"openapi: Express-style path {p} — canonical is {{id}}")
+    return errs
+
+
+def check_csv_export(files: list[dict], components: list[dict]) -> list[str]:
+    """csv-export selected ⇒ helper exists + at least one page wires it.
+
+    The helper is emitted deterministically, so a missing helper means the
+    generator predates the component (real error). A missing button in all
+    pages is repairable (gate repair adds it to a list page).
+    """
+    wanted = [u for u in (components or []) if u.get("component") == "csv-export"]
+    if not wanted:
+        return []
+    errs = []
+    by_path = {f.get("path"): f.get("content", "") for f in files}
+    if "src/lib/csv.ts" not in by_path:
+        errs.append("src/lib/csv.ts missing (csv-export selected)")
+    pages = {p: c for p, c in by_path.items() if p.startswith("src/pages/")}
+    if pages and not any("downloadCsv(" in c for c in pages.values()):
+        # Name one target page so gate repair can patch it.
+        target = next((p for p in pages if "Dashboard" in p), sorted(pages)[0])
+        errs.append(f"{target}: no downloadCsv() wiring (csv-export selected — add Export button)")
+    return errs
+
+
+def check_file_upload(files: list[dict], components: list[dict]) -> list[str]:
+    """file-upload selected ⇒ helper exists + at least one detail page wires it.
+
+    The helper is emitted deterministically, so a missing helper means the
+    generator predates the component (real error). Missing section wiring in
+    all detail pages is repairable (gate repair adds it to a detail page).
+    """
+    wanted = [u for u in (components or []) if u.get("component") == "file-upload"]
+    if not wanted:
+        return []
+    errs = []
+    by_path = {f.get("path"): f.get("content", "") for f in files}
+    if "src/lib/upload.ts" not in by_path:
+        errs.append("src/lib/upload.ts missing (file-upload selected)")
+    details = {p: c for p, c in by_path.items() if p.startswith("src/pages/")}
+    if details and not any("uploadAttachment(" in c for c in details.values()):
+        target = next((p for p in details if "Detail" in p), sorted(details)[0])
+        errs.append(f"{target}: no uploadAttachment() wiring (file-upload selected — add Attachments section)")
     return errs
 
 

@@ -1,0 +1,23 @@
+{
+  "id": "dashboard-page",
+  "version": "1.0.0",
+  "kind": "page",
+  "title": "Dashboard page",
+  "description": "Metric overview page: stat cards plus the bound entity list. Landing route of dashboard apps.",
+  "categories": ["dashboard"],
+  "status": "stable",
+  "requires": ["crud-entity", "stat-cards"],
+  "conflicts": [],
+  "params": {
+    "page": {"type": "string", "required": true},
+    "route": {"type": "string", "required": false, "default": "/"},
+    "entity": {"type": "string", "required": true}
+  },
+  "generator": {
+    "module": "services.generators.frontend_gen",
+    "prompt": "prompts.frontend_page_v2.build_frontend_page_prompt",
+    "template": "list/dashboard template fallback"
+  },
+  "gates": ["tsx-valid", "has-default-export"],
+  "capabilities": ["overview", "metrics"]
+}

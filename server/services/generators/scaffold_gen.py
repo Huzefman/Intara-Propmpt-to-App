@@ -173,6 +173,23 @@ GEMINI_API_KEY=your_gemini_key
 """
     files["server/__init__.py"] = ""
 
+    # Supabase Storage bucket for the file-upload component. SQLite ignores it
+    # (uploads fall back to Data URLs); apply once in the Supabase SQL editor
+    # when going live, then set window.__INTARA_ENV__ in the frontend entry.
+    files["storage.sql"] = """-- Intara file uploads (Supabase Storage). Run once in the SQL editor.
+insert into storage.buckets (id, name, public)
+values ('uploads', 'uploads', true)
+on conflict (id) do nothing;
+
+drop policy if exists "uploads public read" on storage.objects;
+create policy "uploads public read"
+  on storage.objects for select using (bucket_id = 'uploads');
+
+drop policy if exists "uploads anyone can add" on storage.objects;
+create policy "uploads anyone can add"
+  on storage.objects for insert with check (bucket_id = 'uploads');
+"""
+
     files["README_BACKEND.md"] = f"""# {app_name} Backend
 
 Run without Supabase (SQLite):
@@ -184,6 +201,11 @@ uvicorn server.main:app --reload --port 8000
 ```
 
 With Supabase: set `SUPABASE_URL` and `SUPABASE_KEY` in `.env`, then same command — db.py swaps to Supabase.
+
+File uploads: run `storage.sql` once in the Supabase SQL editor to create the
+`uploads` bucket, then expose the project credentials to the frontend via
+`window.__INTARA_ENV__ = {{ SUPABASE_URL, SUPABASE_ANON_KEY }}`. Without it,
+uploads persist as local Data URLs per record.
 """
 
     return files

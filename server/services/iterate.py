@@ -144,7 +144,7 @@ def _validate(path: str, content: str) -> list[str]:
     try:
         if path.endswith((".tsx", ".ts")):
             from services.validator import validate_tsx
-            return validate_tsx(content)
+            return validate_tsx(content, path)
         if path.endswith(".py"):
             from services.validator import validate_python
             return validate_python(content)

@@ -1,0 +1,22 @@
+{
+  "id": "file-upload",
+  "version": "1.0.0",
+  "kind": "integration",
+  "title": "File upload + storage",
+  "description": "Attachments on detail pages: Supabase Storage bucket when configured, per-record Data-URL fallback in trial. Emits src/lib/upload.ts, an Attachments section, and storage.sql.",
+  "categories": ["catalog", "social", "content-management"],
+  "status": "stable",
+  "requires": [],
+  "conflicts": [],
+  "params": {
+    "entity": {"type": "string", "required": false, "description": "table whose detail pages get Attachments; empty means all"},
+    "bucket": {"type": "string", "required": false, "default": "uploads"}
+  },
+  "generator": {
+    "module": "services.generators.frontend_gen",
+    "prompt": null,
+    "template": "UPLOAD_LIB_TS + Attachments section in detail-page template, gated on prd._components"
+  },
+  "gates": ["check_file_upload", "tsx-valid"],
+  "capabilities": ["storage", "uploads"]
+}

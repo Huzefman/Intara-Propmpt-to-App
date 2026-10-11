@@ -1,0 +1,22 @@
+{
+  "id": "auth-pages",
+  "version": "0.3.0",
+  "kind": "page",
+  "title": "Auth pages",
+  "description": "Sign-in/profile pages bound to the users entity. Experimental: Supabase Auth wiring still demo-grade.",
+  "categories": ["dashboard", "social", "marketplace"],
+  "status": "experimental",
+  "requires": ["auth-users"],
+  "conflicts": [],
+  "params": {
+    "page": {"type": "string", "required": false, "default": "Profile"},
+    "route": {"type": "string", "required": false, "default": "/profile"}
+  },
+  "generator": {
+    "module": "services.generators.frontend_gen",
+    "prompt": "prompts.frontend_page_v2.build_frontend_page_prompt",
+    "template": "detail template fallback"
+  },
+  "gates": ["tsx-valid", "has-default-export"],
+  "capabilities": ["signin", "profile"]
+}

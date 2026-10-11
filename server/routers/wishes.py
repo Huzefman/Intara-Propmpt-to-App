@@ -114,12 +114,75 @@ class PatchPlanIn(BaseModel):
 class AnswerIn(BaseModel):
     answers: dict
 
-def make_plan(prompt: str, owner=None, answers: dict | None = None, skip_clarify: bool = False):
-    from services.planner_v2 import plan_build
-    from services.prompt_enhance import clarify_prompt, redraft_prompt, READY_THRESHOLD
-    # Fail-fast: Supabase is required for staged builds (normalized steps)
+def _plan_progress(wid: str, phase: str | None, label: str = ""):
+    """Publish planning progress to DB (polling) + SSE (live). Best-effort, never raises."""
     try:
-        from db.wishes import create_wish_tx
+        from db.wishes import get_wish_with_steps, set_wish_status
+        wish = get_wish_with_steps(wid)
+        artifacts = wish.get("artifacts") or {}
+        artifacts["plan_phase"] = {"phase": phase, "label": label} if phase else None
+        set_wish_status(wid, wish.get("status", "planning"), artifacts=artifacts)
+    except Exception as e:
+        print(f"plan progress DB snapshot failed for {wid}: {e}")
+    try:
+        from services.orchestrator import emit
+        emit(wid, "plan_phase", {"phase": phase, "label": label})
+    except Exception:
+        pass
+    try:
+        if wid in MEM:
+            arts = MEM[wid].get("artifacts") or {}
+            arts["plan_phase"] = {"phase": phase, "label": label} if phase else None
+            MEM[wid]["artifacts"] = arts
+    except Exception:
+        pass
+
+
+def _planning_shell(prompt: str, clarify: dict | None = None):
+    """Empty PRD shell shown instantly while the background plan task works."""
+    clarify = clarify or {}
+    return {
+        "appName": "Draft", "tagline": prompt[:120],
+        "tables": [], "pages": [], "apis": [], "auth": False,
+        "requirements": {"functional": [], "nonFunctional": []},
+        "ia": {"entities": [], "relations": [], "nav": []},
+        "buildGraph": [],
+        "clarify": {k: v for k, v in clarify.items() if not k.startswith("_")} if clarify else {"pending": True},
+        "_meta": {"source": (clarify.get("_meta", {}) or {}).get("source", "clarify") if clarify else "shell", "analyzer": False},
+    }
+
+
+def make_plan_shell(prompt: str):
+    """Fast sync half of POST /wish/plan: insert shell row, return it. No LLM."""
+    from db.wishes import create_wish_tx
+    wish = create_wish_tx(prompt, _planning_shell(prompt), status="planning")
+    MEM[wish["id"]] = wish
+    return wish
+
+
+async def _run_plan_task(wid: str, prompt: str, answers: dict | None = None, skip_clarify: bool = False):
+    """Background half of POST /wish/plan: clarify → plan → promote shell. Fail-closed.
+
+    Blocking LLM work runs in worker threads with a hard timeout so the event
+    loop stays responsive (page loads, polls, chat) while planning.
+    """
+    def _plan_timeout() -> float:
+        try:
+            return float(os.getenv("STEP_TIMEOUT_SECONDS", "600"))
+        except Exception:
+            return 600.0
+
+    async def _blocking(label: str, fn, *args):
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(fn, *args), timeout=_plan_timeout())
+        except asyncio.TimeoutError:
+            raise RuntimeError(f"{label} timed out after {int(_plan_timeout())}s")
+
+    try:
+        from services.planner_v2 import plan_build
+        from services.prompt_enhance import clarify_prompt, redraft_prompt, READY_THRESHOLD
+        from db.wishes import get_wish_with_steps, set_wish_status, promote_shell_to_plan
+        _plan_progress(wid, "clarifying", "Asking two quick questions…")
         clarify = None
         effective = prompt
         if answers:
@@ -128,37 +191,95 @@ def make_plan(prompt: str, owner=None, answers: dict | None = None, skip_clarify
             clarify = {"answers": answers, "redrafted": effective}
         elif not skip_clarify:
             # Clarify-first: one advisory call (never 429s — degrades to templates)
-            clarify = clarify_prompt(prompt)
+            clarify = await _blocking("clarify", clarify_prompt, prompt)
             if clarify.get("score", 0) < READY_THRESHOLD:
-                # Persist a clarifying shell (empty buildGraph) so answers can resume it
-                shell = {
-                    "appName": "Draft", "tagline": prompt[:120],
-                    "tables": [], "pages": [], "apis": [], "auth": False,
-                    "requirements": {"functional": [], "nonFunctional": []},
-                    "ia": {"entities": [], "relations": [], "nav": []},
-                    "buildGraph": [],
-                    "clarify": {k: v for k, v in clarify.items() if not k.startswith("_")},
-                    "_meta": {"source": clarify.get("_meta", {}).get("source", "clarify"), "analyzer": False},
-                }
-                wish = create_wish_tx(prompt, shell, status="planning")
-                MEM[wish["id"]] = wish
-                return wish
-        build_plan = plan_build(effective)
+                shell = _planning_shell(prompt, clarify)
+                set_wish_status(wid, "planning", prd=shell)
+                try:
+                    MEM[wid] = get_wish_with_steps(wid)
+                except Exception:
+                    pass
+                _plan_progress(wid, None)
+                try:
+                    from services.orchestrator import emit
+                    emit(wid, "plan_ready", {"wid": wid, "status": "planning"})
+                except Exception:
+                    pass
+                return
+        _plan_progress(wid, "drafting_tables", "Drafting tables…")
+        build_plan = await _blocking("plan", plan_build, effective)
+        _plan_progress(wid, "drafting_pages", "Drafting pages…")
         if clarify:
             build_plan.setdefault("_meta", {})["clarify"] = clarify if answers else {k: v for k, v in clarify.items() if not k.startswith("_")}
-        wish = create_wish_tx(prompt, build_plan, status="awaiting_approval")
-        # also cache in MEM for fast read-through (but source of truth is DB)
-        MEM[wish["id"]] = wish
-        return wish
+        # Background path always lands on approval (questions, if any, come from the
+        # clarify shell branch above which returns early).
+        status = "awaiting_approval"
+        wish = promote_shell_to_plan(wid, build_plan, status=status)
+        MEM[wid] = wish
+        try:
+            from components.store import record_wish_composition
+            record_wish_composition(wid, build_plan)
+        except Exception as e:
+            print(f"composition record skipped: {e}")
+        _plan_progress(wid, None)
+        try:
+            from services.orchestrator import emit
+            emit(wid, "plan_ready", {"wid": wid, "status": status})
+        except Exception:
+            pass
     except HTTPException:
         raise
     except Exception as e:
-        # Surface DB error to caller (fail-fast, no silent MEM)
-        print(f"make_plan DB fail-fast: {e}")
+        print(f"background plan failed for {wid}: {e}")
+        try:
+            from db.wishes import set_wish_status, get_wish_with_steps
+            err = str(e)[:500]
+            set_wish_status(wid, "failed")
+            try:
+                MEM[wid] = get_wish_with_steps(wid)
+            except Exception:
+                if wid in MEM:
+                    MEM[wid]["status"] = "failed"
+            try:
+                from services.orchestrator import emit
+                emit(wid, "plan_failed", {"wid": wid, "error": err})
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+
+@router.post("/wish/plan", status_code=202)
+def create_plan(body: PlanIn, background_tasks: BackgroundTasks):
+    """Fast shell + background plan: returns the wish instantly so the client can
+    navigate to the chat page immediately; clarify/plan land via polling/SSE."""
+    if not body.prompt or len(body.prompt.strip()) < 4:
+        raise HTTPException(400, "prompt too short")
+    if len(body.prompt) > 500:
+        raise HTTPException(400, "prompt too long (max 500)")
+    prompt = body.prompt.strip()
+    try:
+        wish = make_plan_shell(prompt)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"create_plan shell DB fail-fast: {e}")
         raise HTTPException(500, f"Supabase required for staged builds: {e}. Run supabase/migrations/002_staged_builds.sql in SQL editor. Status: {e}")
+    background_tasks.add_task(_run_plan_task, wish["id"], prompt, body.answers, body.skip_clarify)
+    return wish
+
 
 async def _run_staged_build(wid: str):
-    # background task: run orchestrator sequential — DB is source of truth, fail-fast
+    # background task: run orchestrator sequential — DB is source of truth, fail-fast.
+    # Single-flight: concurrent tasks for one wish corrupt step state, so bail if taken.
+    try:
+        from services.orchestrator import BUILD_RUNNING
+        if wid in BUILD_RUNNING:
+            print(f"staged build already running for {wid}, skipping duplicate task")
+            return
+        BUILD_RUNNING.add(wid)
+    except Exception:
+        pass
     try:
         from services.orchestrator import run_build_sequential
         from db.wishes import get_wish_with_steps, set_wish_status
@@ -176,7 +297,7 @@ async def _run_staged_build(wid: str):
             MEM[wid] = final
         except: pass
         if not ok:
-            # orchestrator already set failed, ensure MEM
+            # orchestrator already flipped DB to failed via _mark_build_failed; ensure MEM
             try:
                 MEM[wid]["status"] = "failed"
             except: pass
@@ -189,23 +310,12 @@ async def _run_staged_build(wid: str):
                 MEM[wid]["status"] = "failed"
         except: pass
         # surface via orchestrator emit already
-
-@router.post("/wish/plan")
-def create_plan(body: PlanIn):
-    if not body.prompt or len(body.prompt.strip()) < 4:
-        raise HTTPException(400, "prompt too short")
-    if len(body.prompt) > 500:
-        raise HTTPException(400, "prompt too long (max 500)")
-    try:
-        return make_plan(body.prompt.strip(), answers=body.answers, skip_clarify=body.skip_clarify)
-    except HTTPException:
-        raise
-    except Exception as e:
-        msg = str(e)
-        if "429" in msg or "quota" in msg.lower():
-            raise HTTPException(429, f"Gemini quota hit (20/day free). Retry in ~30s or try a smaller prompt. Details: {msg[:300]}")
-        print(f"create_plan error: {e}")
-        raise HTTPException(500, str(e))
+    finally:
+        try:
+            from services.orchestrator import BUILD_RUNNING as _BR
+            _BR.discard(wid)
+        except Exception:
+            pass
 
 @router.patch("/wish/{wid}/plan")
 def patch_plan(wid: str, body: PatchPlanIn):
@@ -274,6 +384,11 @@ def answer_clarify(wid: str, body: AnswerIn):
         if steps:
             supa.table("wish_steps").insert(steps).execute()
         supa.table("wishes").update({"prd": build_plan, "status": "awaiting_approval", "artifacts": {"steps": {n["id"]: {"status": "pending"} for n in build_plan.get("buildGraph", [])}, "buildGraph": build_plan.get("buildGraph", [])}, "build_graph": build_plan.get("buildGraph", [])}).eq("id", wid).execute()
+        try:
+            from components.store import record_wish_composition
+            record_wish_composition(wid, build_plan)
+        except Exception as e:
+            print(f"composition record skipped: {e}")
         from db.wishes import get_wish_with_steps as _reload
         MEM[wid] = _reload(wid)
         return MEM[wid]
@@ -453,7 +568,7 @@ async def stream_build(wid: str):
             # fallback to BUILD_STATE if DB steps empty but in-memory has more
             if not steps and wid in BUILD_STATE:
                 steps = BUILD_STATE[wid]["steps"]
-            yield f"data: {json.dumps({'event':'snapshot','steps': steps, 'status': wish.get('status')})}\n\n"
+            yield f"data: {json.dumps({'event':'snapshot','steps': steps, 'status': wish.get('status'), 'plan_phase': wish.get('artifacts',{}).get('plan_phase'), 'current_step': wish.get('current_step_id'), 'updated_at': wish.get('updated_at')})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'event':'error','error': str(e)})}\n\n"
             return
@@ -466,7 +581,7 @@ async def stream_build(wid: str):
                 try:
                     payload = await asyncio.wait_for(q.get(), timeout=2.0)
                     yield f"data: {json.dumps(payload)}\n\n"
-                    if payload.get("event") in ("build_done","build_failed"):
+                    if payload.get("event") in ("build_done","build_failed","plan_ready","plan_failed"):
                         break
                 except asyncio.TimeoutError:
                     # poll DB for status (fail-fast, but don't crash stream)
@@ -504,6 +619,16 @@ async def retry_step(wid: str, body: dict):
         steps = wish.get("artifacts",{}).get("steps",{})
         if step_id not in steps and step_id not in [n["id"] for n in wish.get("prd",{}).get("buildGraph",[])]:
             raise HTTPException(404, f"step {step_id} not found")
+        # Guard: refuse a second concurrent build for the same wish (two
+        # run_build_sequential tasks would interleave DB writes and corrupt step state)
+        try:
+            from services.orchestrator import BUILD_RUNNING
+            if wid in BUILD_RUNNING:
+                raise HTTPException(409, "build already running for this wish — watch it land instead of double-retrying")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
         # reset step in DB
         update_step(wid, step_id, status="pending", error=None, attempt=(steps.get(step_id,{}).get("attempt",1)+1 if isinstance(steps.get(step_id),dict) else 1))
         set_wish_status(wid, "building", current_step_id=step_id)

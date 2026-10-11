@@ -5,7 +5,73 @@ import os, json, re, uuid
 from prompts.build_plan import BUILD_PLAN_PROMPT
 from utils.json_parse import parse_json, is_quota_error
 
+GAME_WORDS = ("tic tac", "tictactoe", "tic-tac", "chess", "checkers", "sudoku",
+                "minesweeper", "snake", "pong", "tetris", "memory match", "memory game",
+                "crossword", "2048", "board game", "card game", "2-player", "two player")
+
+
+def _is_game_prompt(prompt: str) -> bool:
+    p = (prompt or "").lower()
+    return any(w in p for w in GAME_WORDS)
+
+
+def mock_game_plan(prompt: str) -> dict:
+    """Deterministic tic-tac-toe-shaped BuildPlan (no-key/quota fallback)."""
+    tables = [
+        {"name": "scores", "fields": [
+            {"name": "player", "type": "text"},
+            {"name": "wins", "type": "integer"},
+            {"name": "losses", "type": "integer"},
+            {"name": "draws", "type": "integer"},
+        ]},
+    ]
+    pages = [
+        {"name": "Game", "route": "/", "components": ["Board", "TurnIndicator", "Scoreboard"], "feature": "play"},
+        {"name": "Scores", "route": "/scores", "components": ["Scoreboard"], "feature": "scores"},
+    ]
+    apis = [
+        {"method": "GET", "path": "/api/scores", "desc": "list scores"},
+        {"method": "POST", "path": "/api/scores", "desc": "save score"},
+    ]
+    graph = [
+        {"id": "schema-foundation", "kind": "schema", "ref": None, "dependsOn": [], "status": "pending", "promptHint": "scores table"},
+        {"id": "backend-scores", "kind": "backend_table", "ref": "scores", "dependsOn": ["schema-foundation"], "status": "pending", "promptHint": "scores GET+POST only"},
+        {"id": "frontend-Game", "kind": "frontend_page", "ref": "Game", "dependsOn": ["schema-foundation"], "status": "pending", "promptHint": "board page + game logic"},
+        {"id": "frontend-Scores", "kind": "frontend_page", "ref": "Scores", "dependsOn": ["schema-foundation"], "status": "pending", "promptHint": "scoreboard page"},
+        {"id": "wiring", "kind": "wiring", "ref": None, "dependsOn": ["schema-foundation", "backend-scores", "frontend-Game", "frontend-Scores"], "status": "pending", "promptHint": "App.tsx game shell, scores mock"},
+        {"id": "validate", "kind": "validate", "ref": None, "dependsOn": ["wiring"], "status": "pending", "promptHint": "tsc + game rule gates"},
+    ]
+    return {
+        "appName": "TicTacToe",
+        "tagline": "Three in a row, forged in stardust",
+        "appType": "game",
+        "appKind": "interactive",
+        "gameType": "tictactoe",
+        "requirements": {
+            "functional": [
+                "As a player I want a 3x3 board so that I can play tic-tac-toe",
+                "As a player I want local 2-player mode so that we share one screen",
+                "As a player I want an AI opponent so that I can play solo",
+                "As a player I want persistent scores so that rivalries survive refresh",
+                "As a player I want rematch in one tap so that games keep flowing",
+            ],
+            "nonFunctional": ["Dark nebula glass, responsive, fluid animations", "Free-tier runnable, Dexie trial scores"],
+            "auth": False,
+            "roles": ["player"],
+        },
+        "ia": {"entities": ["scores"], "relations": [], "nav": ["Game -> /", "Scores -> /scores"]},
+        "entities": [{"name": "scores", "fields": tables[0]["fields"], "relationships": [], "businessRules": ["one row per player"]}],
+        "tables": tables,
+        "pages": pages,
+        "apis": apis,
+        "auth": False,
+        "buildGraph": graph,
+    }
+
+
 def mock_build_plan(prompt: str) -> dict:
+    if _is_game_prompt(prompt):
+        return mock_game_plan(prompt)
     # Reuse planner mock_prd and enrich to BuildPlan
     from services.planner import mock_prd
     base = mock_prd(prompt)
@@ -76,7 +142,11 @@ def plan_build(prompt: str) -> dict:
         if _is_quota_error(e):
             raise
         print(f"analyzer failed, falling back to legacy plan_build: {e}")
-    has_llm = bool(os.getenv("OPENROUTER_API_KEY") or os.getenv("GEMINI_API_KEY"))
+    try:
+        from services.llm import has_any_llm
+        has_llm = has_any_llm()
+    except Exception:
+        has_llm = bool(os.getenv("OPENROUTER_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GROQ_API_KEY") or os.getenv("NVIDIA_API_KEY") or os.getenv("DEEPSEEK_API_KEY"))
     if not has_llm:
         data = mock_build_plan(prompt)
         data["_meta"] = {"source": "mock", "reason": "no_key", "model": "mock"}
@@ -93,8 +163,10 @@ def plan_build(prompt: str) -> dict:
                 tmp = mock_build_plan(prompt)
                 data["requirements"] = data.get("requirements", tmp["requirements"])
                 data["ia"] = data.get("ia", tmp["ia"])
+                _kind = str(data.get("appKind") or ("interactive" if _is_game_prompt(prompt) else "crud")).lower()
+                data["appKind"] = _kind
                 for idx, p in enumerate(data.get("pages",[])):
-                    if "table" not in p:
+                    if "table" not in p and _kind == "crud":
                         p["table"] = data["tables"][idx % len(data["tables"])]["name"] if data["tables"] else "items"
                 graph = []
                 graph.append({"id":"schema-foundation","kind":"schema","ref":None,"dependsOn":[],"status":"pending","promptHint":"schema"})
@@ -106,7 +178,7 @@ def plan_build(prompt: str) -> dict:
                 graph.append({"id":"validate","kind":"validate","ref":None,"dependsOn":["wiring"],"status":"pending","promptHint":"validate"})
                 data["buildGraph"] = graph
             for p in data.get("pages",[]):
-                if "table" not in p:
+                if "table" not in p and str(data.get("appKind") or "crud").lower() == "crud":
                     p["table"] = data["tables"][0]["name"] if data["tables"] else "items"
             data["_meta"] = meta
             return data
@@ -128,7 +200,11 @@ def plan_build(prompt: str) -> dict:
                 return data
     except Exception as e:
         if _is_quota_error(e):
-            raise RuntimeError(f"429 LLM quota exhausted: {e}")
+            # All providers exhausted — degrade to mock with warning (never 500).
+            print(f"planner_v2 all-providers exhausted, mock fallback with warning: {e}")
+            data = mock_build_plan(prompt)
+            data["_meta"] = {"source": "mock", "reason": "all_exhausted", "warning": f"All LLM quotas exhausted. Using mock for now. Retry in ~60s. Prompt: {prompt[:40]}"}
+            return data
         print(f"planner_v2 fallback: {e}")
         data = mock_build_plan(prompt)
         data["_meta"] = {"source": "mock", "reason": str(e)[:120]}

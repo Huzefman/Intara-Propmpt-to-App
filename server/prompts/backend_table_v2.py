@@ -77,3 +77,47 @@ Rules:
 """
     prompt = prompt.replace("__APP_NAME__", str(app_spec.get('appName'))).replace("__ENTITY__", str(entity['name'])).replace("__FIELDS__", str(entity.get('fields'))).replace("__RELS__", str(relationships)).replace("__RULES__", str(business_rules)).replace("__APIS__", str(apis)).replace("__AUTH__", str(auth_required)).replace("__ALL_ENTITIES__", str(app_spec.get('entities'))).replace("__EXAMPLE__", example).replace("__TABLE_NAME__", table['name']).replace("__MATRIX_BLOCK__", matrix_block).replace("__FK_BLOCK__", fk_block)
     return prompt
+
+
+def build_backend_scores_prompt(table: dict, app_spec: dict) -> str:
+    """Minimal scores API for games — ONLY the declared routes (usually GET list
+    + POST save). Never full CRUD: no PUT/PATCH/DELETE (gates reject them)."""
+    apis = [a for a in app_spec.get("apis", []) if table["name"] in a.get("path", "")]
+    lines = "\n".join(f"- {a.get('method')} {a.get('path')} ({a.get('desc','')})" for a in apis) or "- GET /api/scores (list)\n- POST /api/scores (save)"
+    return f"""You are Intara backend weaver — build a MINIMAL scores API (FastAPI, SQLite default + Supabase swap via db.py).
+
+App: {app_spec.get('appName')}
+Table: {table['name']} fields: {table.get('fields')}
+Declared routes ONLY (output is rejected if it adds more):
+{lines}
+
+Layout (mandatory — deviation is rejected):
+- Put routes INLINE in server/main.py (one file); NEVER emit server/routers/ stubs
+- Import as `from server.db import get_engine, init_db, supabase`, run from backend/ via `uvicorn server.main:app`
+- ids are strings (uuid hex); POST validates winner/player payload, read-after-write happens AFTER commit
+- openapi paths use {{id}} only if a GET-by-id route is declared above, never :id
+
+Example (scores):
+from pydantic import BaseModel
+from typing import Optional
+class Score(BaseModel):
+    id: Optional[str] = None
+    player: str
+    wins: int = 0
+    losses: int = 0
+    draws: int = 0
+
+@app.get("/api/scores")
+def list_scores():
+    if supabase:
+        return supabase.table("scores").select("*").execute().data or []
+    with get_engine().connect() as conn:
+        return [dict(r) for r in conn.execute(text("select * from scores")).mappings().all()]
+
+Return ONLY JSON with files (server/main.py, server/models.py) and openapi for the DECLARED routes only.
+Rules:
+- Pydantic model with Optional id, sensible defaults (wins/losses/draws default 0)
+- FastAPI routes use get_engine+supabase fallback, proper HTTP codes (400 on empty player)
+- Full-file content for every file; no stubs: no `return []`, no SELECT 1, no TODO, no bare `...`
+- No markdown, JSON only
+"""

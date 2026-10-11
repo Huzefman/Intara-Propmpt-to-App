@@ -1,0 +1,15 @@
+{
+  "version": "1.0.0",
+  "packs": {
+    "dashboard": ["auth-users", "crud-entity", "dashboard-page", "list-page", "detail-page", "crud-api", "stat-cards"],
+    "catalog": ["crud-entity", "list-page", "detail-page", "crud-api"],
+    "marketplace": ["auth-users", "crud-entity", "list-page", "detail-page", "crud-api"],
+    "social": ["auth-users", "crud-entity", "list-page", "detail-page", "crud-api"],
+    "booking": ["booking-slot", "list-page", "detail-page", "crud-api"],
+    "content-management": ["auth-users", "crud-entity", "list-page", "detail-page", "crud-api"],
+    "form-wizard": ["crud-entity", "detail-page", "crud-api"],
+    "game": ["scores-table", "game-board", "scores-list", "scores-api"],
+    "tool": ["game-board"],
+    "showcase": []
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "id": "supabase-auth",
+  "version": "0.3.0",
+  "kind": "integration",
+  "title": "Supabase Auth",
+  "description": "Supabase Auth client wiring with RLS owner policies. Experimental: RLS posture still demo-open.",
+  "categories": ["dashboard", "social", "marketplace"],
+  "status": "experimental",
+  "requires": ["auth-users"],
+  "conflicts": [],
+  "params": {},
+  "generator": {
+    "module": null,
+    "prompt": null,
+    "template": "supabase client + RLS migration snippet"
+  },
+  "gates": [],
+  "capabilities": ["auth", "rls"]
+}

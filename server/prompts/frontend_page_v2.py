@@ -80,6 +80,7 @@ __EXAMPLE__
 Return ONLY JSON with path and content for src/pages/__PAGE_NAME__.tsx
 __CLIENT_BLOCK__
 Rules:
+- MUST include `export default function __PAGE_NAME__` (routing and the pages barrel import the DEFAULT export; a named-only export breaks the build and is rejected)
 - Use React hooks; data ONLY via the imported client fns (list/create/get/put/patch/delete)
 - Strict TS: annotate every callback param (e.g. (x:any), (s:any), (e:any)); Dexie-free page code
 - Single braces in JSX (style={{...}} is an object; never {{! or {{f[); no __TOKENS__ leftovers
@@ -93,3 +94,37 @@ Rules:
     prompt = prompt.replace("__PAGE_NAME__", page['name']).replace("__ROUTE__", page['route']).replace("__TABLE__", table_name).replace("__LAYOUT__", layout).replace("__LIST_STYLE__", list_style)
     prompt = prompt.replace("__FEATURES__", str(ui.get('features', []))).replace("__IMPORTS_REF__", imports_ref).replace("__API_CONTRACT__", api_contract).replace("__ENTITIES__", str(app_spec.get('entities'))).replace("__ALL_PAGES__", str(app_spec.get('pages'))).replace("__EXAMPLE__", example).replace("__CLIENT_BLOCK__", client_block)
     return prompt
+
+
+def build_frontend_game_prompt(page: dict, app_spec: dict) -> str:
+    """Game page prompt — board UI plus a pure, import-free rules module.
+
+    Returns a TWO-file JSON contract: the page (default export, imports the
+    rules) and src/game/logic.ts (pure calcWinner/isDraw/legalMoves/applyMove/
+    bestMove, zero imports — the rule gates execute it). Single braces in JSX.
+    """
+    game_type = str(app_spec.get("gameType") or "tictactoe")
+    features = (app_spec.get("uiPatterns") or {}).get("features", [])
+    return f"""You are Intara game weaver — build ONE playable game page for Vite React 18 + TS, Sandpack safe (no import.meta).
+
+App: {app_spec.get('appName')} — {app_spec.get('tagline')}
+Game type: {game_type} (tic-tac-toe: 3x3 grid, X first, win = 3 in a row/col/diag, draw = full board)
+Page: {page.get('name')} route: {page.get('route')} components: {",".join(page.get('components', []))}
+Features: {features}
+
+Design System (Intara — Dark Nebula Glass):
+- Colors: bg #07070B, glass rgba(255,255,255,0.035) blur 24px, border rgba(255,255,255,0.06), nebula #8B5CF6, text #F8FAFC muted #CBD5E1
+- Typography: Space Grotesk (headings), Inter (body), JetBrains Mono (code)
+- Big tappable cells (min 72px), turn indicator, scoreboard, reset/rematch button, mode select (local 2-player vs AI), difficulty select if AI
+
+Return ONLY JSON: {{"files": [{{"path": "src/pages/{page.get('name')}.tsx", "content": "...page..."}}, {{"path": "src/game/logic.ts", "content": "...pure rules..."}}]}}
+Rules:
+- MUST include `export default function {page.get('name')}` in the page (routing imports the DEFAULT export)
+- src/game/logic.ts MUST export exactly: calcWinner(board), isDraw(board), legalMoves(board), applyMove(board, i, player), bestMove(board, player — unbeatable minimax). Board is (("X"|"O"|null)[] of length 9). ZERO imports in logic.ts (gates execute it standalone). applyMove throws on occupied cells.
+- Page imports rules ONLY from '../game/logic' (or '../../game/logic'): never duplicate win logic in the page
+- State: board, turn, mode ('2P'|'AI'), scores in useState; persist scores via localStorage AND POST /api/scores when available (never block play on network)
+- Strict TS: annotate every callback param (x:any, s:any, e:any). Dexie-free page code
+- Single braces in JSX (style={{{{...}}}} is an object; never {{{{! or {{{{f[); no __TOKENS__ leftovers
+- No search/filter/create-form CRUD chrome. No stubs, no TODO, playable on first render
+- No markdown, JSON only
+"""

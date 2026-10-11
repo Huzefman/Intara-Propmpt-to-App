@@ -71,9 +71,13 @@ Intara weaves stardust into code. Make another wish at intara.planet.wish
     # cites — try RAG, fallback mock (handle dim mismatch)
     cites = []
     try:
-        gemini_key = os.getenv("GEMINI_API_KEY","")
-        supa_url = os.getenv("SUPABASE_URL","")
-        if gemini_key and supa_url:
+        try:
+            from services.llm import has_any_llm
+            _has_llm = has_any_llm()
+        except Exception:
+            _has_llm = bool(os.getenv("GEMINI_API_KEY", "") or os.getenv("OPENROUTER_API_KEY", "") or os.getenv("GROQ_API_KEY", "") or os.getenv("NVIDIA_API_KEY", "") or os.getenv("DEEPSEEK_API_KEY", ""))
+        supa_url = os.getenv("SUPABASE_URL", "")
+        if _has_llm and supa_url:
             try:
                 from rag import answer
                 rag_res = answer(f"What stack for {app_name}? {prompt[:100]}")

@@ -1,0 +1,21 @@
+{
+  "id": "scores-table",
+  "version": "1.0.0",
+  "kind": "entity",
+  "title": "Scores table",
+  "description": "Append-only per-player score counters for games. No FKs, no auth — shared arcade data.",
+  "categories": ["game"],
+  "status": "stable",
+  "requires": [],
+  "conflicts": [],
+  "params": {
+    "table": {"type": "string", "required": false, "default": "scores"}
+  },
+  "generator": {
+    "module": "services.generators.schema_gen",
+    "prompt": "prompts.schema_v2.build_schema_game_prompt",
+    "template": "game scores DDL fallback"
+  },
+  "gates": ["schema-conformance"],
+  "capabilities": ["tables", "leaderboard-data"]
+}

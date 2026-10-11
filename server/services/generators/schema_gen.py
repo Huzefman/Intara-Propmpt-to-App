@@ -93,13 +93,20 @@ def _parse_json(text: str):
 
 
 def _schema_conforms(data: dict, prd: dict) -> list[str]:
-    """LLM schema output must carry every belongs_to FK column in sql+prisma."""
+    """LLM schema output must carry every belongs_to FK column in sql+prisma,
+    cover every PRD table, and use well-formed {name, type} field dicts."""
+    from services.contract import ALLOWED_FIELD_TYPES
     problems = []
     want_tables = {t["name"].lower() for t in (prd.get("tables") or [])}
     got_tables = {t.get("name", "").lower() for t in (data.get("tables") or [])}
     for w in want_tables:
         if w not in got_tables:
             problems.append(f"table {w} missing from LLM schema")
+    for t in data.get("tables") or []:
+        for f in t.get("fields") or []:
+            if not isinstance(f, dict) or not f.get("name") or f.get("type") not in ALLOWED_FIELD_TYPES:
+                problems.append(f"table {t.get('name')}: malformed field {str(f)[:60]} (need {{name, type}})")
+                break
     sql = (data.get("sql") or "").lower()
     prisma = (data.get("prisma") or "").lower()
     for ent in prd.get("entities") or []:
@@ -118,9 +125,13 @@ def generate_schema(prd: dict):
     # LLM-first if entities present (skipped under INTARA_TEMPLATE_ONLY for $0 builds/tests)
     if prd.get("entities") and not os.getenv("INTARA_TEMPLATE_ONLY"):
         try:
-            from prompts.schema_v2 import build_schema_prompt
             from services.llm import call_llm
-            raw = call_llm(build_schema_prompt(prd), temperature=0.2)
+            if str(prd.get("appKind") or "").lower() in ("interactive", "game"):
+                from prompts.schema_v2 import build_schema_game_prompt
+                raw = call_llm(build_schema_game_prompt(prd), temperature=0.2)
+            else:
+                from prompts.schema_v2 import build_schema_prompt
+                raw = call_llm(build_schema_prompt(prd), temperature=0.2)
             data = _parse_json(raw)
             if data.get("tables") and data.get("sql") and data.get("prisma"):
                 problems = _schema_conforms(data, prd)
@@ -132,11 +143,16 @@ def generate_schema(prd: dict):
 
     tables = prd.get("tables", [])
     entities = prd.get("entities")
-    # sanitize: 1-5 tables, 2-6 fields, types text/integer/timestamp/boolean/uuid
-    allowed = {"text","integer","timestamp","boolean","uuid"}
+    # sanitize: 1-5 tables, 2-6 fields, types text/integer/timestamp/boolean/uuid.
+    # coerce_field tolerates LLM string-shaped fields (["title", ...]).
+    from services.contract import coerce_field
     sane = []
     for t in tables[:5]:
-        fields = [f for f in t.get("fields", []) if f.get("type") in allowed][:6]
+        fields = []
+        for f in (t.get("fields", []) or [])[:6]:
+            c = coerce_field(f)
+            if c and c["type"] in {"text", "integer", "timestamp", "boolean", "uuid"}:
+                fields.append(c)
         if len(fields) < 2:
             while len(fields) < 2:
                 fields.append({"name": f"field_{len(fields)+1}", "type": "text"})

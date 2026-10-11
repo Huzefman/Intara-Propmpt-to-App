@@ -79,8 +79,50 @@ function ClarifyCards({ questions, answers, onPick, submitting, onSubmit, onSkip
   )
 }
 
-function phaseChips(graph: any[]): { label: string }[] {
-  const tables = graph.filter(n => n.kind === 'backend_table').length
+const PLAN_PHASES = [
+  { id: 'clarifying', label: 'Clarifying' },
+  { id: 'drafting_tables', label: 'Tables' },
+  { id: 'drafting_pages', label: 'Pages' },
+] as const
+
+function PlanProgress({ phase, label }: { phase?: string | null; label?: string | null }) {
+  const order = PLAN_PHASES.map((p) => p.id)
+  const activeIdx = phase ? order.indexOf(phase as (typeof order)[number]) : 0
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }} aria-label="Plan progress">
+        {PLAN_PHASES.map((p, i) => {
+          const done = activeIdx > i
+          const active = activeIdx === i
+          return (
+            <span key={p.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span style={{
+                padding: '6px 10px', borderRadius: 999, fontSize: 11, fontWeight: active ? 600 : 500,
+                background: done ? 'rgba(16,185,129,0.12)' : active ? 'rgba(139,92,246,0.16)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${done ? 'rgba(16,185,129,0.22)' : active ? 'rgba(139,92,246,0.32)' : 'rgba(255,255,255,0.06)'}`,
+                color: done ? '#10B981' : active ? 'var(--intara-nebula-light)' : 'var(--intara-faint)',
+                animation: active ? 'pulse 1.2s ease-in-out infinite' : 'none',
+                whiteSpace: 'nowrap',
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: done ? '#10B981' : active ? '#8B5CF6' : 'var(--intara-dim)', display: 'inline-block', marginRight: 6, verticalAlign: 'middle' }} />
+                {p.label}
+              </span>
+              {i < PLAN_PHASES.length - 1 && <span style={{ color: 'var(--intara-dim)', fontSize: 10 }}>→</span>}
+            </span>
+          )
+        })}
+      </div>
+      {(label || activeIdx >= 0) && (
+        <div style={{ fontSize: 11.5, color: 'var(--intara-faint)', marginTop: 8 }}>
+          <span className="chat-shimmer" aria-label="Planning in progress">✦</span> {label || 'Warming up the forge…'}
+        </div>
+      )}
+      <style>{`@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }`}</style>
+    </div>
+  )
+}
+
+function phaseChips(graph: any[]): { label: string }[] {  const tables = graph.filter(n => n.kind === 'backend_table').length
   const pages = graph.filter(n => n.kind === 'frontend_page').length
   const chips = [{ label: '01 wish' }, { label: '02 schema' }]
   if (tables) chips.push({ label: `03 ${tables} table${tables === 1 ? '' : 's'}` })
@@ -290,8 +332,8 @@ function ChatThread({ wish, onChanged }: { wish: Wish; onChanged: () => void }) 
         const next = await createPlan(wish.prompt + a.suffix)
         nav(`/wish/${next.id}`)
       }
-    } catch {
-      /* surfaced via thread refresh / navigation */
+    } catch (e: any) {
+      setErr(e?.message || 'Action failed — retry shortly.')
     } finally {
       setActing(null)
     }
@@ -504,6 +546,7 @@ export function AgentThread({ wish, onChanged, buildView }: { wish: Wish; onChan
       {wish.status === 'planning' && (
         clarify?.questions?.length ? (
           <AgentBubble>
+            <PlanProgress phase={wish.artifacts?.plan_phase?.phase} label={wish.artifacts?.plan_phase?.label} />
             <ClarifyCards
               questions={clarify.questions}
               answers={answers}
@@ -515,7 +558,10 @@ export function AgentThread({ wish, onChanged, buildView }: { wish: Wish; onChan
             />
           </AgentBubble>
         ) : (
-          <AgentBubble><p>Refining your wish into a plan…</p></AgentBubble>
+          <AgentBubble>
+            <PlanProgress phase={wish.artifacts?.plan_phase?.phase} label={wish.artifacts?.plan_phase?.label} />
+            <p>Refining your wish into a plan…</p>
+          </AgentBubble>
         )
       )}
 

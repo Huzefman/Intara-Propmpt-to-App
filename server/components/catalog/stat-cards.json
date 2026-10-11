@@ -1,0 +1,21 @@
+{
+  "id": "stat-cards",
+  "version": "1.0.0",
+  "kind": "widget",
+  "title": "Stat cards strip",
+  "description": "Total/active/unique metric cards computed from a bound entity list. Folds into list/dashboard pages.",
+  "categories": ["dashboard"],
+  "status": "stable",
+  "requires": ["crud-entity"],
+  "conflicts": [],
+  "params": {
+    "entity": {"type": "string", "required": true}
+  },
+  "generator": {
+    "module": "services.generators.frontend_gen",
+    "prompt": null,
+    "template": "stats strip inside list/dashboard template"
+  },
+  "gates": ["tsx-valid"],
+  "capabilities": ["metrics"]
+}

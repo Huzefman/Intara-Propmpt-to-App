@@ -33,9 +33,20 @@ export async function createWish(prompt: string): Promise<Wish> {
   return res.json()
 }
 
+export class PlanAbortedError extends Error {
+  prompt: string
+  constructor(prompt: string) {
+    super('Still weaving — the wish takes longer than usual. It is likely safe: check Constellation or retry and you will land straight in the build chat.')
+    this.name = 'PlanAbortedError'
+    this.prompt = prompt
+  }
+}
+
 export async function createPlan(prompt: string): Promise<Wish> {
+  // Server returns a shell instantly (202) and plans in background, so this
+  // timer is a safety net only — it must never surface a raw AbortError.
   const controller = new AbortController()
-  const t = setTimeout(() => controller.abort(), 35000)
+  const t = setTimeout(() => controller.abort(), 150000)
   try {
     const res = await fetch('/api/wish/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }), signal: controller.signal })
     if (!res.ok) {
@@ -43,7 +54,28 @@ export async function createPlan(prompt: string): Promise<Wish> {
       throw new Error(`plan failed ${res.status} ${txt}`)
     }
     return res.json()
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw new PlanAbortedError(prompt)
+    throw e
   } finally { clearTimeout(t) }
+}
+
+/** After an abort/timeout: find a just-created wish for the same prompt (<3 min old). */
+export async function reconcileWish(prompt: string): Promise<Wish | null> {
+  try {
+    const all = await listWishes()
+    const now = Date.now()
+    const mine = all
+      .filter((w) => w.prompt === prompt)
+      .filter((w) => {
+        const t = Date.parse(w.created_at)
+        return Number.isFinite(t) && now - t < 3 * 60 * 1000
+      })
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+    return mine[0] ?? null
+  } catch {
+    return null
+  }
 }
 
 export async function patchPlan(id: string, prd: any): Promise<Wish> {

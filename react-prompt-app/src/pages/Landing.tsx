@@ -4,7 +4,7 @@ import { motion, useSpring, useTransform } from 'framer-motion'
 import { PlanetOrb } from '../components/PlanetOrb'
 import { WishInput } from '../components/WishInput'
 import { Pillars, HowItWorks } from '../components/RocketSections'
-import { createWish, createPlan, askRag } from '../api/client'
+import { createWish, createPlan, askRag, reconcileWish, PlanAbortedError } from '../api/client'
 import { supabase } from '../supabase'
 import { useReveal } from '../hooks/useReveal'
 
@@ -41,6 +41,7 @@ export function Landing() {
   const [prompt, setPrompt] = useState(EXAMPLES[0])
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [weaveNote, setWeaveNote] = useState<string | null>(null)
   const [count, setCount] = useState<number | null>(null)
   const [q, setQ] = useState('What stack does Intara use?')
   const [ragAns, setRagAns] = useState('')
@@ -58,12 +59,25 @@ export function Landing() {
   async function onWeave() {
     if (!prompt.trim()) return
     setLoading(true); setErr(null)
+    const text = prompt.trim()
     try {
-      const w = staged ? await createPlan(prompt) : await createWish(prompt)
+      const w = staged ? await createPlan(text) : await createWish(text)
       nav(`/wish/${w.id}`)
     } catch (e: any) {
-      setErr(e.message || 'weave failed')
-    } finally { setLoading(false) }
+      if (e instanceof PlanAbortedError) {
+        // Slow plan, not a failure: the server keeps working. Reconcile —
+        // land straight in the chat if the wish already exists.
+        setWeaveNote('Still weaving — checking for your wish…')
+        const found = await reconcileWish(text)
+        if (found) {
+          nav(`/wish/${found.id}`)
+          return
+        }
+        setErr(e.message)
+      } else {
+        setErr(e.message || 'weave failed')
+      }
+    } finally { setLoading(false); setWeaveNote(null) }
   }
 
   async function onAsk() {
@@ -119,7 +133,8 @@ export function Landing() {
       <div ref={wishRef} style={{ scrollMarginTop: 90 }}>
         <WishInput value={prompt} onChange={setPrompt} onSubmit={onWeave} loading={loading} placeholder={staged ? "I wish for a hackathon manager with teams, projects, votes..." : "I wish for a..."} autoFocus />
       </div>
-      {err && <div style={{ marginTop: 12, fontSize: 12.5, fontWeight: 450, color: '#FCA5A5', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.14)', padding: '12px 14px', borderRadius: 14, backdropFilter: 'blur(12px)' }}>{err}</div>}
+      {err && <div style={{ marginTop: 12, fontSize: 12.5, fontWeight: 450, color: '#FCA5A5', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.14)', padding: '12px 14px', borderRadius: 14, backdropFilter: 'blur(12px)' }}>{err} <button onClick={() => nav('/constellation')} className="btn-ghost btn-sm" style={{ marginLeft: 8 }}>Open Constellation</button></div>}
+      {weaveNote && !err && <div style={{ marginTop: 12, fontSize: 12.5, color: 'var(--intara-nebula-light)' }}>{weaveNote}</div>}
 
       <Pillars />
       <HowItWorks onStart={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />

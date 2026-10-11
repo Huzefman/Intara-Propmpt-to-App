@@ -1,0 +1,22 @@
+{
+  "id": "charts",
+  "version": "0.1.0",
+  "kind": "widget",
+  "title": "Charts",
+  "description": "Recharts/d3-style series charts over entity data. Planned: no chart dependency or template yet.",
+  "categories": ["dashboard"],
+  "status": "planned",
+  "requires": ["crud-entity"],
+  "conflicts": [],
+  "params": {
+    "entity": {"type": "string", "required": true},
+    "series": {"type": "array", "required": false}
+  },
+  "generator": {
+    "module": null,
+    "prompt": null,
+    "template": null
+  },
+  "gates": [],
+  "capabilities": ["charts"]
+}

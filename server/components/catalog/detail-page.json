@@ -1,0 +1,23 @@
+{
+  "id": "detail-page",
+  "version": "1.0.0",
+  "kind": "page",
+  "title": "Detail page",
+  "description": "Single-record view with edit form, save/delete actions, and raw data inspector. Binds one entity via :id route.",
+  "categories": ["dashboard", "catalog", "social", "marketplace", "booking", "content-management"],
+  "status": "stable",
+  "requires": ["crud-entity"],
+  "conflicts": [],
+  "params": {
+    "page": {"type": "string", "required": true},
+    "route": {"type": "string", "required": true, "description": "must contain :id or {id}"},
+    "entity": {"type": "string", "required": true}
+  },
+  "generator": {
+    "module": "services.generators.frontend_gen",
+    "prompt": "prompts.frontend_page_v2.build_frontend_page_prompt",
+    "template": "detail template fallback"
+  },
+  "gates": ["tsx-valid", "has-default-export"],
+  "capabilities": ["read-one", "edit", "delete"]
+}

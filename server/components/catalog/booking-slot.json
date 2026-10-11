@@ -1,0 +1,23 @@
+{
+  "id": "booking-slot",
+  "version": "1.0.0",
+  "kind": "entity",
+  "title": "Bookable slots",
+  "description": "Services + time slots + appointments triple for booking flows with availability semantics.",
+  "categories": ["booking"],
+  "status": "stable",
+  "requires": [],
+  "conflicts": [],
+  "params": {
+    "service_table": {"type": "string", "required": false, "default": "services"},
+    "slot_table": {"type": "string", "required": false, "default": "slots"},
+    "booking_table": {"type": "string", "required": false, "default": "appointments"}
+  },
+  "generator": {
+    "module": "services.generators.schema_gen",
+    "prompt": "prompts.schema_v2.build_schema_prompt",
+    "template": "to_prisma/to_sql deterministic fallback"
+  },
+  "gates": ["schema-conformance"],
+  "capabilities": ["tables", "availability"]
+}

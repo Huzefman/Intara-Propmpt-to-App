@@ -1,0 +1,23 @@
+{
+  "id": "list-page",
+  "version": "1.0.0",
+  "kind": "page",
+  "title": "List page",
+  "description": "Searchable, filterable record list with stats strip, create form, and cards linking to detail. Binds one entity.",
+  "categories": ["dashboard", "catalog", "social", "marketplace", "booking", "content-management"],
+  "status": "stable",
+  "requires": ["crud-entity"],
+  "conflicts": [],
+  "params": {
+    "page": {"type": "string", "required": true, "description": "PascalCase page name"},
+    "route": {"type": "string", "required": true},
+    "entity": {"type": "string", "required": true, "description": "bound table name"}
+  },
+  "generator": {
+    "module": "services.generators.frontend_gen",
+    "prompt": "prompts.frontend_page_v2.build_frontend_page_prompt",
+    "template": "list/dashboard template fallback"
+  },
+  "gates": ["tsx-valid", "has-default-export"],
+  "capabilities": ["browse", "search", "create"]
+}

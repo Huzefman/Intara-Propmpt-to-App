@@ -1,0 +1,21 @@
+{
+  "id": "crud-api",
+  "version": "1.0.0",
+  "kind": "api",
+  "title": "Full CRUD API",
+  "description": "Six-route matrix (list, create, get, put, patch, delete) for one entity with Supabase-first, SQLite-fallback handlers.",
+  "categories": ["dashboard", "catalog", "marketplace", "social", "booking", "content-management"],
+  "status": "stable",
+  "requires": ["crud-entity"],
+  "conflicts": [],
+  "params": {
+    "entity": {"type": "string", "required": true}
+  },
+  "generator": {
+    "module": "services.generators.backend_gen",
+    "prompt": "prompts.backend_table_v2.build_backend_table_prompt",
+    "template": "_template_backend full CRUD fallback"
+  },
+  "gates": ["route-matrix", "be-matrix"],
+  "capabilities": ["rest-crud", "openapi"]
+}

@@ -245,7 +245,11 @@ def _is_quota(e: Exception) -> bool:
     return is_quota_error(e)
 
 def plan_wish(prompt: str) -> dict:
-    has_llm = bool(os.getenv("OPENROUTER_API_KEY") or os.getenv("GEMINI_API_KEY"))
+    try:
+        from services.llm import has_any_llm
+        has_llm = has_any_llm()
+    except Exception:
+        has_llm = bool(os.getenv("OPENROUTER_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GROQ_API_KEY") or os.getenv("NVIDIA_API_KEY") or os.getenv("DEEPSEEK_API_KEY"))
     if not has_llm:
         data = mock_prd(prompt)
         data["_meta"] = {"source": "mock", "reason": "no_key"}
@@ -278,7 +282,12 @@ def plan_wish(prompt: str) -> dict:
                 return data
     except Exception as e:
         if _is_quota(e):
-            raise RuntimeError(f"429 LLM quota exhausted: {e}")
+            # All providers exhausted (chain tried OR→Gemini→Groq→Nvidia→DeepSeek):
+            # degrade to mock with warning instead of 500/429 so the app keeps working.
+            print(f"planner all-providers exhausted, mock fallback with warning: {e}")
+            data = mock_prd(prompt)
+            data["_meta"] = {"source": "mock", "reason": "all_exhausted", "warning": f"All LLM quotas exhausted. Using mock for now. Retry in ~60s. Prompt: {prompt[:40]}"}
+            return data
         print(f"planner fallback due to: {e}")
         data = mock_prd(prompt)
         data["_meta"] = {"source": "mock", "reason": str(e)[:120]}

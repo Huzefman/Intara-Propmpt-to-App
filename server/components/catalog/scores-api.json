@@ -1,0 +1,21 @@
+{
+  "id": "scores-api",
+  "version": "1.0.0",
+  "kind": "api",
+  "title": "Scores API",
+  "description": "Append-only scores endpoints (list + save). No update/delete routes by design.",
+  "categories": ["game"],
+  "status": "stable",
+  "requires": ["scores-table"],
+  "conflicts": [],
+  "params": {
+    "entity": {"type": "string", "required": false, "default": "scores"}
+  },
+  "generator": {
+    "module": "services.generators.backend_gen",
+    "prompt": "prompts.backend_table_v2.build_backend_scores_prompt",
+    "template": "_template_backend minimal fallback"
+  },
+  "gates": ["declared-routes", "be-matrix"],
+  "capabilities": ["rest-append", "openapi"]
+}

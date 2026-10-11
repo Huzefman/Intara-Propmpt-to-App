@@ -1,0 +1,21 @@
+{
+  "id": "search-api",
+  "version": "0.3.0",
+  "kind": "api",
+  "title": "Full-text search API",
+  "description": "Search endpoint over entity text fields. Experimental: client-side filtering covers most cases today.",
+  "categories": ["catalog", "content-management"],
+  "status": "experimental",
+  "requires": ["crud-entity"],
+  "conflicts": [],
+  "params": {
+    "entity": {"type": "string", "required": true}
+  },
+  "generator": {
+    "module": null,
+    "prompt": null,
+    "template": null
+  },
+  "gates": [],
+  "capabilities": ["search"]
+}

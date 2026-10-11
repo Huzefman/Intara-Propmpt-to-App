@@ -1,0 +1,21 @@
+{
+  "id": "csv-export",
+  "version": "1.0.0",
+  "kind": "workflow",
+  "title": "CSV export",
+  "description": "One-click CSV download of any entity table. Emits src/lib/csv.ts plus an Export button (filtered rows) on list pages.",
+  "categories": ["dashboard", "catalog"],
+  "status": "stable",
+  "requires": ["crud-entity"],
+  "conflicts": [],
+  "params": {
+    "entity": {"type": "string", "required": true}
+  },
+  "generator": {
+    "module": "services.generators.frontend_gen",
+    "prompt": null,
+    "template": "CSV_LIB_TS + Export button in list-page template, gated on prd._components"
+  },
+  "gates": ["check_csv_export", "tsx-valid"],
+  "capabilities": ["export", "csv"]
+}

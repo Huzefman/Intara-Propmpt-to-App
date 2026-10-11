@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react'
 
 export function WishVault() {
   const { id } = useParams()
-  const { wish, loading, err, setWish } = useWish(id)
+  const { wish, loading, busy, err, setWish } = useWish(id)
   const refresh = useCallback(async () => {
     if (!id) return
     try { setWish(await getWish(id)) } catch { /* keep current */ }
@@ -65,7 +65,7 @@ export function WishVault() {
   if (loading && !wish) return <div className="glass" style={{ padding: 40, textAlign: 'center', borderRadius: 20 }}>
     <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.06)', borderTopColor: 'var(--intara-nebula)', borderRadius: '50%', animation: 'spin 0.9s var(--ease-fluid) infinite', margin: '0 auto' }} />
     <div style={{ fontFamily: 'Space Grotesk', fontSize: 14, fontWeight: 500, letterSpacing: '-0.02em', marginTop: 16, color: 'var(--intara-text)' }}>Opening studio…</div>
-    <div style={{ color: 'var(--intara-faint)', fontSize: 12.5, marginTop: 6, fontWeight: 400 }}>Intara is listening</div>
+    <div style={{ color: 'var(--intara-faint)', fontSize: 12.5, marginTop: 6, fontWeight: 400 }}>{busy ? 'Server is busy building — holding the door open, retrying…' : 'Intara is listening'}</div>
     <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
   </div>
   if (err) return <div className="glass" style={{ padding: 20, color: '#FCA5A5', borderRadius: 16 }}>{err} <Link to="/" style={{ color: 'var(--intara-nebula-light)' }}>Make another wish</Link></div>
@@ -122,7 +122,7 @@ export function WishVault() {
             <button className="studio-collapse-btn" onClick={() => setChatCollapsed(true)} title="Collapse chat" aria-label="Collapse chat">‹‹</button>
           </div>
           <ErrorBoundary label="agent thread" key={`thread-${wish.id}-${wish.status}`}>
-            <AgentThread wish={wish} onChanged={refresh} buildView={building ? <BuildingView wish={wish} compact /> : undefined} />
+            <AgentThread wish={wish} onChanged={refresh} buildView={building ? <BuildingView wish={wish} compact onChanged={refresh} /> : undefined} />
           </ErrorBoundary>
         </div>
       ) : (
@@ -155,23 +155,122 @@ export function WishVault() {
   )
 }
 
-function BuildingView({ wish, compact = false }: { wish: any; compact?: boolean }) {
+function fmtDur(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return '—'
+  const s = Math.floor(ms / 1000)
+  if (s < 60) return `${s}s`
+  return `${Math.floor(s / 60)}m ${s % 60}s`
+}
+
+function toMs(t: any): number | null {
+  if (t == null) return null
+  if (typeof t === 'number') return t < 1e12 ? t * 1000 : t
+  const p = Date.parse(t)
+  return Number.isFinite(p) ? p : null
+}
+
+function eventLabel(ev: any): { text: string; tone: 'ok' | 'busy' | 'bad' | 'dim' } {
+  const d = ev.data || ev || {}
+  switch (ev.event) {
+    case 'snapshot': return { text: `Connected — ${(d.status || 'building').replace('_', ' ')}`, tone: 'dim' }
+    case 'build_started': return { text: `Build started — ${(d.graph || []).length} steps`, tone: 'busy' }
+    case 'step_started': return { text: `▶ ${d.stepId || ''} started (${d.kind || ''}${d.ref ? ` · ${d.ref}` : ''})`, tone: 'busy' }
+    case 'step_done': return { text: `✓ ${d.stepId || ''} done`, tone: 'ok' }
+    case 'step_failed': return { text: `✗ ${d.stepId || ''} failed — ${(d.error || '').slice(0, 140)}`, tone: 'bad' }
+    case 'step_skipped': return { text: `↷ ${d.stepId || ''} already done — skipped`, tone: 'dim' }
+    case 'validation_started': return { text: 'Running pre-checks (syntax + wiring)…', tone: 'busy' }
+    case 'validation_warnings': return { text: `⚠ ${(d.errors || []).length} validation warning(s) — see details`, tone: 'bad' }
+    case 'validation_gates': return { text: d.phase === 'tsc/vite' ? 'Heavy gates: type-check + production build (slowest step, minutes)…' : d.phase === 'import/crud' ? 'Heavy gates: backend import + CRUD matrix…' : `Gate phase: ${d.phase || ''}`, tone: 'busy' }
+    case 'plan_phase': return { text: `Plan: ${d.label || d.phase || ''}`, tone: 'busy' }
+    case 'plan_ready': return { text: 'Plan ready — awaiting approval', tone: 'ok' }
+    case 'plan_failed': return { text: `Plan failed — ${(d.error || '').slice(0, 140)}`, tone: 'bad' }
+    case 'build_done': return { text: 'Build done — packing the trial…', tone: 'ok' }
+    case 'build_failed': return { text: `Build failed at ${d.failedStep || 'unknown step'}`, tone: 'bad' }
+    case 'heartbeat': return { text: `Still working — status ${(d.status || '').replace('_', ' ')}`, tone: 'dim' }
+    case 'error': return { text: `Stream note: ${(d.error || ev.error || '').slice(0, 140)}`, tone: 'dim' }
+    default: return { text: `${ev.event}`, tone: 'dim' }
+  }
+}
+
+function BuildingView({ wish, compact = false, onChanged }: { wish: any; compact?: boolean; onChanged?: () => void }) {
   const [steps, setSteps] = useState<any>(wish.artifacts?.steps || {})
-  const [log, setLog] = useState<any[]>([])
+  const [feed, setFeed] = useState<{ t: number; text: string; tone: string }[]>([])
+  const [gatePhase, setGatePhase] = useState<string | null>(null)
+  const [live, setLive] = useState<'live' | 'polling'>('live')
+  const [now, setNow] = useState(() => Date.now())
+  const [finished, setFinished] = useState<string | null>(null)
+  const [retryErr, setRetryErr] = useState<string | null>(null)
+  const [retrying, setRetrying] = useState<string | null>(null)
+  const finishedRef = useRef(false)
+
+  async function onRetryStep(stepId: string) {
+    setRetryErr(null)
+    setRetrying(stepId)
+    try {
+      const { retryStep } = await import('../api/client')
+      await retryStep(wish.id, stepId)
+      setFinished(null)
+      finishedRef.current = false
+      onChanged?.()
+    } catch (e: any) {
+      setRetryErr(e?.message || 'Retry failed')
+    } finally {
+      setRetrying(null)
+    }
+  }
+
+  const pushFeed = useCallback((ev: any) => {
+    const { text, tone } = eventLabel(ev)
+    setFeed((prev) => [...prev.slice(-30), { t: Date.now(), text, tone }])
+  }, [])
+
+  const finish = useCallback((status: string) => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    setFinished(status)
+    pushFeed({ event: status === 'ready' ? 'build_done' : 'build_failed', data: {} })
+    // refresh parent (no full page reload) so Trial/plan states render
+    setTimeout(() => { try { onChanged?.() } catch {} }, 600)
+  }, [onChanged, pushFeed])
 
   useEffect(() => {
-    // SSE
-    const close = streamBuild(wish.id, (ev:any) => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    // SSE live
+    const close = streamBuild(wish.id, (ev: any) => {
+      if (!ev || !ev.event) return
       if (ev.event === 'step_started' || ev.event === 'step_done' || ev.event === 'step_failed') {
-        setSteps((prev:any) => ({ ...prev, [ev.data.stepId]: { status: ev.event === 'step_started' ? 'running' : ev.event === 'step_done' ? 'done' : 'failed', ...ev.data }}))
+        setSteps((prev: any) => ({ ...prev, [ev.data.stepId]: { status: ev.event === 'step_started' ? 'running' : ev.event === 'step_done' ? 'done' : 'failed', ...ev.data } }))
+      } else if (ev.event === 'snapshot' && ev.data?.steps) {
+        setSteps((prev: any) => ({ ...prev, ...ev.data.steps }))
+      } else if (ev.event === 'validation_started') {
+        setGatePhase('pre-checks')
+      } else if (ev.event === 'validation_gates') {
+        setGatePhase(ev.data?.phase || 'gates')
+      } else if (ev.event === 'build_done') {
+        finish('ready')
+        return
+      } else if (ev.event === 'build_failed' || ev.event === 'plan_failed') {
+        finish('failed')
+        return
+      } else if (ev.event === 'error') {
+        setLive('polling')
       }
-      setLog(prev => [...prev.slice(-20), ev])
-      if (ev.event === 'build_done' || ev.event === 'build_failed') {
-        // will be updated via polling as well, but force reload after 1s
-        setTimeout(() => window.location.reload(), 800)
-      }
+      if (ev.event === 'heartbeat') {
+        // collapse repeats: one "still working" line until real news arrives
+        setFeed((prev) => {
+          const last = prev[prev.length - 1]
+          if (last && last.text.startsWith('Still working')) return prev
+          const { text, tone } = eventLabel(ev)
+          return [...prev.slice(-30), { t: Date.now(), text, tone }]
+        })
+      } else pushFeed(ev)
+      setLive('live')
     })
-    // polling fallback every 2s
+    // polling fallback every 2s (also the source of truth while SSE is down)
     const iv = setInterval(async () => {
       try {
         const res = await fetch(`/api/wish/${wish.id}`)
@@ -180,26 +279,44 @@ function BuildingView({ wish, compact = false }: { wish: any; compact?: boolean 
           if (data.artifacts?.steps) setSteps(data.artifacts.steps)
           if (data.status === 'ready' || data.status === 'failed') {
             clearInterval(iv)
-            setTimeout(() => window.location.reload(), 500)
+            finish(data.status)
           }
         }
-      } catch {}
+      } catch { setLive('polling') }
     }, 2000)
     return () => { close(); clearInterval(iv) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wish.id])
 
   const graph = wish.prd?.buildGraph || []
-  const done = Object.values(steps as any).filter((s:any)=>s.status==='done').length
-  const total = graph.length || Object.keys(steps).length
+  const stepList = Object.entries(steps as any)
+  const done = stepList.filter(([, s]: any) => s?.status === 'done').length
+  const total = graph.length || stepList.length
+  const running = graph.find((n: any) => (steps[n.id] || {}).status === 'running')
+  const runningDetail = running ? `${running.kind}${running.ref ? ` · ${running.ref}` : ''}${running.promptHint ? ` — ${running.promptHint}` : ''}` : null
+  const failedSteps = graph.filter((n: any) => (steps[n.id] || {}).status === 'failed')
+  const startedAll = stepList.map(([, s]: any) => toMs(s?.startedAt)).filter((v): v is number => v != null)
+  const elapsed = startedAll.length ? now - Math.min(...startedAll) : 0
+  const toneColor: Record<string, string> = { ok: '#10B981', busy: 'var(--intara-nebula-light)', bad: '#F87171', dim: 'var(--intara-dim)' }
 
   return (
     <div className="build-compact">
       <div style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <strong style={{ fontFamily: 'Space Grotesk', fontWeight: 500 }}>Building {wish.prd?.appName || 'app'}</strong>
-          <span style={{ marginLeft: 'auto', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--intara-faint)' }}>{done} / {total}</span>
+          <span title={live === 'live' ? 'Live event stream connected' : 'Stream down — updating via polling'} style={{ fontSize: 10.5, padding: '3px 8px', borderRadius: 999, background: live === 'live' ? 'rgba(16,185,129,0.12)' : 'rgba(251,191,36,0.12)', border: '1px solid rgba(255,255,255,0.06)', color: live === 'live' ? '#10B981' : '#FBBF24' }}>
+            ● {live === 'live' ? 'live' : 'polling'}
+          </span>
+          <span style={{ marginLeft: 'auto', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--intara-faint)' }}>{done} / {total} · {fmtDur(elapsed)}</span>
         </div>
         {!compact && <div style={{ color: 'var(--intara-faint)', fontSize: 12, marginTop: 4 }}>{wish.prompt}</div>}
+        {(runningDetail || finished) && (
+          <div style={{ marginTop: 8, fontSize: 12, color: finished ? (finished === 'ready' ? '#10B981' : '#F87171') : 'var(--intara-nebula-light)' }}>
+            {finished ? (finished === 'ready' ? '✓ Build finished — packing the trial…' : '✗ Build stalled — plan is safe, retry below.') : (
+              <><span className="chat-shimmer" aria-label="Step in progress">✦</span> Now building: {runningDetail}{gatePhase ? ` — ${gatePhase}` : ''}</>
+            )}
+          </div>
+        )}
         <div style={{ marginTop: 10, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 999, overflow: 'hidden' }}>
           <div style={{ width: `${total ? (done/total)*100 : 0}%`, height: '100%', background: 'linear-gradient(90deg, #8B5CF6, #7C3AED)', transition: 'width 0.6s var(--ease-premium)' }} />
         </div>
@@ -240,29 +357,52 @@ function BuildingView({ wish, compact = false }: { wish: any; compact?: boolean 
             const color = st.status === 'done' ? '#10B981' : st.status === 'running' ? '#8B5CF6' : st.status === 'failed' ? '#F87171' : 'var(--intara-dim)'
             const bg = st.status === 'done' ? 'rgba(16,185,129,0.10)' : st.status === 'running' ? 'rgba(139,92,246,0.12)' : st.status === 'failed' ? 'rgba(248,113,113,0.08)' : 'rgba(255,255,255,0.02)'
             const isRunning = st.status === 'running'
+            const sMs = toMs(st.startedAt)
+            const eMs = toMs(st.endedAt)
+            const dur = sMs != null ? fmtDur((eMs ?? now) - sMs) : null
             return (
               <div key={n.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 12, background: bg, border: '1px solid rgba(255,255,255,0.04)', opacity: isRunning ? 1 : st.status === 'pending' ? 0.7 : 1 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, boxShadow: isRunning ? '0 0 8px rgba(139,92,246,0.5)' : 'none', flexShrink: 0, animation: isRunning ? 'pulse 1s infinite' : 'none' }} />
                 <span style={{ fontSize: 12, fontWeight: 550, color: 'var(--intara-text)' }}>{n.id}</span>
-                <span style={{ fontSize: 11, color: 'var(--intara-faint)' }}>{n.kind} · {n.ref || '-'}</span>
+                <span style={{ fontSize: 11, color: 'var(--intara-faint)' }}>{n.kind} · {n.ref || '-'}{dur ? ` · ${dur}` : ''}</span>
                 <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 500, color, display: 'flex', alignItems: 'center', gap: 6 }}>
                   {isRunning && <span style={{ width: 10, height: 10, border: '1.5px solid rgba(139,92,246,0.3)', borderTopColor: '#8B5CF6', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />}
                   {st.status}
-                  {st.status === 'failed' && <button onClick={async()=>{await fetch(`/api/wish/${wish.id}/retry`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({stepId: n.id})}); window.location.reload()}} style={{ marginLeft: 8, padding: '4px 8px', borderRadius: 999, fontSize: 10, border: '1px solid rgba(248,113,113,0.3)', background: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer' }}>Retry</button>}
+                  {st.status === 'failed' && <button onClick={() => onRetryStep(n.id)} disabled={retrying === n.id} style={{ marginLeft: 8, padding: '4px 8px', borderRadius: 999, fontSize: 10, border: '1px solid rgba(248,113,113,0.3)', background: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer' }}>{retrying === n.id ? 'Retrying…' : 'Retry'}</button>}
                 </span>
               </div>
             )
           })}
         </div>
+        {failedSteps.length > 0 && (
+          <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 12, background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.14)', fontSize: 11.5, color: '#FCA5A5' }}>
+            {failedSteps.map((n:any) => (
+              <div key={n.id} style={{ marginTop: 4 }}>{n.id}: {String((steps[n.id] || {}).error || 'failed').slice(0, 220)}</div>
+            ))}
+            {retryErr && <div style={{ marginTop: 6 }}>Retry note: {retryErr}</div>}
+          </div>
+        )}
+        {feed.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 6 }}>Live activity</div>
+            <div style={{ display: 'grid', gap: 4, maxHeight: 180, overflow: 'auto', padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 12 }}>
+              {feed.slice(-8).map((f, i) => (
+                <div key={i} style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: toneColor[f.tone] || 'var(--intara-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <span style={{ opacity: 0.6 }}>{new Date(f.t).toLocaleTimeString()}</span> {f.text}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <style>{`@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
         <div style={{ marginTop: 10, fontSize: 11, color: 'var(--intara-dim)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <span>● One prompt per page/component</span>
-          <span>● Wired as single app at the end</span>
-          <span>● SSE live + poll fallback</span>
+          <span>● Step-by-step, wired as one app at the end</span>
+          <span>● Type-check + build gates are the slow part (minutes)</span>
+          <span>● Safe to keep open — progress resumes after refresh</span>
         </div>
       </div>
 
-      <div style={{ marginTop: 12, fontSize: 11, color: 'var(--intara-dim)' }}>Building sequentially — this takes ~6-10s for 12 steps. Do not close.</div>
+      <div style={{ marginTop: 12, fontSize: 11, color: 'var(--intara-dim)' }}>Building sequentially on the shared free pool — quiet stretches of a few minutes during gates are normal.</div>
     </div>
   )
 }

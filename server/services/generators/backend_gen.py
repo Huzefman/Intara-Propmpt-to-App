@@ -12,11 +12,15 @@ from utils.json_parse import parse_json as _parse_json, is_quota_error
 
 def generate_backend_table_llm(table: dict, app_spec: dict) -> dict | None:
     try:
-        from prompts.backend_table_v2 import build_backend_table_prompt
         from services.llm import call_llm
         from services.validator import validate_python
 
-        prompt = build_backend_table_prompt(table, app_spec)
+        if str(app_spec.get("appKind") or "").lower() in ("interactive", "game"):
+            from prompts.backend_table_v2 import build_backend_scores_prompt
+            prompt = build_backend_scores_prompt(table, app_spec)
+        else:
+            from prompts.backend_table_v2 import build_backend_table_prompt
+            prompt = build_backend_table_prompt(table, app_spec)
         raw = call_llm(prompt, temperature=0.3)
         data = _parse_json(raw)
         files = data.get("files", [])
@@ -100,6 +104,80 @@ def _template_backend(contract: dict) -> dict:
     ]
     for t in tables:
         name = t["name"]
+        if contract.get("appKind") in ("interactive", "game"):
+            # Minimal mode: emit ONLY declared contract routes (e.g. scores GET+POST).
+            declared = {(r.get("table"), r.get("method")) for r in contract.get("routes", [])}
+            main.append("")
+            main.append(f"# {name} — minimal routes (Supabase when env set, else SQLite)")
+            if (name, "GET") in declared:
+                main.append(f'@app.get("/api/{name}")')
+                main.append(f"def list_{name}():")
+                main.append("    if supabase:")
+                main.append("        try:")
+                main.append(f'            return supabase.table("{name}").select("*").execute().data or []')
+                main.append("        except Exception as e: print(e)")
+                main.append("    try:")
+                main.append("        with get_engine().connect() as conn:")
+                main.append(f'            rows = conn.execute(text("select * from {name}")).mappings().all()')
+                main.append("            return [dict(r) for r in rows]")
+                main.append("    except Exception as e: raise HTTPException(500, str(e))")
+            if (name, "POST") in declared:
+                main.append(f'@app.post("/api/{name}")')
+                main.append(f"def create_{name}(body: dict):")
+                main.append('    body = dict(body or {})')
+                main.append('    body.setdefault("id", _new_id())')
+                main.append("    if supabase:")
+                main.append("        try:")
+                main.append(f'            return supabase.table("{name}").insert(body).execute().data[0]')
+                main.append("        except Exception as e: print(e)")
+                main.append("    try:")
+                main.append("        with get_engine().begin() as conn:")
+                main.append('            cols = ", ".join(body.keys())')
+                main.append('            vals = ", ".join([f":{k}" for k in body.keys()])')
+                main.append(f'            conn.execute(text(f"insert into {name} ({{cols}}) values ({{vals}})"), body)')
+                main.append("    except HTTPException: raise")
+                main.append("    except Exception as e: raise HTTPException(500, str(e))")
+                main.append(f'    return _row_or_404("{name}", body["id"])')
+            for method, fname in (("get", f"get_{name}_by_id"), ("put", f"put_{name}"),
+                                  ("patch", f"patch_{name}"), ("delete", f"delete_{name}")):
+                want = "GET_ID" if method == "get" else method.upper()
+                if (name, want) not in declared:
+                    continue
+                main.append(f'@app.{method}("/api/{name}/{{id}}")')
+                if method == "get":
+                    main.append(f"def {fname}(id: str):")
+                    main.append(f'    return _row_or_404("{name}", id)')
+                elif method == "delete":
+                    main.append(f"def {fname}(id: str):")
+                    main.append(f'    _row_or_404("{name}", id)')
+                    main.append("    if supabase:")
+                    main.append("        try:")
+                    main.append(f'            supabase.table("{name}").delete().eq("id", id).execute()')
+                    main.append(f'            return {{"ok": True}}')
+                    main.append("        except Exception as e: print(e)")
+                    main.append("    try:")
+                    main.append("        with get_engine().begin() as conn:")
+                    main.append(f'            conn.execute(text("delete from {name} where id = :id"), {{"id": id}})')
+                    main.append('        return {"ok": True}')
+                    main.append("    except HTTPException: raise")
+                    main.append("    except Exception as e: raise HTTPException(500, str(e))")
+                else:
+                    main.append(f"def {fname}(id: str, body: dict):")
+                    main.append(f'    _row_or_404("{name}", id)')
+                    main.append('    body = {k: v for k, v in dict(body or {}).items() if k != "id"}')
+                    main.append('    if not body: raise HTTPException(400, "empty update")')
+                    main.append("    if supabase:")
+                    main.append("        try:")
+                    main.append(f'            return supabase.table("{name}").update(body).eq("id", id).execute().data[0]')
+                    main.append("        except Exception as e: print(e)")
+                    main.append("    try:")
+                    main.append("        with get_engine().begin() as conn:")
+                    main.append('            sets = ", ".join([f"{k} = :{k}" for k in body.keys()])')
+                    main.append(f'            conn.execute(text(f"update {name} set {{sets}} where id = :id"), {{**body, "id": id}})')
+                    main.append("    except HTTPException: raise")
+                    main.append("    except Exception as e: raise HTTPException(500, str(e))")
+                    main.append(f'    return _row_or_404("{name}", id)')
+            continue
         main.append("")
         main.append(f"# {name} — full CRUD (Supabase when env set, else SQLite)")
         main.append(f'@app.get("/api/{name}")')

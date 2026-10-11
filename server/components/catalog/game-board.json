@@ -1,0 +1,23 @@
+{
+  "id": "game-board",
+  "version": "1.0.0",
+  "kind": "page",
+  "title": "Game board page",
+  "description": "Playable game screen: board grid, turn indicator, scoreboard, rematch, local 2-player + unbeatable AI modes. Emits the pure rules module alongside the page.",
+  "categories": ["game"],
+  "status": "stable",
+  "requires": [],
+  "conflicts": [],
+  "params": {
+    "page": {"type": "string", "required": false, "default": "Game"},
+    "route": {"type": "string", "required": false, "default": "/"},
+    "feature": {"type": "string", "required": false, "default": "play"}
+  },
+  "generator": {
+    "module": "services.generators.frontend_gen",
+    "prompt": "prompts.frontend_page_v2.build_frontend_game_prompt",
+    "template": "GAME_BOARD_PAGE + GAME_LOGIC_TS deterministic fallback"
+  },
+  "gates": ["tsx-valid", "has-default-export", "game-rules-proof"],
+  "capabilities": ["play", "local-2-player", "ai-opponent", "win-detection", "rematch"]
+}

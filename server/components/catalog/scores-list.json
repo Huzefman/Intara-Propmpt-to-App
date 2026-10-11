@@ -1,0 +1,23 @@
+{
+  "id": "scores-list",
+  "version": "1.0.0",
+  "kind": "page",
+  "title": "Scores list page",
+  "description": "Read-only scoreboard list bound to the scores table. No create form — scores are written by gameplay.",
+  "categories": ["game"],
+  "status": "stable",
+  "requires": ["scores-table"],
+  "conflicts": [],
+  "params": {
+    "page": {"type": "string", "required": false, "default": "Scores"},
+    "route": {"type": "string", "required": false, "default": "/scores"},
+    "entity": {"type": "string", "required": false, "default": "scores"}
+  },
+  "generator": {
+    "module": "services.generators.frontend_gen",
+    "prompt": "prompts.frontend_page_v2.build_frontend_game_prompt",
+    "template": "GAME_SCORES_PAGE deterministic fallback"
+  },
+  "gates": ["tsx-valid", "has-default-export"],
+  "capabilities": ["leaderboard"]
+}

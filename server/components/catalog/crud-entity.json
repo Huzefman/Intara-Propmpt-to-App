@@ -1,0 +1,23 @@
+{
+  "id": "crud-entity",
+  "version": "1.0.0",
+  "kind": "entity",
+  "title": "CRUD entity",
+  "description": "A standard data table with typed fields and optional relationships. Renders as schema DDL, backend model, and list/detail UI.",
+  "categories": ["dashboard", "catalog", "marketplace", "social", "booking", "content-management"],
+  "status": "stable",
+  "requires": [],
+  "conflicts": [],
+  "params": {
+    "table": {"type": "string", "required": true, "description": "snake_case table name"},
+    "fields": {"type": "array", "required": true, "description": "list of {name, type} with types in text|integer|timestamp|boolean|uuid"},
+    "relationships": {"type": "array", "required": false, "description": "belongs_to / has_many entries with target + fk"}
+  },
+  "generator": {
+    "module": "services.generators.schema_gen",
+    "prompt": "prompts.schema_v2.build_schema_prompt",
+    "template": "to_prisma/to_sql deterministic fallback"
+  },
+  "gates": ["schema-conformance", "ddl-valid"],
+  "capabilities": ["tables", "relations", "migrations"]
+}

@@ -120,6 +120,18 @@ try:
     if r.status_code != 200:
         errors.append(f"/health -> {r.status_code}")
     tables = contract["tables"]
+    # Declared-route enforcement: CRUD mode declares all six per table; minimal
+    # (game) contracts declare a subset. Undeclared mutating ops may 404/405
+    # without failing (e.g. append-only scores have no PUT/PATCH/DELETE).
+    declared = set()
+    for r in contract.get("routes", []):
+        m = r.get("method", "")
+        declared.add((r.get("table"), m))
+    def enforced(table, method):
+        # no declared routes at all (pure frontend): nothing enforced per table
+        if not contract.get("routes"):
+            return False
+        return (table, method) in declared
     depth = {}
     def dep(t):
         if t["name"] in depth: return depth[t["name"]]
@@ -142,6 +154,11 @@ try:
     for t in order:
         name = t["name"]
         fkvals = {fk["col"]: ids[fk["ref_table"]] for fk in t.get("fks", []) if fk["ref_table"] in ids}
+        if not enforced(name, "POST"):
+            # read-only declared table: list must work, nothing else required
+            if enforced(name, "GET") and c.get(f"/api/{name}").status_code != 200:
+                errors.append(f"GET /api/{name} failed")
+            continue
         r = c.post(f"/api/{name}", json=sample(t, fkvals))
         if r.status_code != 200:
             errors.append(f"POST /api/{name} -> {r.status_code} {str(r.text)[:200]}"); continue
@@ -149,21 +166,37 @@ try:
         if not rid:
             errors.append(f"POST /api/{name}: no id returned"); continue
         ids[name] = rid
-        if c.get(f"/api/{name}").status_code != 200: errors.append(f"GET /api/{name} failed")
-        if c.get(f"/api/{name}/{rid}").status_code != 200: errors.append(f"GET /api/{name}/{rid} failed")
+        if enforced(name, "GET") and c.get(f"/api/{name}").status_code != 200: errors.append(f"GET /api/{name} failed")
+        get_id_declared = any(r.get("table") == name and r.get("method") == "GET_ID"
+                              for r in contract.get("routes", []))
+        if get_id_declared:
+            if c.get(f"/api/{name}/{rid}").status_code != 200: errors.append(f"GET /api/{name}/{rid} failed")
         first = next((f for f in t.get("fields", []) if f["name"] != "id"), {"name": "title", "type": "text"})
         alt = {"text": "smoke2", "integer": 8, "boolean": False,
                "timestamp": "2026-02-02T00:00:00", "uuid": "u-smoke2"}.get(first.get("type", "text"), "smoke2")
-        r2 = c.patch(f"/api/{name}/{rid}", json={first["name"]: alt})
-        if r2.status_code != 200 or r2.json().get(first["name"]) != alt:
-            errors.append(f"PATCH /api/{name}/{rid} failed: {r2.status_code} {str(r2.text)[:160]}")
-        if c.put(f"/api/{name}/{rid}", json={**sample(t, fkvals), first["name"]: alt}).status_code != 200:
-            errors.append(f"PUT /api/{name}/{rid} failed")
-        if c.delete(f"/api/{name}/{rid}").status_code != 200: errors.append(f"DELETE /api/{name}/{rid} failed")
-        if c.get(f"/api/{name}/{rid}").status_code != 404: errors.append(f"GET deleted /api/{name}/{rid} != 404")
+        if enforced(name, "PATCH"):
+            r2 = c.patch(f"/api/{name}/{rid}", json={first["name"]: alt})
+            if r2.status_code != 200 or r2.json().get(first["name"]) != alt:
+                errors.append(f"PATCH /api/{name}/{rid} failed: {r2.status_code} {str(r2.text)[:160]}")
+        else:
+            r2x = c.patch(f"/api/{name}/{rid}", json={first["name"]: alt})
+            if r2x.status_code not in (200, 404, 405):
+                errors.append(f"PATCH /api/{name}/{rid} unexpected: {r2x.status_code}")
+        if enforced(name, "PUT"):
+            if c.put(f"/api/{name}/{rid}", json={**sample(t, fkvals), first["name"]: alt}).status_code != 200:
+                errors.append(f"PUT /api/{name}/{rid} failed")
+        elif c.put(f"/api/{name}/{rid}", json={**sample(t, fkvals)}).status_code not in (200, 404, 405):
+            errors.append(f"PUT /api/{name}/{rid} unexpected status")
+        if enforced(name, "DELETE"):
+            if c.delete(f"/api/{name}/{rid}").status_code != 200: errors.append(f"DELETE /api/{name}/{rid} failed")
+            if c.get(f"/api/{name}/{rid}").status_code != 404: errors.append(f"GET deleted /api/{name}/{rid} != 404")
+        elif get_id_declared:
+            # undeclared DELETE but readable items: row must survive (append-only history)
+            if c.get(f"/api/{name}/{rid}").status_code != 200: errors.append(f"GET /api/{name}/{rid} failed")
+        # else: no item routes at all by design (e.g. scores GET+POST) — nothing to check
     print(json.dumps({"errors": errors[:12]}))
 except Exception as e:
-    import traceback; print(json.dumps({"errors": [f"CRUD matrix crashed: {e}", traceback.format_exc()[-800:]]}))
+    import traceback; print(json.dumps({"errors": [f"BE matrix crashed: {e}", traceback.format_exc()[-800:]]}))
 '''
 
 
@@ -193,6 +226,152 @@ def run_be_gates(be_files: list[dict], contract: dict) -> list[str]:
         return errors
     except Exception as e:
         return [f"DEGRADED: BE gate harness failed: {e}"]
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+# --- game gates (phase 1: tic-tac-toe rule proofs; templates in phase 3 implement
+# the canonical logic API below, pure logic with zero imports) ---
+
+# Canonical game-logic API (src/game/logic.ts). Pure functions, no DOM, no imports.
+# Phase-3 templates MUST implement exactly these exports; the harness resolves
+# common aliases (calculateWinner/checkWinner/...) for LLM-authored variants.
+GAME_LOGIC_PATHS = ("src/game/logic.ts", "src/game/logic.js", "src/game/engine.ts")
+GAME_WIN_ALIASES = ("calcWinner", "calculateWinner", "checkWinner", "getWinner")
+GAME_DRAW_ALIASES = ("isDraw", "isBoardFull", "checkDraw")
+GAME_MOVES_ALIASES = ("legalMoves", "emptySquares", "availableMoves")
+GAME_APPLY_ALIASES = ("applyMove", "makeMove", "playMove")
+GAME_AI_ALIASES = ("bestMove", "minimax", "aiMove", "findBestMove")
+
+GAME_DRIVER = r'''
+const L = require("./logic.cjs");
+const out = { checks: [], errors: [] };
+function pick(names) {
+  for (const n of names) { if (typeof L[n] === "function") return n; }
+  return null;
+}
+function check(name, cond, detail) {
+  out.checks.push(name);
+  if (!cond) out.errors.push(name + (detail ? ": " + detail : ""));
+}
+const winFn = pick(%WIN%), drawFn = pick(%DRAW%), movesFn = pick(%MOVES%),
+      applyFn = pick(%APPLY%), aiFn = pick(%AI%);
+if (!winFn) { console.log(JSON.stringify({errors: ["no win function (want one of: calcWinner, ...)"]})); process.exit(0); }
+const win = L[winFn];
+const E = null;
+check("x-row-win", win(["X","X","X",E,E,E,E,E,E]) === "X");
+check("o-col-win", win(["O",E,E,"O",E,E,"O",E,E]) === "O");
+check("x-diag-win", win(["X",E,E,E,"X",E,E,E,"X"]) === "X");
+check("o-anti-win", win([E,E,"O",E,"O",E,"O",E,E]) === "O");
+check("empty-no-win", win([E,E,E,E,E,E,E,E,E]) === null);
+check("draw-no-win", win(["X","O","X","X","O","O","O","X","X"]) === null);
+if (drawFn) {
+  const draw = L[drawFn];
+  check("full-draw", draw(["X","O","X","X","O","O","O","X","X"]) === true);
+  check("empty-not-draw", draw([E,E,E,E,E,E,E,E,E]) === false);
+}
+if (movesFn) {
+  const moves = L[movesFn];
+  check("moves-count", JSON.stringify(moves([E,E,E,E,"X",E,E,E,E]).sort()) === JSON.stringify([0,1,2,3,5,6,7,8]));
+}
+if (applyFn) {
+  const apply = L[applyFn];
+  try {
+    const nb = apply(["X",E,E,E,E,E,E,E,E], 1, "O");
+    const b = Array.isArray(nb) ? nb : nb.board || nb;
+    check("apply-places", b && b[1] === "O");
+  } catch (e) { check("apply-places", false, String(e).slice(0, 120)); }
+  let rejected = false;
+  try {
+    const r = apply(["X",E,E,E,E,E,E,E,E], 0, "O");
+    const b = Array.isArray(r) ? r : (r && (r.board || r.error !== undefined));
+    rejected = (r === null || r === false || (b && b.error !== undefined));
+    if (Array.isArray(r) && r[0] === "X") rejected = JSON.stringify(r) === JSON.stringify(["X",E,E,E,E,E,E,E,E]);
+  } catch (e) { rejected = true; }
+  check("apply-rejects-occupied", rejected);
+}
+if (aiFn) {
+  const ai = L[aiFn];
+  try {
+    // must take immediate win
+    const w = ai(["X","X",E,"O","O",E,E,E,E], "X");
+    check("ai-takes-win", w === 2, "got " + w);
+    // must block immediate loss
+    const b = ai(["X","X",E,"O",E,E,E,E,E], "O");
+    check("ai-blocks-loss", b === 2, "got " + b);
+    // unbeatable: random X vs ai-O over 30 games, O must never lose
+    let losses = 0;
+    for (let g = 0; g < 30; g++) {
+      let board = [E,E,E,E,E,E,E,E,E];
+      let turn = "X";
+      for (let t = 0; t < 9; t++) {
+        let mv;
+        if (turn === "X") {
+          const open = board.map((v,i)=>v===null?i:-1).filter(i=>i>=0);
+          mv = open[Math.floor(Math.random()*open.length)];
+        } else { mv = ai(board.slice(), "O"); }
+        if (mv == null || board[mv] !== null) break;
+        board[mv] = turn;
+        if (win(board.slice()) === "O") break;
+        if (win(board.slice()) === "X") { losses++; break; }
+        turn = turn === "X" ? "O" : "X";
+      }
+    }
+    check("ai-never-loses-30", losses === 0, losses + " losses");
+  } catch (e) { check("ai-suite", false, String(e).slice(0, 160)); }
+}
+console.log(JSON.stringify(out));
+'''
+
+
+def run_game_gates(fe_files: list[dict], contract: dict) -> list[str]:
+    """Execute tic-tac-toe rule proofs against the candidate tree's pure game
+    logic (src/game/logic.ts, zero imports). Returns error list (empty = green).
+
+    Skips ([]) when no logic module is present or gameType is unsupported — the
+    orchestrator only calls this for interactive appKinds. Toolchain missing →
+    DEGRADED (reported, never a silent pass). Best-effort: never raises."""
+    game_type = (contract.get("gameType") or (contract.get("prd") or {}).get("gameType") or "tictactoe")
+    if str(game_type).lower() not in ("tictactoe", "tic-tac-toe", "tic_tac_toe"):
+        return []
+    by_path = {f.get("path"): f.get("content", "") for f in (fe_files or []) if isinstance(f, dict)}
+    logic_path = next((p for p in GAME_LOGIC_PATHS if p in by_path), None)
+    if not logic_path:
+        return []
+    logic_src = by_path[logic_path] or ""
+    import re as _re
+    if _re.search(r"^\s*import\s", logic_src, _re.M):
+        return [f"{logic_path}: game logic must be import-free (pure rules) for gate execution"]
+    tmp = Path(tempfile.mkdtemp(prefix="intara-game-"))
+    try:
+        (tmp / "logic_src.ts").write_text(logic_src)
+        driver = (GAME_DRIVER.replace("%WIN%", json.dumps(list(GAME_WIN_ALIASES)))
+                  .replace("%DRAW%", json.dumps(list(GAME_DRAW_ALIASES)))
+                  .replace("%MOVES%", json.dumps(list(GAME_MOVES_ALIASES)))
+                  .replace("%APPLY%", json.dumps(list(GAME_APPLY_ALIASES)))
+                  .replace("%AI%", json.dumps(list(GAME_AI_ALIASES))))
+        (tmp / "driver.js").write_text(driver)
+        code, out = _run(["npx", "-y", "esbuild", "logic_src.ts", "--bundle",
+                          "--platform=node", "--format=cjs", "--outfile=logic.cjs"], tmp, 120)
+        if code != 0:
+            return [f"{logic_path}: bundle failed:\n{out[:1200]}"]
+        code, out = _run(["node", "driver.js"], tmp, 60)
+        for line in out.splitlines():
+            line = line.strip()
+            if line.startswith("{") and line.endswith("}"):
+                try:
+                    data = json.loads(line)
+                    errs = data.get("errors", [])
+                    if code != 0 and not errs:
+                        return [f"{logic_path}: rule driver exited {code}:\n{out[:1200]}"]
+                    return [f"{logic_path}: {e}" for e in errs[:10]]
+                except Exception:
+                    continue
+        if code != 0:
+            return [f"{logic_path}: rule driver failed ({code}):\n{out[:1200]}"]
+        return [f"{logic_path}: no JSON result from rule driver:\n{out[:800]}"]
+    except Exception as e:
+        return [f"DEGRADED: game gate harness failed: {e}"]
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -238,8 +417,9 @@ def repair_gate_files(contract: dict, errors: list[str],
 def run_contract_checks(contract: dict, fe_files: list[dict], be_files: list[dict],
                         openapi: dict, package_json: str, postcss: str | None) -> list[str]:
     from services.contract import (check_backend_routes, check_frontend_client,
-                                   check_openapi, check_deps, check_placeholders,
-                                   check_no_template_tokens)
+                                 check_openapi, check_deps, check_placeholders,
+                                 check_no_template_tokens, check_csv_export,
+                                 check_file_upload)
     errs: list[str] = []
     errs += check_placeholders(fe_files + be_files)
     errs += check_no_template_tokens(fe_files + be_files)
@@ -247,4 +427,6 @@ def run_contract_checks(contract: dict, fe_files: list[dict], be_files: list[dic
     errs += check_frontend_client(fe_files, contract)
     errs += check_openapi(openapi, contract)
     errs += check_deps(package_json, postcss)
+    errs += check_csv_export(fe_files, contract.get("components", []))
+    errs += check_file_upload(fe_files, contract.get("components", []))
     return errs

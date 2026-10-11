@@ -87,16 +87,31 @@ export async function seedPreview() {{
 }}
 '''
 
-    # server.ts — fetch interceptor serving the contract route matrix (string ids)
+    # server.ts — fetch interceptor serving the contract's declared routes (string ids).
+    # Minimal game contracts only declare GET/POST, so only those are intercepted.
     route_cases = []
-    for t in tables:
-        tbl = t["name"]
-        route_cases.append(f'  if (pathname === "/api/{tbl}" && method === "GET") {{ return Response.json(await db.{tbl}.toArray()) }}')
-        route_cases.append(f'  if (pathname === "/api/{tbl}" && method === "POST") {{ const b = await req.json().catch(()=>({{}})); if (!b.id) b.id = "{tbl}-" + Math.random().toString(36).slice(2, 10); await db.{tbl}.put(b); return Response.json(await db.{tbl}.get(b.id)) }}')
-        route_cases.append(f'  if (pathname.startsWith("/api/{tbl}/") && method === "GET") {{ const id = String(pathname.split("/").pop()); const row = await db.{tbl}.get(id); return row ? Response.json(row) : Response.json({{error:"not found"}}, {{status:404}}) }}')
-        route_cases.append(f'  if (pathname.startsWith("/api/{tbl}/") && method === "PUT") {{ const id = String(pathname.split("/").pop()); const b = await req.json().catch(()=>({{}})); b.id = id; await db.{tbl}.put(b); return Response.json(await db.{tbl}.get(id)) }}')
-        route_cases.append(f'  if (pathname.startsWith("/api/{tbl}/") && method === "PATCH") {{ const id = String(pathname.split("/").pop()); const b = await req.json().catch(()=>({{}})); await db.{tbl}.update(id, b); return Response.json(await db.{tbl}.get(id)) }}')
-        route_cases.append(f'  if (pathname.startsWith("/api/{tbl}/") && method === "DELETE") {{ const id = String(pathname.split("/").pop()); await db.{tbl}.delete(id); return Response.json({{ok:true}}) }}')
+    for r in contract.get("routes", []):
+        method = r.get("method", "")
+        path = r.get("path", "")
+        tbl = r.get("table", "")
+        if not tbl or tbl not in dexie_stores:
+            continue
+        if method == "GET" and "{id}" not in path:
+            route_cases.append(f'  if (pathname === "{path}" && method === "GET") {{ return Response.json(await db.{tbl}.toArray()) }}')
+        elif method == "POST":
+            route_cases.append(f'  if (pathname === "{path}" && method === "POST") {{ const b = await req.json().catch(()=>({{}})); if (!b.id) b.id = "{tbl}-" + Math.random().toString(36).slice(2, 10); await db.{tbl}.put(b); return Response.json(await db.{tbl}.get(b.id)) }}')
+        elif method == "GET_ID":
+            base = path.replace("/{id}", "")
+            route_cases.append(f'  if (pathname.startsWith("{base}/") && method === "GET") {{ const id = String(pathname.split("/").pop()); const row = await db.{tbl}.get(id); return row ? Response.json(row) : Response.json({{error:"not found"}}, {{status:404}}) }}')
+        elif method == "PUT":
+            base = path.replace("/{id}", "")
+            route_cases.append(f'  if (pathname.startsWith("{base}/") && method === "PUT") {{ const id = String(pathname.split("/").pop()); const b = await req.json().catch(()=>({{}})); b.id = id; await db.{tbl}.put(b); return Response.json(await db.{tbl}.get(id)) }}')
+        elif method == "PATCH":
+            base = path.replace("/{id}", "")
+            route_cases.append(f'  if (pathname.startsWith("{base}/") && method === "PATCH") {{ const id = String(pathname.split("/").pop()); const b = await req.json().catch(()=>({{}})); await db.{tbl}.update(id, b); return Response.json(await db.{tbl}.get(id)) }}')
+        elif method == "DELETE":
+            base = path.replace("/{id}", "")
+            route_cases.append(f'  if (pathname.startsWith("{base}/") && method === "DELETE") {{ const id = String(pathname.split("/").pop()); await db.{tbl}.delete(id); return Response.json({{ok:true}}) }}')
 
     server_ts = f'''import {{ db }} from './db'
 

@@ -13,7 +13,14 @@ MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 SUPA_URL = os.getenv("SUPABASE_URL", "")
 SUPA_KEY = os.getenv("SUPABASE_KEY", "")
 
-client = genai.Client(api_key=GEMINI_KEY) if GEMINI_KEY else None
+def _make_gemini_client(api_key: str):
+    try:
+        return genai.Client(api_key=api_key, http_options={"timeout": 60000})
+    except Exception:
+        return genai.Client(api_key=api_key)
+
+
+client = _make_gemini_client(GEMINI_KEY) if GEMINI_KEY else None
 supabase = create_client(SUPA_URL, SUPA_KEY) if SUPA_URL and SUPA_KEY else None
 
 def chunk(text: str, size=400, overlap=50):
@@ -52,9 +59,13 @@ def _embed_for_supabase(texts: list[str]):
     return [v[:1536] for v in full]
 
 def answer(question: str, top_k=5):
-    has_llm = bool(os.getenv("OPENROUTER_API_KEY") or os.getenv("GEMINI_API_KEY"))
+    try:
+        from services.llm import has_any_llm
+        has_llm = has_any_llm()
+    except Exception:
+        has_llm = bool(os.getenv("OPENROUTER_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GROQ_API_KEY") or os.getenv("NVIDIA_API_KEY") or os.getenv("DEEPSEEK_API_KEY"))
     if not supabase or not has_llm:
-        return {"answer": "Demo mode: configure OPENROUTER_API_KEY or GEMINI_API_KEY + SUPABASE to enable RAG. Question was: "+question, "cites": []}
+        return {"answer": "Demo mode: configure any LLM key (OPENROUTER/GEMINI/GROQ/NVIDIA/DEEPSEEK) + SUPABASE to enable RAG. Question was: "+question, "cites": []}
     try:
         q_emb = embed([question])[0]
         try:

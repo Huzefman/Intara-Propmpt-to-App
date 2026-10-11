@@ -9,6 +9,8 @@ from typing import Dict, Any, Callable
 BUILD_STATE: Dict[str, Any] = {}
 # simple pub/sub for SSE: wid -> list of asyncio.Queue
 SSE_QUEUES: Dict[str, list] = {}
+# single-flight: wid set while a build task owns the wish (prevents double-run corruption)
+BUILD_RUNNING: set = set()
 
 def init_build_state(wid: str, build_graph):
     BUILD_STATE[wid] = {
@@ -28,13 +30,65 @@ def emit(wid: str, event: str, data: dict):
         try: q.put_nowait(payload)
         except: pass
 
+
+def _step_timeout() -> float:
+    try:
+        return float(os.getenv("STEP_TIMEOUT_SECONDS", "600"))
+    except Exception:
+        return 600.0
+
+
+async def _run_blocking(label: str, fn, *args):
+    """Run sync blocking work (LLM HTTP, tsc/vite subprocesses) in a worker thread
+    with a hard timeout, so the server event loop stays responsive mid-build and no
+    step can wedge the worker forever."""
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(fn, *args), timeout=_step_timeout())
+    except asyncio.TimeoutError:
+        raise RuntimeError(f"{label} timed out after {int(_step_timeout())}s")
+
+
+def _mark_build_failed(wid: str, reason: str, emit_event: bool = True):
+    """Flip the wish to failed in DB + MEM (+ SSE unless the caller emits its own richer event)."""
+    """Flip the wish to failed in DB + MEM + SSE. A dead build must never leave
+    the wish stuck on 'building' (which bricks retry guards and the UI)."""
+    try:
+        from db.wishes import set_wish_status, get_wish_with_steps
+        try:
+            wish = get_wish_with_steps(wid)
+            artifacts = wish.get("artifacts") or {}
+            artifacts["steps"] = BUILD_STATE.get(wid, {}).get("steps", artifacts.get("steps", {}))
+            set_wish_status(wid, "failed", artifacts=artifacts)
+        except Exception:
+            try:
+                set_wish_status(wid, "failed")
+            except Exception as e2:
+                print(f"mark_build_failed DB failed for {wid}: {e2}")
+    except Exception as e:
+        print(f"mark_build_failed failed for {wid}: {e}")
+    try:
+        from routers.wishes import MEM
+        if wid in MEM:
+            MEM[wid]["status"] = "failed"
+    except Exception:
+        pass
+    if emit_event:
+        emit(wid, "build_failed", {"wid": wid, "error": str(reason)[:500]})
+
 def _try_llm_frontend_page(appName, tagline, table, fields, pageName, route, components, all_tables, all_pages):
-    """Try LLM for one page, fallback to None on any failure (429/no key)"""
-    if not os.getenv("GEMINI_API_KEY"):
-        return None
+    """Try LLM for one page via full fallback chain, fallback to None on any failure (429/no key)"""
+    try:
+        from services.llm import has_any_llm
+        if not has_any_llm():
+            return None
+    except Exception:
+        import os as _os
+        if not (_os.getenv("OPENROUTER_API_KEY") or _os.getenv("GEMINI_API_KEY") or _os.getenv("GROQ_API_KEY") or _os.getenv("NVIDIA_API_KEY") or _os.getenv("DEEPSEEK_API_KEY")):
+            return None
     try:
         from prompts.frontend_page import FRONTEND_PAGE_PROMPT
-        from main import call_gemini, parse_json
+        from services.llm import call_llm
+        from utils.json_parse import parse_json
         all_tables_str = ", ".join([f"{t['name']}({','.join(f['name'] for f in t['fields'])})" for t in all_tables])
         all_pages_str = ", ".join([f"{p['name']}:{p['route']}" for p in all_pages])
         prompt = FRONTEND_PAGE_PROMPT
@@ -42,7 +96,7 @@ def _try_llm_frontend_page(appName, tagline, table, fields, pageName, route, com
         prompt = prompt.replace("__TABLE__", table).replace("__FIELDS__", json.dumps(fields))
         prompt = prompt.replace("__PAGE_NAME__", pageName).replace("__ROUTE__", route).replace("__COMPONENTS__", ",".join(components))
         prompt = prompt.replace("__ALL_TABLES__", all_tables_str).replace("__ALL_PAGES__", all_pages_str)
-        raw = call_gemini(prompt)
+        raw = call_llm(prompt)
         data = parse_json(raw)
         if "content" in data and "path" in data:
             return data
@@ -56,15 +110,22 @@ def _try_llm_frontend_page(appName, tagline, table, fields, pageName, route, com
         return None
 
 def _try_llm_backend_table(appName, table, fields, all_tables, apis):
-    if not os.getenv("GEMINI_API_KEY"):
-        return None
+    try:
+        from services.llm import has_any_llm
+        if not has_any_llm():
+            return None
+    except Exception:
+        import os as _os
+        if not (_os.getenv("OPENROUTER_API_KEY") or _os.getenv("GEMINI_API_KEY") or _os.getenv("GROQ_API_KEY") or _os.getenv("NVIDIA_API_KEY") or _os.getenv("DEEPSEEK_API_KEY")):
+            return None
     try:
         from prompts.backend_table import BACKEND_TABLE_PROMPT
-        from main import call_gemini, parse_json
+        from services.llm import call_llm
+        from utils.json_parse import parse_json
         prompt = BACKEND_TABLE_PROMPT
         prompt = prompt.replace("__APP_NAME__", appName).replace("__TABLE__", table).replace("__FIELDS__", json.dumps(fields))
         prompt = prompt.replace("__ALL_TABLES__", json.dumps([t["name"] for t in all_tables])).replace("__APIS__", json.dumps(apis))
-        raw = call_gemini(prompt)
+        raw = call_llm(prompt)
         data = parse_json(raw)
         if "models" in data or "routes" in data:
             return data
@@ -126,16 +187,23 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                             schema = generate_schema({"tables": out["tables"]})
                     except: pass
                 elif nid.startswith("backend-") and out.get("files"):
-                    # output has files list, but our backend_tables expects frag with files/openapi
-                    # reconstruct minimal frag
+                    # output stores file PATHS only — content lives in the dead process.
+                    # A resumed step with empty content would validate red, so force a
+                    # fresh re-run instead of trusting the hollow restore.
                     ref = nid.replace("backend-","")
                     backend_tables[ref] = {"files": [{"path": p, "content": ""} for p in out.get("files",[])], "openapi": out.get("openapi",{})}
+                    BUILD_STATE[wid]["steps"][nid]["status"] = "pending"
+                    emit(wid, "step_requeued", {"stepId": nid, "reason": "content not persisted; regenerating"})
                     # be_openapi merge
                     for path, methods in out.get("openapi",{}).get("paths",{}).items():
                         be_openapi["paths"][path] = methods
                 elif nid.startswith("frontend-") and out.get("files"):
+                    # Same hollow-restore problem as backend steps (paths only, no
+                    # content) — re-run fresh so validate checks real code.
                     ref = nid.replace("frontend-","")
                     frontend_pages[ref] = {"files": [{"path": p, "content": ""} for p in out.get("files",[])]}
+                    BUILD_STATE[wid]["steps"][nid]["status"] = "pending"
+                    emit(wid, "step_requeued", {"stepId": nid, "reason": "content not persisted; regenerating"})
                 elif nid == "wiring" and out.get("fe_scaffold"):
                     # wiring output has scaffold keys, reconstruct minimal
                     fe_scaffold = {k: "" for k in out.get("fe_scaffold",[])}
@@ -211,6 +279,7 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
             BUILD_STATE[wid]["steps"][nid]["status"] = "failed"
             BUILD_STATE[wid]["steps"][nid]["error"] = str(e)
             emit(wid, "step_failed", {"stepId": nid, "error": str(e)})
+            _mark_build_failed(wid, f"DB persist failed at {nid}: {e}", emit_event=False)
             emit(wid, "build_failed", {"wid": wid, "failedStep": nid, "reason": "DB persist failed"})
             return False
         update_wish_partial()
@@ -222,8 +291,11 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
             if kind == "schema":
                 step_prompt = f"Generate schema for tables: {json.dumps(build_plan['tables'])}"
                 # pass entities so FK columns land in prisma/sql (contract parity with mock)
-                schema = generate_schema({"tables": build_plan["tables"],
-                                          "entities": build_plan.get("entities")})
+                schema = await _run_blocking(
+                    f"schema {nid}",
+                    generate_schema,
+                    {"tables": build_plan["tables"], "entities": build_plan.get("entities")},
+                )
                 step_output = {"tables": schema["tables"], "prisma": schema["prisma"][:500], "sql": schema["sql"][:500]}
                 BUILD_STATE[wid]["steps"][nid]["status"] = "done"
             elif kind == "backend_table":
@@ -232,7 +304,7 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                     single_prd["tables"] = [t for t in build_plan["tables"] if t["name"]==ref]
                 step_prompt = f"Build backend for table {ref}: {json.dumps(single_prd['tables'])} apis {json.dumps(single_prd['apis'])}"
                 from services.generators.backend_gen import generate_backend
-                frag = generate_backend(single_prd)
+                frag = await _run_blocking(f"backend {nid}", generate_backend, single_prd)
                 backend_tables[ref] = frag
                 step_output = {"files": [f["path"] for f in frag.get("files",[])], "openapi": frag.get("openapi")}
                 for path, methods in frag.get("openapi",{}).get("paths",{}).items():
@@ -248,7 +320,7 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                 step_prompt = f"Build frontend page {ref} route {page.get('route')} for table {page.get('table')} components {page.get('components')}"
                 from services.generators.frontend_gen import generate_frontend
                 single_prd = {**build_plan, "pages": [page], "tables": build_plan["tables"]}
-                frag = generate_frontend(single_prd)
+                frag = await _run_blocking(f"frontend {nid}", generate_frontend, single_prd)
                 step_output = {"files": [f["path"] for f in frag.get("files",[])], "page": page["name"]}
                 frontend_pages[ref] = frag
                 BUILD_STATE[wid]["steps"][nid]["status"] = "done"
@@ -268,6 +340,7 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                 # Blocking gates: node→done ONLY on green, else step failed (fail-closed).
                 # Gate trees are regenerated template-only ($0): templates are the guaranteed
                 # fallback, and every systemic TaskNest failure lived in template output.
+                validation_errors: list = []
                 try:
                     from services.validator import validate_tsx, validate_python, validate_imports_consistency
                     from services.contract import build_contract as _bcv
@@ -275,7 +348,7 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                     for frag in frontend_pages.values():
                         for f in frag.get("files", []):
                             if f["path"].endswith(".tsx"):
-                                errs = validate_tsx(f["content"])
+                                errs = validate_tsx(f["content"], f["path"])
                                 if errs:
                                     validation_errors.append(f"{f['path']}: {errs}")
                     for frag in backend_tables.values():
@@ -325,26 +398,40 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                         _scaf.get("package.json", ""), _scaf.get("postcss.config.js"))
                     if not any(e.startswith("DEGRADED") for e in validation_errors):
                         emit(wid, "validation_gates", {"stepId": nid, "phase": "tsc/vite"})
-                        validation_errors += run_fe_gates(_fe_tree, _scaf)
+                        validation_errors += await _run_blocking("tsc/vite gates", run_fe_gates, _fe_tree, _scaf)
                         emit(wid, "validation_gates", {"stepId": nid, "phase": "import/crud"})
-                        validation_errors += run_be_gates(_be_tree, _cv)
+                        validation_errors += await _run_blocking("import/crud gates", run_be_gates, _be_tree, _cv)
                     # --- one repair attempt per failing file, then re-run that side once ---
                     from services.gates import repair_gate_files as _rgf
-                    _repaired = _rgf(_cv, validation_errors, _fe_tree, _be_tree)
+                    _repaired = await _run_blocking("gate repair", _rgf, _cv, validation_errors, _fe_tree, _be_tree)
                     if _repaired:
                         _fe_err = [e for e in validation_errors if "src/" in e or "tsc" in e or "vite" in e]
                         _be_err = [e for e in validation_errors if "server/" in e or "py_compile" in e or "CRUD" in e or "import " in e]
                         validation_errors = [e for e in validation_errors
                                              if e not in _fe_err and e not in _be_err]
                         if _repaired.get("fe"):
-                            validation_errors += run_fe_gates(_fe_tree, _scaf)
+                            validation_errors += await _run_blocking("tsc/vite re-gates", run_fe_gates, _fe_tree, _scaf)
                         if _repaired.get("be"):
-                            validation_errors += run_be_gates(_be_tree, _cv)
+                            validation_errors += await _run_blocking("import/crud re-gates", run_be_gates, _be_tree, _cv)
                     step_output = {"validated": len(validation_errors) == 0, "errors": validation_errors[:10], "fe_files": sum(len(v.get("files",[])) for v in frontend_pages.values()), "be_tables": len(backend_tables)}
                     if validation_errors:
                         raise RuntimeError("blocking gates failed: " + "; ".join(validation_errors[:5]))
                     BUILD_STATE[wid]["steps"][nid]["status"] = "done"
                 except Exception as e:
+                    # Fail-closed: real gate failures must NEVER fall through to a green
+                    # pass. Only missing-validator availability issues use the simple check.
+                    if str(e).startswith("blocking gates failed") or validation_errors:
+                        details = "; ".join(validation_errors[:5]) if validation_errors else str(e)
+                        BUILD_STATE[wid]["steps"][nid]["status"] = "failed"
+                        BUILD_STATE[wid]["steps"][nid]["error"] = f"blocking gates failed: {details}"[:2000]
+                        try:
+                            persist_step(nid, "failed", prompt=step_prompt, raw=step_raw, output=step_output, error=BUILD_STATE[wid]["steps"][nid]["error"], ended=time.time())
+                        except: pass
+                        emit(wid, "step_failed", {"stepId": nid, "error": BUILD_STATE[wid]["steps"][nid]["error"]})
+                        update_wish_partial()
+                        _mark_build_failed(wid, BUILD_STATE[wid]["steps"][nid]["error"], emit_event=False)
+                        emit(wid, "build_failed", {"wid": wid, "failedStep": nid})
+                        return False
                     # fallback to simple check if validator not available
                     if not schema or not fe_scaffold or not be_scaffold:
                         # try to reconstruct as before
@@ -382,6 +469,7 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
             except: pass
             emit(wid, "step_failed", {"stepId": nid, "error": str(e)})
             update_wish_partial()
+            _mark_build_failed(wid, f"step {nid} failed: {e}", emit_event=False)
             emit(wid, "build_failed", {"wid": wid, "failedStep": nid})
             return False
         BUILD_STATE[wid]["steps"][nid]["endedAt"] = time.time()
@@ -392,6 +480,7 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
             BUILD_STATE[wid]["steps"][nid]["status"] = "failed"
             BUILD_STATE[wid]["steps"][nid]["error"] = f"DB persist failed: {e}"
             emit(wid, "step_failed", {"stepId": nid, "error": f"DB persist failed: {e}"})
+            _mark_build_failed(wid, f"DB persist failed at {nid}: {e}", emit_event=False)
             emit(wid, "build_failed", {"wid": wid, "failedStep": nid})
             return False
         emit(wid, "step_done", {"stepId": nid, "kind": kind})
@@ -557,7 +646,12 @@ Staged sequential build — one prompt per page/component, wired as single app.
         import os
         cites = []
         try:
-            if os.getenv("GEMINI_API_KEY") and os.getenv("SUPABASE_URL"):
+            try:
+                from services.llm import has_any_llm
+                _has_llm = has_any_llm()
+            except Exception:
+                _has_llm = bool(os.getenv("GEMINI_API_KEY") or os.getenv("OPENROUTER_API_KEY") or os.getenv("GROQ_API_KEY") or os.getenv("NVIDIA_API_KEY") or os.getenv("DEEPSEEK_API_KEY"))
+            if _has_llm and os.getenv("SUPABASE_URL"):
                 from rag import answer
                 rag_res = answer(f"What stack for {app_name}? {prompt[:100]}")
                 cites = rag_res.get("cites", [])[:3]
@@ -595,5 +689,6 @@ Staged sequential build — one prompt per page/component, wired as single app.
         return True
     except Exception as e:
         traceback.print_exc()
+        _mark_build_failed(wid, f"final assembly failed: {e}")
         emit(wid, "build_failed", {"wid": wid, "error": str(e)})
         return False

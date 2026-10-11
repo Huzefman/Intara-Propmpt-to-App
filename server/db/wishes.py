@@ -117,3 +117,44 @@ def get_steps(wid: str):
     supa = _client()
     res = supa.table("wish_steps").select("*").eq("wish_id", wid).order("created_at").execute()
     return res.data or []
+
+def promote_shell_to_plan(wid: str, prd: dict, status: str) -> Dict[str, Any]:
+    """Replace a planning shell's PRD with a finished BuildPlan + reset steps.
+
+    Used by the background plan task (POST /wish/plan returns the shell fast).
+    Mirrors PATCH /wish/{wid}/plan reset logic. Fail-fast: raises on DB error.
+    """
+    supa = _client()
+    build_graph = prd.get("buildGraph", [])
+    supa.table("wish_steps").delete().eq("wish_id", wid).execute()
+    steps = []
+    for n in build_graph:
+        steps.append({
+            "wish_id": wid,
+            "step_id": n["id"],
+            "kind": n["kind"],
+            "ref": n.get("ref"),
+            "status": "pending",
+            "attempt": 1,
+            "prompt": n.get("promptHint", ""),
+            "depends_on": n.get("dependsOn", []),
+        })
+    if steps:
+        r2 = supa.table("wish_steps").insert(steps).execute()
+        if not r2.data:
+            raise RuntimeError(f"promote_shell_to_plan steps insert failed for {wid}")
+    artifacts = {
+        "steps": {n["id"]: {"status": "pending"} for n in build_graph},
+        "buildGraph": build_graph,
+        "plan_phase": None,
+    }
+    res = supa.table("wishes").update({
+        "prd": prd,
+        "status": status,
+        "artifacts": artifacts,
+        "build_graph": build_graph,
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }).eq("id", wid).execute()
+    if not res.data:
+        raise RuntimeError(f"promote_shell_to_plan wishes update failed for {wid}")
+    return get_wish_with_steps(wid)
