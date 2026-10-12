@@ -10,7 +10,14 @@ Canonical layout (see services/contract.py — single source of truth):
 from utils.json_parse import parse_json as _parse_json, is_quota_error
 
 
-def generate_backend_table_llm(table: dict, app_spec: dict) -> dict | None:
+def generate_backend_table_llm(table: dict, app_spec: dict, notes: list | None = None) -> dict | None:
+    def _note(msg: str):
+        try:
+            if notes is not None:
+                notes.append(msg[:200])
+        except Exception:
+            pass
+
     try:
         from services.llm import call_llm
         from services.validator import validate_python
@@ -21,9 +28,12 @@ def generate_backend_table_llm(table: dict, app_spec: dict) -> dict | None:
         else:
             from prompts.backend_table_v2 import build_backend_table_prompt
             prompt = build_backend_table_prompt(table, app_spec)
-        raw = call_llm(prompt, temperature=0.3)
+        raw = call_llm(prompt, temperature=0.3, json_mode=True)
         data = _parse_json(raw)
         files = data.get("files", [])
+        if not files:
+            _note("empty files in LLM response")
+            return None
         # Validate each file
         for f in files:
             if f["path"].endswith(".py"):
@@ -32,17 +42,19 @@ def generate_backend_table_llm(table: dict, app_spec: dict) -> dict | None:
                     # repair
                     repair = f"Fix these Python errors:\n{errs}\n\nCode:\n{f['content']}"
                     try:
-                        raw2 = call_llm(repair, temperature=0.1)
+                        raw2 = call_llm(repair, temperature=0.1, json_mode=True)
                         data2 = _parse_json(raw2)
                         for ff in data2.get("files", []):
                             if ff["path"] == f["path"]:
                                 if not validate_python(ff["content"]):
                                     f["content"] = ff["content"]
-                    except:
+                    except Exception as e:
+                        _note(f"repair failed: {e}"[:200])
                         return None
         return data
     except Exception as e:
         print(f"LLM backend table {table.get('name')} failed: {e}")
+        _note(str(e))
         return None
 
 
@@ -277,17 +289,23 @@ def generate_backend(prd: dict):
 
     # Try LLM per table if app_spec has entities (skipped under INTARA_TEMPLATE_ONLY)
     import os as _os
+    _be_fallbacks: list = []
     if prd.get("entities") and not _os.getenv("INTARA_TEMPLATE_ONLY"):
         llm_files = []
         llm_openapi = {"openapi": "3.0.0", "info": {"title": app_name, "version": "1.0.0"}, "paths": {}}
         success = True
         for table in tables[:5]:
-            data = generate_backend_table_llm(table, prd)
+            _notes: list = []
+            data = generate_backend_table_llm(table, prd, _notes)
             if data and data.get("files"):
                 llm_files.extend(data["files"])
                 for path, methods in data.get("openapi", {}).get("paths", {}).items():
                     llm_openapi["paths"][path] = methods
             else:
+                if _notes:
+                    _be_fallbacks.append({"table": table.get("name"), "reason": _notes[-1]})
+                else:
+                    _be_fallbacks.append({"table": table.get("name"), "reason": "llm_failed"})
                 success = False
                 break
         if success and llm_files:
@@ -314,7 +332,16 @@ def generate_backend(prd: dict):
                     method = api["method"].lower()
                     llm_openapi["paths"].setdefault(path, {}).setdefault(
                         method, {"summary": api.get("desc", ""), "responses": {"200": {"description": "ok"}}})
-                return {"files": llm_files, "requirements": requirements, "openapi": llm_openapi}
+                return {"files": llm_files, "requirements": requirements, "openapi": llm_openapi,
+                        "_meta": {"source": "llm", "fallback_reason": None, "fallbacks": []}}
             print(f"LLM backend failed contract conformance, template fallback: {problems[:4]}")
+            _be_fallbacks.append({"table": "contract", "reason": f"conformance: {problems[0][:150]}" if problems else "conformance"})
 
-    return _template_backend(contract)
+    result = _template_backend(contract)
+    if _be_fallbacks:
+        result["_meta"] = {"source": "template",
+                           "fallback_reason": "; ".join(f"{f['table']}: {f['reason']}" for f in _be_fallbacks)[:500],
+                           "fallbacks": _be_fallbacks}
+    else:
+        result["_meta"] = {"source": "template", "fallback_reason": "template_only_mode" if _os.getenv("INTARA_TEMPLATE_ONLY") else None, "fallbacks": []}
+    return result

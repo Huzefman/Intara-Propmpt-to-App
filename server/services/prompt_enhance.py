@@ -164,7 +164,7 @@ def clarify_prompt(prompt: str) -> dict:
             "Questions should resolve the biggest ambiguities (audience, scope, key features). "
             "No markdown, JSON only.\n\nWish: " + prompt[:300]
         )
-        raw = call_llm(instruction, temperature=0.3)
+        raw = call_llm(instruction, temperature=0.3, json_mode=True)
         data = parse_json(raw)
         questions = data.get("questions", [])[:3]
         # validate shape, normalize

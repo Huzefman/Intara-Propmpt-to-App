@@ -48,10 +48,22 @@ async def _run_blocking(label: str, fn, *args):
         raise RuntimeError(f"{label} timed out after {int(_step_timeout())}s")
 
 
+def _frag_fallback(frag) -> str | None:
+    """Extract a step's fallback_reason from a generator result's _meta.
+
+    Returns None when the unit was LLM-authored (or meta is absent), so
+    callers only record genuine template fallbacks.
+    """
+    if not isinstance(frag, dict):
+        return None
+    meta = frag.get("_meta") or {}
+    reason = meta.get("fallback_reason")
+    return str(reason)[:500] if reason else None
+
+
 def _mark_build_failed(wid: str, reason: str, emit_event: bool = True):
-    """Flip the wish to failed in DB + MEM (+ SSE unless the caller emits its own richer event)."""
-    """Flip the wish to failed in DB + MEM + SSE. A dead build must never leave
-    the wish stuck on 'building' (which bricks retry guards and the UI)."""
+    """Flip the wish to failed in DB + MEM (+ SSE unless the caller emits its own richer event).
+    A dead build must never leave the wish stuck on 'building' (which bricks retry guards and the UI)."""
     try:
         from db.wishes import set_wish_status, get_wish_with_steps
         try:
@@ -96,7 +108,7 @@ def _try_llm_frontend_page(appName, tagline, table, fields, pageName, route, com
         prompt = prompt.replace("__TABLE__", table).replace("__FIELDS__", json.dumps(fields))
         prompt = prompt.replace("__PAGE_NAME__", pageName).replace("__ROUTE__", route).replace("__COMPONENTS__", ",".join(components))
         prompt = prompt.replace("__ALL_TABLES__", all_tables_str).replace("__ALL_PAGES__", all_pages_str)
-        raw = call_llm(prompt)
+        raw = call_llm(prompt, json_mode=True)
         data = parse_json(raw)
         if "content" in data and "path" in data:
             return data
@@ -125,7 +137,7 @@ def _try_llm_backend_table(appName, table, fields, all_tables, apis):
         prompt = BACKEND_TABLE_PROMPT
         prompt = prompt.replace("__APP_NAME__", appName).replace("__TABLE__", table).replace("__FIELDS__", json.dumps(fields))
         prompt = prompt.replace("__ALL_TABLES__", json.dumps([t["name"] for t in all_tables])).replace("__APIS__", json.dumps(apis))
-        raw = call_llm(prompt)
+        raw = call_llm(prompt, json_mode=True)
         data = parse_json(raw)
         if "models" in data or "routes" in data:
             return data
@@ -296,7 +308,8 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                     generate_schema,
                     {"tables": build_plan["tables"], "entities": build_plan.get("entities")},
                 )
-                step_output = {"tables": schema["tables"], "prisma": schema["prisma"][:500], "sql": schema["sql"][:500]}
+                step_output = {"tables": schema["tables"], "prisma": schema["prisma"][:500], "sql": schema["sql"][:500],
+                               "fallback_reason": _frag_fallback(schema)}
                 BUILD_STATE[wid]["steps"][nid]["status"] = "done"
             elif kind == "backend_table":
                 single_prd = {**build_plan, "tables": [t for t in build_plan["tables"] if t["name"]==ref][:1], "pages": [], "apis": [a for a in build_plan.get("apis",[]) if ref in a["path"]]}
@@ -306,7 +319,8 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                 from services.generators.backend_gen import generate_backend
                 frag = await _run_blocking(f"backend {nid}", generate_backend, single_prd)
                 backend_tables[ref] = frag
-                step_output = {"files": [f["path"] for f in frag.get("files",[])], "openapi": frag.get("openapi")}
+                step_output = {"files": [f["path"] for f in frag.get("files",[])], "openapi": frag.get("openapi"),
+                               "fallback_reason": _frag_fallback(frag)}
                 for path, methods in frag.get("openapi",{}).get("paths",{}).items():
                     if path not in be_openapi["paths"]:
                         be_openapi["paths"][path] = methods
@@ -321,7 +335,8 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                 from services.generators.frontend_gen import generate_frontend
                 single_prd = {**build_plan, "pages": [page], "tables": build_plan["tables"]}
                 frag = await _run_blocking(f"frontend {nid}", generate_frontend, single_prd)
-                step_output = {"files": [f["path"] for f in frag.get("files",[])], "page": page["name"]}
+                step_output = {"files": [f["path"] for f in frag.get("files",[])], "page": page["name"],
+                               "fallback_reason": _frag_fallback(frag)}
                 frontend_pages[ref] = frag
                 BUILD_STATE[wid]["steps"][nid]["status"] = "done"
             elif kind == "wiring":

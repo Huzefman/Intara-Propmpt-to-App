@@ -160,7 +160,7 @@ def analyze_prompt(prompt: str) -> dict:
         from services.llm import call_llm_with_meta
         from main import parse_json as main_parse
         full_prompt = ANALYZER_SYSTEM_PROMPT.replace("{prompt}", prompt)
-        raw, meta = call_llm_with_meta(full_prompt)
+        raw, meta = call_llm_with_meta(full_prompt, json_mode=True)
         data = _parse_json(raw) if isinstance(raw, str) else raw
         # also try main_parse for robustness
         if not isinstance(data, dict) or "appName" not in data:

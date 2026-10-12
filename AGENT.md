@@ -60,14 +60,14 @@
 - [x] P0.4 Commit `INTARA_ARCHITECTURE_GUIDE.md` + this file → `21b36a9` (6 files, +1889/−2; backend.log + run log excluded)
 - **Accept:** `evals/reports/baseline-*.json` exists; §6 filled; suite still 93/93
 
-### Phase 1 — Gateway + visible fallback [ ]
-*Goal: structured output everywhere; every fallback labelled. (Guide M0.1–M0.2)*
-- [ ] P1.1 `server/services/llm.py`: per-provider capability probe (cached) → `json_schema`/`json_object`/`prompt_only`; `response_format` / `response_mime_type` wired per provider with auto-fallback; `max_output_tokens` per call; keep cooldown chain + `LLM_ONLY`
-- [ ] P1.2 `server/utils/json_parse.py`: parse ladder (`json.loads` → fence/prose strip → control-char/escape normalisation → truncation repair → **one** LLM repair with exact error) + `finish_reason` truncation detection (split, never blind-repair)
-- [ ] P1.3 `fallback_reason` on every generator return path → stored in `wish_steps.output` → Studio badge (thread + BuildingView)
-- [ ] P1.4 `tests/test_json_parse.py`: fixtures for unescaped newlines, tabs, trailing commas, fenced+prose, truncated, BOM, smart quotes, empty/prose-only
-- [ ] P1.5 Re-run baseline script; record delta in §6
-- **Accept:** fixtures green; live re-run shows parse-success ≥ baseline +15pp; 100% of fallbacks carry reason; suite green
+### Phase 1 — Gateway + visible fallback [~]
+*Goal: structured output everywhere; every fallback labelled.*
+- [x] P1.1 `server/services/llm.py` + `main.call_gemini`: `json_mode` (response_format/response_mime_type with cached per-model fallback), `max_output_tokens` on all providers, `info` telemetry (provider/model/finish_reason/attempts); wired into all JSON-expecting call sites (planner×2, analyzer, clarify, schema×2, backend×2, frontend×3, orchestrator×2, /generate×2)
+- [x] P1.2 `server/utils/json_parse.py`: parse ladder + `detect_truncation()` + `parse_json_with_repair()` (one capped repair call)
+- [x] P1.3 `fallback_reason` on generator `_meta` → orchestrator `step_output` → `wish_steps.output` → `artifacts.steps` → Studio badge; `_frag_fallback()` helper
+- [x] P1.4 `tests/test_json_parse.py` (21 tests: ladder fixtures, repair semantics, gateway mocked transports, Gemini config)
+- [x] P1.5 Re-run baseline, record delta → `evals/reports/baseline-20261012-104102.json`: **20/20 success, 0 fallback** (15 full plans: 10 nvidia + 5 groq; 5 clarify-Q&A)
+- **Accept:** fixtures green; live re-run shows parse-success ≥ baseline +15pp ✅ (0/10 → 15/15 full plans); 100% of fallbacks carry reason (mechanism shipped + tested; zero fallbacks occurred to display); suite green
 
 ### Phase 2 — Telemetry + cassettes [ ]
 *Goal: product health numbers + keyless CI. (Guide M0.3, M0.6)*
@@ -148,6 +148,11 @@
 - **Problems:** (a) baseline proves analyzer parse-success 0/10 — malformed JSON envelopes dominate, quotas thin mid-run, 1 validator false-positive (see §6 + new §5 entries); (b) `load_dotenv` in seed tests leaked real `LLM_ONLY` into pytest env — fixed via hermetic env files (pattern to reuse); (c) `server/backend.log` is git-tracked runtime noise — excluded from commits, do not stage.
 - **Next:** commit (P0.4); then Phase 1 gateway work — the baseline says JSON-mode + tolerant parsing is the highest-leverage fix.
 
+### Session 2 — 2026-10-12 — Phase 1 gateway + visible fallback [x]
+- **Done (so far):** P1.1 structured-output plumbing (`json_mode`/`max_output_tokens`/`info` through all 5 providers + `call_gemini`, cached per-model fallback, wired into all 17 JSON-expecting call sites); P1.2 parse ladder + `detect_truncation()` + `parse_json_with_repair()`; P1.3 `fallback_reason` from generators → orchestrator → DB → Studio badge; `tests/test_json_parse.py` (21 tests); fixed a shipped `IndentationError` in `frontend_gen.py` game branch found during verification; updated 5 existing fallback-test mocks for new kwarg signatures; suite 123/123, tsc clean, eval 5/5.
+- **Problems:** (a) two baseline runners briefly overlapped after a missed kill pid — restarted clean, stale partial log removed; (b) see §5 #13.
+- **Next:** finish P1.5 re-run, record delta, commit per protocol.
+
 ---
 
 ## 5. Known problems / error register
@@ -166,6 +171,7 @@
 10. 2026-10-12 · Analyzer validator false-positive: `page Summary needs a table binding in crud mode` discarded a live LLM plan into mock fallback · relax/scope the rule in Phase 1 (with fixture) · **OPEN**
 11. 2026-10-12 · Free pools drain mid-run (Gemini 429 + OpenRouter upstream 429s during 20-wish baseline) · baseline cadence + per-tier budgets in Phase 1/2 · **OPEN**
 12. 2026-10-12 · `server/backend.log` is git-tracked runtime noise — never stage it · consider `git rm --cached` + gitignore entry · **OPEN**
+13. 2026-10-12 · Shipped `IndentationError` (`frontend_gen.py:181`, game branch) survived because full suite wasn't re-run post-edit in that session · rule: no session ends without the §0 verification trio · **FIXED this session (suite now gates it)**
 
 ---
 
@@ -181,14 +187,20 @@
 | Requirement coverage | n/a | — | ≥ 80 % (100 % musts) |
 | LLM calls per build (median) | _pending P0.2_ | — | ≤ 14 (≤ 6 strong) |
 | Time to live preview post-approval | _pending P0.2_ | — | ≤ 30 s |
-| Unit suite | 93/93 (2026-10-11) | 98/98 (2026-10-12) | green every session |
+| Unit suite | 93/93 (2026-10-11) | 123/123 (2026-10-12) | green every session |
 | Golden eval | 5/5 (2026-10-11) | 5/5 (2026-10-12) | 5/5 + new suites |
 
-**Baseline 2026-10-12** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):
+**Baseline 2026-10-12, pre-Phase-1** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):
 - Outcomes: **success 10 / fallback 10 / failed 0 / error 0** — but all 10 successes are *planning-with-questions* (clarify path only); **all 10 full plans fell back to mock**. True analyzer parse-success: **0/10**.
 - Fallback causes (backend log): malformed LLM JSON envelopes (`Expecting ',' delimiter`, `Expecting value char 0`), mid-run Gemini 429 + OpenRouter upstream 429s, and 1 validator false-positive (`page Summary needs a table binding` discarded a good plan).
 - Latency: min 6.7s / median 15.4s / max 31.0s per wish (plan stage only).
 - Meta sources: clarify-LLM 10 ("live"), mock 10. No wish reached the build stage in this run.
+
+**Re-run 2026-10-12, post-Phase-1** (`evals/reports/baseline-20261012-104102.json`, same 20 wishes):
+- Outcomes: **success 20 / fallback 0 / failed 0**. Analyzer parse-success **15/15 full plans** (10 nvidia, 5 groq); other 5 are healthy clarify-path successes.
+- Fallback rate 50% → **0%**. No validator false-positives observed.
+- Latency: min 6.7s / median 42.7s / max 173.9s (Nemotron reasoning is slow; Groq ~11–21s).
+- Note: Gemini served zero full plans (prior 429 exhaustion) — chain fallback carried the run, as designed.
 
 ---
 
@@ -200,4 +212,4 @@
 - **LLM spend:** measure first (Phase 0); cache by input hash; cassettes for CI; live evals only on manual dispatch; template gallery costs $0 — use it for demos.
 - **Commits:** code + AGENT.md update together, every session. Never leave the tree red.
 
-*End of AGENT.md v1 — Session 1 done (Phase 0 complete). Next: Phase 1 gateway (P1.1–P1.5).*
+*End of AGENT.md v2 — Session 2 done (Phase 1 complete). Next: Phase 2 telemetry + cassettes.*

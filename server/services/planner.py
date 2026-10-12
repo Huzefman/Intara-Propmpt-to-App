@@ -257,7 +257,7 @@ def plan_wish(prompt: str) -> dict:
     try:
         from services.llm import call_llm, call_llm_with_meta
         from main import parse_json as main_parse
-        raw, meta = call_llm_with_meta(INTARA_PLANNER_PROMPT.format(prompt=prompt))
+        raw, meta = call_llm_with_meta(INTARA_PLANNER_PROMPT.format(prompt=prompt), json_mode=True)
         call_gemini = call_llm  # alias for repair
         try:
             data = main_parse(raw)
@@ -268,7 +268,7 @@ def plan_wish(prompt: str) -> dict:
         except Exception as e:
             if _is_quota(e):
                 raise
-            raw2, meta2 = call_llm_with_meta(f"Fix this to valid JSON with required keys appName,tagline,tables,pages,apis,auth: {raw}")
+            raw2, meta2 = call_llm_with_meta(f"Fix this to valid JSON with required keys appName,tagline,tables,pages,apis,auth: {raw}", json_mode=True)
             try:
                 data = main_parse(raw2)
                 data["_meta"] = {**meta2, "repaired": True}

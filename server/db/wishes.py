@@ -73,7 +73,7 @@ def get_wish_with_steps(wid: str) -> Dict[str, Any]:
     steps = {row["step_id"]: row for row in (s.data or [])}
     # normalize artifacts.steps from DB for FE compat
     artifacts = wish.get("artifacts") or {}
-    artifacts["steps"] = {sid: {"status": row["status"], "startedAt": row.get("started_at"), "endedAt": row.get("ended_at"), "error": row.get("error")} for sid, row in steps.items()}
+    artifacts["steps"] = {sid: {"status": row["status"], "startedAt": row.get("started_at"), "endedAt": row.get("ended_at"), "error": row.get("error"), "fallback_reason": (row.get("output") or {}).get("fallback_reason")} for sid, row in steps.items()}
     artifacts["buildGraph"] = wish.get("build_graph") or wish.get("prd", {}).get("buildGraph", [])
     wish["artifacts"] = artifacts
     wish["_steps_rows"] = steps  # internal full rows

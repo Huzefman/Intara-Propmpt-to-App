@@ -76,10 +76,27 @@ def parse_json(text: str):
     return json.loads(text)
 
 @retry(wait=wait_exponential(min=1, max=8), stop=stop_after_attempt(3), retry=retry_if_exception(_gemini_retryable))
-def call_gemini(prompt: str):
+def call_gemini(prompt: str, *, response_mime_type: str | None = None, max_output_tokens: int | None = None, info: dict | None = None):
     if not client:
         raise RuntimeError("Missing GEMINI_API_KEY")
-    resp = client.models.generate_content(model=MODEL, contents=prompt, config={"temperature": 0.2})
+    config: dict = {"temperature": 0.2}
+    if response_mime_type:
+        config["response_mime_type"] = response_mime_type
+    if max_output_tokens:
+        config["max_output_tokens"] = max_output_tokens
+    resp = client.models.generate_content(model=MODEL, contents=prompt, config=config)
+    if info is not None:
+        finish = None
+        try:
+            cands = getattr(resp, "candidates", None) or []
+            if cands:
+                finish = getattr(cands[0], "finish_reason", None)
+                finish = str(finish).split(".")[-1] if finish is not None else None
+        except Exception:
+            finish = None
+        info.update({"provider": "gemini", "model": MODEL,
+                     "finish_reason": finish,
+                     "json_mode": bool(response_mime_type)})
     return resp.text
 
 @app.post("/generate")
@@ -88,7 +105,7 @@ def generate(inp: PromptIn):
     # OpenRouter-first via call_llm, fallback to Gemini
     try:
         from services.llm import call_llm
-        raw = call_llm(PROMPT.format(prompt=inp.prompt))
+        raw = call_llm(PROMPT.format(prompt=inp.prompt), json_mode=True)
     except Exception:
         raw = call_gemini(PROMPT.format(prompt=inp.prompt))
     try:
@@ -99,7 +116,7 @@ def generate(inp: PromptIn):
         # repair pass — OpenRouter first
         try:
             from services.llm import call_llm
-            raw2 = call_llm(f"Fix this to valid JSON with tables: {raw}")
+            raw2 = call_llm(f"Fix this to valid JSON with tables: {raw}", json_mode=True)
         except Exception:
             raw2 = call_gemini(f"Fix this to valid JSON with tables: {raw}")
         try:

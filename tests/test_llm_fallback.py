@@ -26,7 +26,7 @@ def _ensure_main_stub():
     if mod is None or not getattr(mod, "_is_test_stub", False):
         mod = types.ModuleType("main")
         mod._is_test_stub = True
-        mod.call_gemini = lambda prompt: (_ for _ in ()).throw(RuntimeError("Missing GEMINI_API_KEY"))
+        mod.call_gemini = lambda prompt, **kw: (_ for _ in ()).throw(RuntimeError("Missing GEMINI_API_KEY"))
         import json as _json
         import re as _re
 
@@ -66,7 +66,7 @@ def test_order_gemini_first_falls_to_openrouter_on_quota(monkeypatch):
     main_stub = _ensure_main_stub()
     calls = {"gemini": 0, "or": 0}
 
-    def gemini_quota(prompt):
+    def gemini_quota(prompt, **kw):
         calls["gemini"] += 1
         raise RuntimeError("429 quota exhausted")
 
@@ -87,7 +87,7 @@ def test_all_exhausted_raises_429(monkeypatch):
     llm = _fresh_llm(monkeypatch, {"OPENROUTER_API_KEY": "x", "GEMINI_API_KEY": "y", "GROQ_API_KEY": "z"})
     main_stub = _ensure_main_stub()
     monkeypatch.setattr(llm, "_call_openrouter", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("429 quota")))
-    monkeypatch.setattr(main_stub, "call_gemini", lambda prompt: (_ for _ in ()).throw(RuntimeError("429 Gemini quota")))
+    monkeypatch.setattr(main_stub, "call_gemini", lambda prompt, **kw: (_ for _ in ()).throw(RuntimeError("429 Gemini quota")))
     monkeypatch.setattr(llm, "_call_groq", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("429 quota exceeded")))
     with pytest.raises(RuntimeError, match="429 All LLM providers exhausted"):
         llm.call_llm("hello")
@@ -123,7 +123,7 @@ def test_with_meta_falls_through_and_reports_source(monkeypatch):
     llm = _fresh_llm(monkeypatch, {"OPENROUTER_API_KEY": "x", "GROQ_API_KEY": "g"})
     main_stub = _ensure_main_stub()
     monkeypatch.setattr(llm, "_call_openrouter", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("429 quota")))
-    monkeypatch.setattr(main_stub, "call_gemini", lambda prompt: (_ for _ in ()).throw(RuntimeError("Missing GEMINI_API_KEY")))
+    monkeypatch.setattr(main_stub, "call_gemini", lambda prompt, **kw: (_ for _ in ()).throw(RuntimeError("Missing GEMINI_API_KEY")))
     monkeypatch.setattr(llm, "_call_groq", lambda *a, **k: "G")
     text, meta = llm.call_llm_with_meta("hi")
     assert text == "G"
@@ -187,7 +187,7 @@ def test_only_gemini_skips_other_providers(monkeypatch):
 
     monkeypatch.setattr(llm, "_call_openrouter", or_fail)
     monkeypatch.setattr(llm, "_call_groq", groq_fail)
-    monkeypatch.setattr(main_stub, "call_gemini", lambda prompt: "GEMINI-OK")
+    monkeypatch.setattr(main_stub, "call_gemini", lambda prompt, **kw: "GEMINI-OK")
     assert llm.call_llm("hi") == "GEMINI-OK"
     assert calls == {"or": 0, "groq": 0}
     assert llm.has_any_llm() is True

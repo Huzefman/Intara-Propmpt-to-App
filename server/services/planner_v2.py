@@ -154,7 +154,7 @@ def plan_build(prompt: str) -> dict:
     try:
         from services.llm import call_llm_with_meta
         from main import parse_json as main_parse
-        raw, meta = call_llm_with_meta(BUILD_PLAN_PROMPT.format(prompt=prompt))
+        raw, meta = call_llm_with_meta(BUILD_PLAN_PROMPT.format(prompt=prompt), json_mode=True)
         try:
             data = main_parse(raw)
             if "appName" not in data or "tables" not in data or "pages" not in data:
@@ -186,7 +186,7 @@ def plan_build(prompt: str) -> dict:
             if _is_quota_error(e):
                 raise
             from services.llm import call_llm_with_meta
-            raw2, meta2 = call_llm_with_meta(f"Fix to valid BuildPlan JSON with appName,tables,pages,buildGraph: {raw}")
+            raw2, meta2 = call_llm_with_meta(f"Fix to valid BuildPlan JSON with appName,tables,pages,buildGraph: {raw}", json_mode=True)
             try:
                 data = main_parse(raw2)
                 data["_meta"] = {**meta2, "repaired": True}

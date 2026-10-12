@@ -122,24 +122,30 @@ def _schema_conforms(data: dict, prd: dict) -> list[str]:
 
 def generate_schema(prd: dict):
     import os
+    fallback_reason: str | None = None
     # LLM-first if entities present (skipped under INTARA_TEMPLATE_ONLY for $0 builds/tests)
     if prd.get("entities") and not os.getenv("INTARA_TEMPLATE_ONLY"):
         try:
             from services.llm import call_llm
             if str(prd.get("appKind") or "").lower() in ("interactive", "game"):
                 from prompts.schema_v2 import build_schema_game_prompt
-                raw = call_llm(build_schema_game_prompt(prd), temperature=0.2)
+                raw = call_llm(build_schema_game_prompt(prd), temperature=0.2, json_mode=True)
             else:
                 from prompts.schema_v2 import build_schema_prompt
-                raw = call_llm(build_schema_prompt(prd), temperature=0.2)
+                raw = call_llm(build_schema_prompt(prd), temperature=0.2, json_mode=True)
             data = _parse_json(raw)
             if data.get("tables") and data.get("sql") and data.get("prisma"):
                 problems = _schema_conforms(data, prd)
                 if not problems:
+                    data["_meta"] = {"source": "llm", "fallback_reason": None}
                     return data
                 print(f"LLM schema failed contract conformance, template fallback: {problems[:4]}")
+                fallback_reason = f"conformance: {problems[0][:150]}" if problems else "conformance"
+            else:
+                fallback_reason = "incomplete LLM schema (missing tables/sql/prisma)"
         except Exception as e:
             print(f"LLM schema gen failed, template fallback: {e}")
+            fallback_reason = str(e)[:200]
 
     tables = prd.get("tables", [])
     entities = prd.get("entities")
@@ -163,5 +169,6 @@ def generate_schema(prd: dict):
     return {
         "tables": sane,
         "prisma": to_prisma(sane, entities),
-        "sql": to_sql(sane, entities)
+        "sql": to_sql(sane, entities),
+        "_meta": {"source": "template", "fallback_reason": fallback_reason},
     }

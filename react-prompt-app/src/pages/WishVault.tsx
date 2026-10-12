@@ -368,6 +368,9 @@ function BuildingView({ wish, compact = false, onChanged }: { wish: any; compact
                 <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 500, color, display: 'flex', alignItems: 'center', gap: 6 }}>
                   {isRunning && <span style={{ width: 10, height: 10, border: '1.5px solid rgba(139,92,246,0.3)', borderTopColor: '#8B5CF6', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />}
                   {st.status}
+                  {st.status === 'done' && st.fallback_reason && (
+                    <span title={String(st.fallback_reason).slice(0, 300)} style={{ padding: '3px 8px', borderRadius: 999, fontSize: 10, border: '1px solid rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.08)', color: '#FBBF24', whiteSpace: 'nowrap' }}>template fallback</span>
+                  )}
                   {st.status === 'failed' && <button onClick={() => onRetryStep(n.id)} disabled={retrying === n.id} style={{ marginLeft: 8, padding: '4px 8px', borderRadius: 999, fontSize: 10, border: '1px solid rgba(248,113,113,0.3)', background: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer' }}>{retrying === n.id ? 'Retrying…' : 'Retry'}</button>}
                 </span>
               </div>

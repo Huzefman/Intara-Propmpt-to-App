@@ -1,6 +1,7 @@
 """
-LLM provider — OpenRouter (50/day) → Gemini (20/day) → Groq → Nvidia → DeepSeek
-Ordered by available free quota (most first). All OpenAI-compatible via openai SDK
+LLM provider — Gemini → OpenRouter → Groq → Nvidia → DeepSeek.
+Structured output: json_mode requests response_format/response_mime_type where
+supported, with per-(provider, model) cached fallback to plain mode.
 Fallback chain: if one provider's quota is exhausted, the next is tried automatically
 until all are exhausted; per-provider 60s cooldown avoids hammering, expired entries
 are retried so refreshed quota is reused. Embeddings: Gemini (others have no stable free embeddings)
@@ -9,6 +10,20 @@ import os
 import time
 
 PROVIDER_ORDER = ["gemini", "openrouter", "groq", "nvidia", "deepseek"]
+
+# Negative capability cache: (provider, model) pairs known NOT to support
+# structured output. Avoids re-paying a failing attempt on every call.
+_NO_JSON_MODE: set = set()
+
+
+def _structured_unsupported(e: Exception) -> bool:
+    """True when the error clearly means 'this model rejects response_format'."""
+    m = str(e).lower()
+    if _is_quota(e):
+        return False  # quota is handled by the chain, never downgrade on it
+    markers = ("response_format", "response_mime_type", "json mode", "json_mode",
+               "not supported", "unsupported", "unknown parameter", "invalid parameter")
+    return any(x in m for x in markers)
 
 # Per-provider quota-exhaustion cooldown: name -> unix timestamp until which we skip it.
 # In-memory only (resets on restart); keeps latency low when a provider is down while
@@ -92,19 +107,51 @@ def _groq_client():
         print(f"groq client init failed: {e}")
         return None
 
-def _call_groq(prompt: str, model: str, temperature: float = 0.2) -> str:
+def _finish_reason_openai(resp) -> str | None:
+    try:
+        return resp.choices[0].finish_reason or None
+    except Exception:
+        return None
+
+
+def _maybe_json_kwargs(provider: str, model: str, kwargs: dict, json_mode: bool) -> bool:
+    """Attach response_format when requested and not known-unsupported.
+    Returns True if structured mode was attempted."""
+    if json_mode and (provider, model) not in _NO_JSON_MODE:
+        kwargs["response_format"] = {"type": "json_object"}
+        return True
+    return False
+
+
+def _call_groq(prompt: str, model: str, temperature: float = 0.2, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None) -> str:
     client = _groq_client()
     if not client:
         raise RuntimeError("Missing GROQ_API_KEY")
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
+    kwargs: dict = {
+        "model": model,
+        "messages": [
             {"role": "system", "content": "You are a JSON generator. Return ONLY valid JSON, no markdown, no prose."},
             {"role": "user", "content": prompt},
         ],
-        temperature=temperature,
-        timeout=30.0,
-    )
+        "temperature": temperature,
+        "timeout": 30.0,
+    }
+    if max_output_tokens:
+        kwargs["max_tokens"] = max_output_tokens
+    tried_structured = _maybe_json_kwargs("groq", model, kwargs, json_mode)
+    try:
+        resp = client.chat.completions.create(**kwargs)  # type: ignore
+    except Exception as e:
+        if tried_structured and _structured_unsupported(e):
+            _NO_JSON_MODE.add(("groq", model))
+            kwargs.pop("response_format", None)
+            resp = client.chat.completions.create(**kwargs)  # type: ignore
+        else:
+            raise
+    if info is not None:
+        info.update({"provider": "groq", "model": model,
+                     "finish_reason": _finish_reason_openai(resp),
+                     "json_mode": tried_structured})
     return (resp.choices[0].message.content or "").strip()
 
 def _nvidia_timeout() -> float:
@@ -126,7 +173,7 @@ def _nvidia_client():
         print(f"nvidia client init failed: {e}")
         return None
 
-def _call_nvidia(prompt: str, model: str, temperature: float = 0.2, stream: bool = False, image_url: str | None = None, reasoning_effort: str | None = None) -> str:
+def _call_nvidia(prompt: str, model: str, temperature: float = 0.2, stream: bool = False, image_url: str | None = None, reasoning_effort: str | None = None, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None) -> str:
     client = _nvidia_client()
     if not client:
         raise RuntimeError("Missing NVIDIA_API_KEY")
@@ -141,22 +188,32 @@ def _call_nvidia(prompt: str, model: str, temperature: float = 0.2, stream: bool
             {"role": "user", "content": prompt},
         ]
     kwargs: dict = {"model": model, "messages": messages, "temperature": temperature, "timeout": _nvidia_timeout()}
+    if max_output_tokens:
+        kwargs["max_tokens"] = max_output_tokens
     if is_nemotron:
         # Nemotron uses chat_template_kwargs.enable_thinking and top_p
-        kwargs["max_tokens"] = 16384
+        kwargs.setdefault("max_tokens", 16384)
         kwargs["top_p"] = 0.95
         kwargs["extra_body"] = {"chat_template_kwargs": {"enable_thinking": True}}
         if stream:
             kwargs["stream"] = True
     else:
         if image_url is None:
-            kwargs["max_tokens"] = 16384
+            kwargs.setdefault("max_tokens", 16384)
             if reasoning_effort:
                 kwargs["extra_body"] = {"reasoning_effort": reasoning_effort}
         else:
-            kwargs["max_tokens"] = 4096
+            kwargs.setdefault("max_tokens", 4096)
         if stream:
             kwargs["stream"] = True
+    tried_structured = False
+    if json_mode and not stream and ("nvidia", model) not in _NO_JSON_MODE:
+        kwargs["response_format"] = {"type": "json_object"}
+        tried_structured = True
+
+    def _finish(resp) -> str | None:
+        return _finish_reason_openai(resp)
+
     if stream:
         resp = client.chat.completions.create(**kwargs)  # type: ignore
         out = ""
@@ -172,7 +229,18 @@ def _call_nvidia(prompt: str, model: str, temperature: float = 0.2, stream: bool
             if delta.content is not None:
                 out += delta.content
         return (reasoning_out + out).strip() if reasoning_out else out.strip()
-    resp = client.chat.completions.create(**kwargs)  # type: ignore
+    try:
+        resp = client.chat.completions.create(**kwargs)  # type: ignore
+    except Exception as e:
+        if tried_structured and _structured_unsupported(e):
+            _NO_JSON_MODE.add(("nvidia", model))
+            kwargs.pop("response_format", None)
+            resp = client.chat.completions.create(**kwargs)  # type: ignore
+        else:
+            raise
+    if info is not None:
+        info.update({"provider": "nvidia", "model": model,
+                     "finish_reason": _finish(resp), "json_mode": tried_structured})
     # Handle reasoning for Nemotron non-streaming
     content = resp.choices[0].message.content or ""
     reasoning = getattr(resp.choices[0].message, "reasoning_content", None) or getattr(resp.choices[0].message, "reasoning", None)
@@ -197,7 +265,7 @@ def _openrouter_client():
         print(f"openrouter client init failed: {e}")
         return None
 
-def _call_openrouter(prompt: str, model: str, temperature: float = 0.2, max_tokens: int | None = None) -> str:
+def _call_openrouter(prompt: str, model: str, temperature: float = 0.2, max_tokens: int | None = None, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None) -> str:
     client = _openrouter_client()
     if not client:
         raise RuntimeError("Missing OPENROUTER_API_KEY")
@@ -211,15 +279,29 @@ def _call_openrouter(prompt: str, model: str, temperature: float = 0.2, max_toke
             "temperature": temperature,
             "timeout": 30.0,
         }
-        if max_tokens:
-            kwargs["max_tokens"] = max_tokens
-        resp = client.chat.completions.create(**kwargs)  # type: ignore
+        limit = max_output_tokens if max_output_tokens else max_tokens
+        if limit:
+            kwargs["max_tokens"] = limit
+        tried_structured = _maybe_json_kwargs("openrouter", model, kwargs, json_mode)
+        try:
+            resp = client.chat.completions.create(**kwargs)  # type: ignore
+        except Exception as e:
+            if tried_structured and _structured_unsupported(e):
+                _NO_JSON_MODE.add(("openrouter", model))
+                kwargs.pop("response_format", None)
+                resp = client.chat.completions.create(**kwargs)  # type: ignore
+            else:
+                raise
+        if info is not None:
+            info.update({"provider": "openrouter", "model": model,
+                         "finish_reason": _finish_reason_openai(resp),
+                         "json_mode": tried_structured})
         content = resp.choices[0].message.content or ""
         return content.strip()
     except Exception as e:
         raise
 
-def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = None) -> str:
+def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = None, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None) -> str:
     """
     Gemini → OpenRouter → Groq → Nvidia → DeepSeek — fall through until all exhausted.
     Gemini is primary; others are fallback in that order.
@@ -227,6 +309,9 @@ def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = Non
     so refreshed quota is reused automatically. Raises 429 only when every configured
     provider is exhausted/cooldown; raises unconfigured only when no key is set at all.
     max_tokens bounds OpenRouter output ( reasoning dribble guard); other providers ignore it.
+    json_mode requests structured output where supported (auto-fallback per model).
+    max_output_tokens caps output on every provider that accepts it.
+    info, when given, is populated with {provider, model, finish_reason, json_mode, attempts}.
     """
     deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
     nvidia_model = os.getenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash-0731")
@@ -237,13 +322,24 @@ def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = Non
     last_err: Exception | None = None
     saw_quota = False
     tried_any = False
+    attempts = 0
+
+    def _track(sub: dict | None):
+        if info is not None:
+            attempts_local = info.get("attempts", 0) + 1
+            info.update({"attempts": attempts_local})
+            if sub:
+                info.update(sub)
 
     # 0. Gemini first (primary) — falls through on quota/failure
     if _allowed("gemini") and not _in_cooldown("gemini"):
         tried_any = True
         try:
             from main import call_gemini
-            text = call_gemini(prompt)
+            sub: dict = {}
+            text = call_gemini(prompt, response_mime_type="application/json" if json_mode else None,
+                               max_output_tokens=max_output_tokens, info=sub)
+            _track(sub)
             _clear_cooldown("gemini")
             return text
         except Exception as e:
@@ -261,7 +357,10 @@ def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = Non
     if _allowed("openrouter") and os.getenv("OPENROUTER_API_KEY") and not _in_cooldown("openrouter"):
         tried_any = True
         try:
-            text = _call_openrouter(prompt, or_primary, temperature, max_tokens)
+            sub = {}
+            text = _call_openrouter(prompt, or_primary, temperature, max_tokens,
+                                    json_mode=json_mode, max_output_tokens=max_output_tokens, info=sub)
+            _track(sub)
             _clear_cooldown("openrouter")
             return text
         except Exception as e:
@@ -272,7 +371,10 @@ def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = Non
             if or_fallback and or_fallback != or_primary:
                 try:
                     print(f"trying openrouter fallback {or_fallback}")
-                    text = _call_openrouter(prompt, or_fallback, temperature, max_tokens)
+                    sub = {}
+                    text = _call_openrouter(prompt, or_fallback, temperature, max_tokens,
+                                            json_mode=json_mode, max_output_tokens=max_output_tokens, info=sub)
+                    _track(sub)
                     _clear_cooldown("openrouter")
                     return text
                 except Exception as e2:
@@ -290,7 +392,10 @@ def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = Non
     if _allowed("groq") and os.getenv("GROQ_API_KEY") and not _in_cooldown("groq"):
         tried_any = True
         try:
-            text = _call_groq(prompt, groq_model, temperature)
+            sub = {}
+            text = _call_groq(prompt, groq_model, temperature,
+                              json_mode=json_mode, max_output_tokens=max_output_tokens, info=sub)
+            _track(sub)
             _clear_cooldown("groq")
             return text
         except Exception as e:
@@ -307,7 +412,10 @@ def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = Non
         tried_any = True
         try:
             is_analyzer = "AppSpec" in prompt or "Analyzer" in prompt
-            text = _call_nvidia(prompt, nvidia_model, temperature, reasoning_effort="high" if is_analyzer else None)
+            sub = {}
+            text = _call_nvidia(prompt, nvidia_model, temperature, reasoning_effort="high" if is_analyzer else None,
+                                json_mode=json_mode, max_output_tokens=max_output_tokens, info=sub)
+            _track(sub)
             _clear_cooldown("nvidia")
             return text
         except Exception as e:
@@ -323,7 +431,10 @@ def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = Non
     if _allowed("deepseek") and os.getenv("DEEPSEEK_API_KEY") and not _in_cooldown("deepseek"):
         tried_any = True
         try:
-            text = _call_deepseek(prompt, deepseek_model, temperature)
+            sub = {}
+            text = _call_deepseek(prompt, deepseek_model, temperature,
+                                  json_mode=json_mode, max_output_tokens=max_output_tokens, info=sub)
+            _track(sub)
             _clear_cooldown("deepseek")
             return text
         except Exception as e:
@@ -342,8 +453,8 @@ def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = Non
         raise RuntimeError(f"429 All LLM providers exhausted (gemini→openrouter→groq→nvidia→deepseek): {last_err}")
     raise RuntimeError(f"All LLM providers failed (gemini→openrouter→groq→nvidia→deepseek): {last_err}")
 
-def call_llm_with_meta(prompt: str, temperature: float = 0.2) -> tuple[str, dict]:
-    """Returns (text, meta) where meta has source/model for _meta badge — Gemini first, then OpenRouter → Groq → Nvidia → DeepSeek. Falls through until all exhausted (same cooldown as call_llm)."""
+def call_llm_with_meta(prompt: str, temperature: float = 0.2, max_tokens: int | None = None, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None) -> tuple[str, dict]:
+    """Returns (text, meta) where meta has source/model for _meta badge — Gemini first, then OpenRouter → Groq → Nvidia → DeepSeek. Falls through until all exhausted (same cooldown as call_llm). json_mode/max_output_tokens/info behave as in call_llm."""
     primary = os.getenv("OPENROUTER_MODEL", "openrouter/free")
     fallback = os.getenv("OPENROUTER_FALLBACK", "openrouter/free")
     groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
@@ -353,12 +464,22 @@ def call_llm_with_meta(prompt: str, temperature: float = 0.2) -> tuple[str, dict
     saw_quota = False
     tried_any = False
 
+    def _track(sub: dict | None):
+        if info is not None:
+            attempts_local = info.get("attempts", 0) + 1
+            info.update({"attempts": attempts_local})
+            if sub:
+                info.update(sub)
+
     # 0. Gemini first (primary) — falls through on quota/failure
     try:
         if _allowed("gemini") and not _in_cooldown("gemini"):
             tried_any = True
             from main import call_gemini
-            text = call_gemini(prompt)
+            sub: dict = {}
+            text = call_gemini(prompt, response_mime_type="application/json" if json_mode else None,
+                               max_output_tokens=max_output_tokens, info=sub)
+            _track(sub)
             _clear_cooldown("gemini")
             return text, {"source": "gemini", "model": os.getenv("GEMINI_MODEL", "gemini-3.6-flash")}
         if _allowed("gemini"):
@@ -376,7 +497,10 @@ def call_llm_with_meta(prompt: str, temperature: float = 0.2) -> tuple[str, dict
     if _allowed("openrouter") and os.getenv("OPENROUTER_API_KEY") and not _in_cooldown("openrouter"):
         tried_any = True
         try:
-            text = _call_openrouter(prompt, primary, temperature)
+            sub = {}
+            text = _call_openrouter(prompt, primary, temperature, max_tokens,
+                                    json_mode=json_mode, max_output_tokens=max_output_tokens, info=sub)
+            _track(sub)
             _clear_cooldown("openrouter")
             return text, {"source": "openrouter", "model": primary}
         except Exception as e:
@@ -386,7 +510,10 @@ def call_llm_with_meta(prompt: str, temperature: float = 0.2) -> tuple[str, dict
             print(f"openrouter primary {primary} failed: {e} — trying fallback/next")
             if fallback and fallback != primary:
                 try:
-                    text = _call_openrouter(prompt, fallback, temperature)
+                    sub = {}
+                    text = _call_openrouter(prompt, fallback, temperature, max_tokens,
+                                            json_mode=json_mode, max_output_tokens=max_output_tokens, info=sub)
+                    _track(sub)
                     _clear_cooldown("openrouter")
                     return text, {"source": "openrouter", "model": fallback}
                 except Exception as e2:
@@ -399,7 +526,10 @@ def call_llm_with_meta(prompt: str, temperature: float = 0.2) -> tuple[str, dict
     if _allowed("groq") and os.getenv("GROQ_API_KEY") and not _in_cooldown("groq"):
         tried_any = True
         try:
-            text = _call_groq(prompt, groq_model, temperature)
+            sub = {}
+            text = _call_groq(prompt, groq_model, temperature,
+                              json_mode=json_mode, max_output_tokens=max_output_tokens, info=sub)
+            _track(sub)
             _clear_cooldown("groq")
             return text, {"source": "groq", "model": groq_model}
         except Exception as e:
@@ -414,7 +544,10 @@ def call_llm_with_meta(prompt: str, temperature: float = 0.2) -> tuple[str, dict
         tried_any = True
         try:
             is_analyzer = "AppSpec" in prompt or "Analyzer" in prompt
-            text = _call_nvidia(prompt, nvidia_model, temperature, reasoning_effort="high" if is_analyzer else None)
+            sub = {}
+            text = _call_nvidia(prompt, nvidia_model, temperature, reasoning_effort="high" if is_analyzer else None,
+                                json_mode=json_mode, max_output_tokens=max_output_tokens, info=sub)
+            _track(sub)
             _clear_cooldown("nvidia")
             return text, {"source": "nvidia", "model": nvidia_model}
         except Exception as e:
@@ -428,7 +561,10 @@ def call_llm_with_meta(prompt: str, temperature: float = 0.2) -> tuple[str, dict
     if _allowed("deepseek") and os.getenv("DEEPSEEK_API_KEY") and not _in_cooldown("deepseek"):
         tried_any = True
         try:
-            text = _call_deepseek(prompt, deepseek_model, temperature)
+            sub = {}
+            text = _call_deepseek(prompt, deepseek_model, temperature,
+                                  json_mode=json_mode, max_output_tokens=max_output_tokens, info=sub)
+            _track(sub)
             _clear_cooldown("deepseek")
             return text, {"source": "deepseek", "model": deepseek_model}
         except Exception as e:
@@ -501,19 +637,35 @@ def _deepseek_client():
         print(f"deepseek client init failed: {e}")
         return None
 
-def _call_deepseek(prompt: str, model: str, temperature: float = 0.2) -> str:
+def _call_deepseek(prompt: str, model: str, temperature: float = 0.2, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None) -> str:
     client = _deepseek_client()
     if not client:
         raise RuntimeError("Missing DEEPSEEK_API_KEY")
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
+    kwargs: dict = {
+        "model": model,
+        "messages": [
             {"role": "system", "content": "You are a JSON generator. Return ONLY valid JSON, no markdown, no prose."},
             {"role": "user", "content": prompt},
         ],
-        temperature=temperature,
-        timeout=30.0,
-    )
+        "temperature": temperature,
+        "timeout": 30.0,
+    }
+    if max_output_tokens:
+        kwargs["max_tokens"] = max_output_tokens
+    tried_structured = _maybe_json_kwargs("deepseek", model, kwargs, json_mode)
+    try:
+        resp = client.chat.completions.create(**kwargs)  # type: ignore
+    except Exception as e:
+        if tried_structured and _structured_unsupported(e):
+            _NO_JSON_MODE.add(("deepseek", model))
+            kwargs.pop("response_format", None)
+            resp = client.chat.completions.create(**kwargs)  # type: ignore
+        else:
+            raise
+    if info is not None:
+        info.update({"provider": "deepseek", "model": model,
+                     "finish_reason": _finish_reason_openai(resp),
+                     "json_mode": tried_structured})
     return (resp.choices[0].message.content or "").strip()
 
 def get_llm_status() -> dict:

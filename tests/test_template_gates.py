@@ -127,3 +127,50 @@ def test_validate_tsx_needs_no_node_modules():
     assert validate_tsx(page, "src/pages/Dashboard.tsx") == []
     comp = 'export function TaskCard({ item }: { item: any }) { return <div>{item.title}</div> }'
     assert validate_tsx(comp, "src/components/TaskCard.tsx") == []
+
+
+# ---------- P1.3: fallback_reason metadata flow ----------
+
+def test_schema_meta_template_and_llm_paths(monkeypatch):
+    monkeypatch.setenv("INTARA_TEMPLATE_ONLY", "1")
+    from services.generators.schema_gen import generate_schema
+    out = generate_schema({"tables": [{"name": "tasks", "fields": [{"name": "title", "type": "text"}, {"name": "done", "type": "boolean"}]}]})
+    assert out["_meta"]["source"] == "template"
+    assert set(out) >= {"tables", "prisma", "sql", "_meta"}
+
+
+def test_frontend_meta_collects_per_page_fallbacks(monkeypatch):
+    monkeypatch.setenv("INTARA_TEMPLATE_ONLY", "1")
+    from services.generators.frontend_gen import generate_frontend
+    prd = {"appName": "T", "tables": [{"name": "tasks", "fields": [{"name": "title", "type": "text"}]}],
+           "pages": [{"name": "Dashboard", "route": "/", "components": [], "table": "tasks"}],
+           "apis": [], "auth": False}
+    out = generate_frontend(prd)
+    meta = out["_meta"]
+    assert meta["source"] == "template"
+    assert len(meta["fallbacks"]) == 1 and meta["fallbacks"][0]["page"] == "Dashboard"
+    assert "Dashboard" in (meta["fallback_reason"] or "")
+
+
+def test_backend_meta_collects_per_table_fallbacks(monkeypatch):
+    monkeypatch.setenv("INTARA_TEMPLATE_ONLY", "1")
+    from services.generators.backend_gen import generate_backend
+    prd = {"appName": "T",
+           "tables": [{"name": "tasks", "fields": [{"name": "title", "type": "text"}]}],
+           "entities": [{"name": "tasks", "fields": [{"name": "title", "type": "text"}],
+                         "relationships": [], "businessRules": []}],
+           "apis": []}
+    out = generate_backend(prd)
+    assert out["_meta"]["source"] == "template"
+    assert out["_meta"]["fallbacks"] == []  # template-only mode: no LLM attempted, nothing failed
+
+
+def test_frag_fallback_helper():
+    import sys
+    sys.path.insert(0, "server")
+    from services.orchestrator import _frag_fallback
+    assert _frag_fallback({"_meta": {"fallback_reason": "boom"}}) == "boom"
+    assert _frag_fallback({"_meta": {"source": "llm"}}) is None
+    assert _frag_fallback({}) is None
+    assert _frag_fallback(None) is None
+    assert _frag_fallback("nope") is None

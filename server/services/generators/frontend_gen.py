@@ -166,9 +166,17 @@ def _csv_export_tables(prd: dict):
     return tables or "*"
 
 
-def generate_frontend_page_llm(page: dict, app_spec: dict) -> dict | None:
+def generate_frontend_page_llm(page: dict, app_spec: dict, notes: list | None = None) -> dict | None:
     """Try LLM generation for one page. Returns {path, content} (crud) or
-    {files: [...]} (game: page + src/game/logic.ts), or None on failure."""
+    {files: [...]} (game: page + src/game/logic.ts), or None on failure.
+    Failure reasons are appended to notes (when given) for fallback_reason."""
+    def _note(msg: str):
+        try:
+            if notes is not None:
+                notes.append(msg[:200])
+        except Exception:
+            pass
+
     try:
         from services.validator import validate_tsx
 
@@ -177,7 +185,7 @@ def generate_frontend_page_llm(page: dict, app_spec: dict) -> dict | None:
             from prompts.frontend_page_v2 import build_frontend_game_prompt
             from services.llm import call_llm
             prompt = build_frontend_game_prompt(page, app_spec)
-            raw = call_llm(prompt, temperature=0.3)
+            raw = call_llm(prompt, temperature=0.3, json_mode=True)
             data = _parse_json(raw)
             files = data.get("files", [])
             if not files:
@@ -185,8 +193,10 @@ def generate_frontend_page_llm(page: dict, app_spec: dict) -> dict | None:
             page_file = next((f for f in files if (f.get("path") or "").startswith("src/pages/")), None)
             logic_file = next((f for f in files if (f.get("path") or "") in ("src/game/logic.ts", "src/game/logic.js", "src/game/engine.ts")), None)
             if not page_file or not page_file.get("content"):
+                _note("game response missing page file")
                 return None
             if validate_tsx(page_file["content"], page_file.get("path", "")):
+                _note("game page failed validation")
                 return None
             out = [page_file]
             if logic_file and logic_file.get("content"):
@@ -199,27 +209,35 @@ def generate_frontend_page_llm(page: dict, app_spec: dict) -> dict | None:
         from services.llm import call_llm
 
         prompt = build_frontend_page_prompt(page, app_spec)
-        raw = call_llm(prompt, temperature=0.3)
+        raw = call_llm(prompt, temperature=0.3, json_mode=True)
         data = _parse_json(raw)
         content = data.get("content", "")
         if not content:
+            _note("empty content in LLM response")
             return None
         errors = validate_tsx(content, data.get("path", f"src/pages/{page['name']}.tsx"))
         if errors:
             repair_prompt = f"Fix these TypeScript errors in the component:\n{errors}\n\nOriginal code:\n{content}"
             try:
-                raw2 = call_llm(repair_prompt, temperature=0.1)
+                raw2 = call_llm(repair_prompt, temperature=0.1, json_mode=True)
                 data2 = _parse_json(raw2)
                 content2 = data2.get("content", content)
                 if not validate_tsx(content2, data2.get("path", data.get("path", f"src/pages/{page['name']}.tsx"))):
                     content = content2
                 else:
+                    _note(f"validation failed after repair: {errors[0][:120]}")
                     return None
-            except:
+            except Exception as e:
+                _note(f"repair failed: {e}"[:200])
                 return None
         return {"path": data.get("path", f"src/pages/{page['name']}.tsx"), "content": content}
     except Exception as e:
         print(f"LLM frontend page {page.get('name')} failed: {e}")
+        try:
+            if notes is not None:
+                notes.append(str(e)[:200])
+        except Exception:
+            pass
         return None
 
 
@@ -520,10 +538,12 @@ def generate_frontend(prd: dict):
     _upload_tables = _upload_target_tables(prd)
     _upload_emitted = False
     _upload_bucket = _upload_bucket_name(prd)
+    _fallbacks: list = []
     for idx, p in enumerate(pages[:6]):
         # LLM-first: try one LLM call per page (skipped under INTARA_TEMPLATE_ONLY).
         # Game pages may return {files:[page, logic]} — extend instead of append.
-        llm_result = None if _template_only else generate_frontend_page_llm(p, prd)
+        _notes: list = []
+        llm_result = None if _template_only else generate_frontend_page_llm(p, prd, _notes)
         if llm_result:
             if isinstance(llm_result.get("files"), list):
                 seen_here = {f["path"] for f in files}
@@ -533,6 +553,10 @@ def generate_frontend(prd: dict):
             # still need to mark table as used for guessing
             guess_table(p, idx)
             continue
+        if _notes:
+            _fallbacks.append({"page": p.get("name"), "reason": _notes[-1]})
+        elif _template_only:
+            _fallbacks.append({"page": p.get("name"), "reason": "template_only_mode"})
         # Template fallback: game feature pages render the deterministic board,
         # crud pages use the extracted list/detail templates below.
         if str(prd.get("appKind") or "").lower() in ("interactive", "game"):
@@ -856,4 +880,11 @@ export default function App() {{
                       "content": UPLOAD_LIB_TS.replace("__BUCKET__", _upload_bucket_name(prd))})
 
     # ensure at least 3 files
-    return {"files": files}
+    n_pages = len([p for p in pages[:6]])
+    if _fallbacks:
+        _meta = {"source": "mixed" if len(_fallbacks) < n_pages else "template",
+                 "fallback_reason": "; ".join(f"{f['page']}: {f['reason']}" for f in _fallbacks)[:500],
+                 "fallbacks": _fallbacks}
+    else:
+        _meta = {"source": "template" if _template_only else "llm", "fallback_reason": None, "fallbacks": []}
+    return {"files": files, "_meta": _meta}
