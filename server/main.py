@@ -158,6 +158,16 @@ def health():
 def wishes_health():
     return {"ok": True, "wishes": True}
 
+@app.on_event("startup")
+def _sweep_orphaned_builds():
+    # Fresh boot owns no builds: requeue steps orphaned by kill/crash so no
+    # wish stays stuck in `building`. Fail-soft — never blocks boot.
+    try:
+        from services.sweeper import sweep_orphans
+        sweep_orphans()
+    except Exception as e:
+        print(f"startup sweep skipped: {e}")
+
 @app.get("/api/health/llm-stats")
 def llm_stats():
     """Per-provider/model aggregates from llm_calls (Phase 2 telemetry).

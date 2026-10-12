@@ -38,7 +38,9 @@
 | Control plane (current) | `server/` | FastAPI; routers, services, prompts, db — see spec §§2–6 |
 | Builder UI | `react-prompt-app/src/` | Studio, Trial (Sandpack), chat/iterate thread |
 | Component catalog | `server/components/catalog/*.json` | 19 entries; `planned` = unselectable by design |
-| Migrations | `supabase/migrations/001–005` | 006+ are v2 (Phase 4) |
+| Migrations | `supabase/migrations/001–005` | 006a/b are Phase 2/3 infra (applied); 006+ control-plane is Phase 4 |
+| Gateway telemetry | `server/services/telemetry.py`, `cassettes.py` | `llm_calls` writes, record/replay, `GET /api/health/llm-stats` |
+| Durable builds | `server/services/artifacts.py`, `sweeper.py` | `artifact_contents` store, boot orphan sweep |
 | Tests | `tests/` (93 green baseline) | + `scripts/eval.py` (5/5) + `scripts/seed_components.py` |
 | Guide + spec | `INTARA_ARCHITECTURE_GUIDE.md`, `PROJECT_SPEC_FOR_PLANNING_AGENT.md` | Read both before planning |
 | Builds proof | `builds/photovault.zip` | Deterministic-build example |
@@ -78,13 +80,13 @@
 - **Accept:** ✅ post-build counts match logs (1 call → 1 row → endpoint n=1); ✅ zero-key serving proven via replay (full 20-wish cassette set = a manual-dispatch record run, see replay runbook below)
 - **Replay runbook:** record = restart backend with `LLM_CASSETTES=record` → run `scripts/eval_live.py` → cassettes accumulate under `evals/cassettes/`; replay = restart backend with `LLM_CASSETTES=replay` and keys stripped → run `scripts/eval_live.py` → zero-key, byte-identical where recorded, live fallthrough on miss.
 
-### Phase 3 — Durable state [ ]
+### Phase 3 — Durable state [x]
 *Goal: kills/restarts never lose work. (Guide M0.4–M0.5)*
-- [ ] P3.1 Content-addressed artifact persistence (`006b_artifacts.sql` or jsonb column — decide in-session, record here): every step output stored by hash, not paths
-- [ ] P3.2 Resume reads stored content (delete hollow-restore + regen path once proven)
-- [ ] P3.3 Startup sweeper: orphaned `running` steps/wishes → `failed`/requeue on boot
-- [ ] P3.4 Kill-resume test: start build → `kill -9` mid-step → restart → retry resumes with **zero** repeated LLM calls (assert call count)
-- **Accept:** kill-resume test green; no row stuck in `building` after unclean shutdown
+- [x] P3.1 Migration `006b_artifact_contents.sql` (new table, additive-only) + `services/artifacts.py`: content-addressed store (sha256 of canonical JSON; put fail-fast with `ARTIFACT_MAX_BYTES` guard, get fail-soft). **Decision (recorded): side table, not a jsonb column on wish_steps** — keeps step rows small, dedups across retries/wishes, purely additive. Every step now persists FULL content (schema/prisma/sql untruncated, frags with real file code, full scaffolds/preview) + `content_sha` in the summary output.
+- [x] P3.2 Resume restores from store: done steps with `content_sha` fill accumulators with real content and stay done (`step_restored` event); legacy hollow rows (no sha) keep the old requeue+regen path (`step_requeued`) — backward compatible. Store failure fails the step (never a hollow persist).
+- [x] P3.3 `services/sweeper.py` + `@app.on_event("startup")` in `main.py`: fresh boot owns nothing → orphan `running` steps → `pending` (+attempt, noted error), orphan `building` wishes → `failed` with resume pointer. Fail-soft, never blocks boot. **Live proof on first boot: photovault wish `5ed568b…` → failed, 2 steps requeued, resume at `backend-albums`.**
+- [x] P3.4 `tests/test_durability.py` (8 tests): store round-trip/canonicalization/limits, sweeper requeue+noop+DB-down, legacy-hollow regen, store-failure-fails-step, and **kill-resume: fault mid-wiring → residue (building+running) → fresh process → sweep → retry completes `ready` with ZERO repeated per-step LLM calls** (3 `step_restored`, real contents in final artifacts).
+- **Accept:** ✅ kill-resume test green; ✅ no row stuck in `building` (sweeper flips on boot, verified live)
 
 ### Phase 4 — Spec v1 + control-plane DB [ ]
 *Goal: the App Spec as data with a linter. (Guide M1.2–M1.5, M1.7)*
@@ -163,6 +165,11 @@
 - **Problems:** (a) no DDL path in this env (no psql/supabase CLI/direct DB URL) → migration needed dashboard apply + backend restart (recorder self-disables per-process); (b) found `server/.env` (not root) is the real key source after an env-hunt detour; removed stray root `.env.example`, vars live in `server/.env.example`; (c) see §5 #16.
 - **Next:** Phase 3 durable state.
 
+### Session 5 — 2026-10-12 — Phase 3 durable state [x]
+- **Done:** P3.1–P3.4: `supabase/migrations/006b_artifact_contents.sql`, `server/services/artifacts.py`, `server/services/sweeper.py`, orchestrator restore/store wiring (5 step kinds), `@app.on_event("startup")` sweep in `main.py`, `tests/test_durability.py` (8 tests), `server/.env.example` var; backend restarted, healthy; sweeper proved live on boot (photovault orphan → failed + 2 requeued). Suite **142/142**, eval 5/5.
+- **Problems:** (a) 006b NOT yet applied — **new builds fail fast at schema step until user applies it via dashboard** (fail-fast by design, no hollow rows); (b) see §5 #17.
+- **Next:** user applies 006b → Phase 4 (spec v1 + control-plane DB).
+
 ---
 
 ## 5. Known problems / error register
@@ -185,6 +192,7 @@
 14. 2026-10-12 · `/api/wishes/health` returned UUID syntax error — router `/wishes/{wid}` matched first · fixed by mounting routers after direct routes + regression test · **FIXED**
 15. 2026-10-12 · Backend process died silently mid-session (health OK → port empty, no traceback) · cause unknown; single-process runs have no supervisor · consider restart check in session start routine · **OPEN, watch**
 16. 2026-10-12 · New telemetry test failed on `"prompt" in k` matching `prompt_version` — assertion too broad, not a product bug · narrowed to exact `prompt`/`prompt_text` keys · **FIXED**
+17. 2026-10-12 · Durability-test fake `dict(sid=..., step_id=..., **row)` blew up on duplicate `step_id` — fake bug, not product · `{**row, "sid": key}` · **FIXED**
 
 ---
 
@@ -200,7 +208,7 @@
 | Requirement coverage | n/a | — | ≥ 80 % (100 % musts) |
 | LLM calls per build (median) | _pending P0.2_ | — | ≤ 14 (≤ 6 strong) |
 | Time to live preview post-approval | _pending P0.2_ | — | ≤ 30 s |
-| Unit suite | 93/93 (2026-10-11) | 134/134 (2026-10-12) | green every session |
+| Unit suite | 93/93 (2026-10-11) | 142/142 (2026-10-12) | green every session |
 | Golden eval | 5/5 (2026-10-11) | 5/5 (2026-10-12) | 5/5 + new suites |
 
 **Baseline 2026-10-12, pre-Phase-1** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):

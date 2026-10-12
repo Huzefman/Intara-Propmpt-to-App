@@ -169,6 +169,27 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
     graph = build_plan.get("buildGraph", [])
     # init in-memory for SSE, but also ensure DB rows exist (from create_wish_tx)
     init_build_state(wid, graph)
+
+    def _resolve_stored(nid: str, out: dict):
+        """Full step content from the artifact store, or None (legacy hollow row)."""
+        sha = (out or {}).get("content_sha")
+        if not sha:
+            return None
+        try:
+            from services.artifacts import get as _aget
+            return _aget(sha)
+        except Exception as e:
+            print(f"artifact resolve failed for {nid}: {e}")
+            return None
+
+    def _store_step_content(step_output: dict, full: dict):
+        """Persist full step content by hash; fail-fast (never persist hollow)."""
+        try:
+            from services.artifacts import put as _aput
+            step_output["content_sha"] = _aput(full)
+        except Exception as e:
+            print(f"artifact store failed, failing step instead of hollow persist: {e}")
+            raise
     # also sync DB steps that may already be done (resume) — and restore accumulators from DB outputs
     # Accumulators for final artifacts
     schema = None
@@ -190,42 +211,74 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                 # restore accumulators from DB output for resume
                 out = row.get("output") or {}
                 if nid == "schema-foundation" and out.get("tables"):
-                    # reconstruct schema from output (tables only, need to rebuild full schema)
-                    try:
-                        from services.generators.schema_gen import generate_schema
-                        # output has tables, prisma snippet, sql snippet — rebuild full
-                        schema = {"tables": out["tables"], "prisma": out.get("prisma",""), "sql": out.get("sql","")}
-                        if not schema["prisma"] or not schema["sql"]:
-                            schema = generate_schema({"tables": out["tables"]})
-                    except: pass
+                    # P3: restore FULL schema from the content store (no regen).
+                    full = _resolve_stored(nid, out)
+                    if full and full.get("tables"):
+                        schema = {"tables": full["tables"], "prisma": full.get("prisma",""), "sql": full.get("sql","")}
+                        emit(wid, "step_restored", {"stepId": nid})
+                    else:
+                        # legacy hollow row (snippets only) — rebuild full
+                        try:
+                            from services.generators.schema_gen import generate_schema
+                            # output has tables, prisma snippet, sql snippet — rebuild full
+                            schema = {"tables": out["tables"], "prisma": out.get("prisma",""), "sql": out.get("sql","")}
+                            if not schema["prisma"] or not schema["sql"]:
+                                schema = generate_schema({"tables": out["tables"]})
+                        except: pass
                 elif nid.startswith("backend-") and out.get("files"):
-                    # output stores file PATHS only — content lives in the dead process.
-                    # A resumed step with empty content would validate red, so force a
-                    # fresh re-run instead of trusting the hollow restore.
                     ref = nid.replace("backend-","")
-                    backend_tables[ref] = {"files": [{"path": p, "content": ""} for p in out.get("files",[])], "openapi": out.get("openapi",{})}
-                    BUILD_STATE[wid]["steps"][nid]["status"] = "pending"
-                    emit(wid, "step_requeued", {"stepId": nid, "reason": "content not persisted; regenerating"})
-                    # be_openapi merge
-                    for path, methods in out.get("openapi",{}).get("paths",{}).items():
-                        be_openapi["paths"][path] = methods
-                elif nid.startswith("frontend-") and out.get("files"):
-                    # Same hollow-restore problem as backend steps (paths only, no
-                    # content) — re-run fresh so validate checks real code.
-                    ref = nid.replace("frontend-","")
-                    frontend_pages[ref] = {"files": [{"path": p, "content": ""} for p in out.get("files",[])]}
-                    BUILD_STATE[wid]["steps"][nid]["status"] = "pending"
-                    emit(wid, "step_requeued", {"stepId": nid, "reason": "content not persisted; regenerating"})
-                elif nid == "wiring" and out.get("fe_scaffold"):
-                    # wiring output has scaffold keys, reconstruct minimal
-                    fe_scaffold = {k: "" for k in out.get("fe_scaffold",[])}
-                    be_scaffold = {k: "" for k in out.get("be_scaffold",[])}
-                    preview = {k: "" for k in out.get("preview",[])}
-                    # if we have actual content in DB output, it would be files, but our wiring output only has keys, not content
-                    # For resume, we need full content, so we will re-run wiring if needed (it is cheap deterministic)
-                    # Mark wiring as not really done for resume purposes if content missing
-                    if len(fe_scaffold) < 5:  # wiring output truncated, need to re-run wiring
+                    frag = _resolve_stored(nid, out)
+                    if frag and frag.get("files"):
+                        # P3 restore: real file contents, step stays done.
+                        backend_tables[ref] = frag
+                        for path, methods in frag.get("openapi",{}).get("paths",{}).items():
+                            be_openapi["paths"][path] = methods
+                        if be_requirements is None:
+                            be_requirements = frag.get("requirements")
+                        emit(wid, "step_restored", {"stepId": nid})
+                    else:
+                        # legacy hollow row: output stores file PATHS only — content
+                        # lives in the dead process. A resumed step with empty content
+                        # would validate red, so force a fresh re-run instead of
+                        # trusting the hollow restore.
+                        backend_tables[ref] = {"files": [{"path": p, "content": ""} for p in out.get("files",[])], "openapi": out.get("openapi",{})}
                         BUILD_STATE[wid]["steps"][nid]["status"] = "pending"
+                        emit(wid, "step_requeued", {"stepId": nid, "reason": "content not persisted; regenerating"})
+                        # be_openapi merge
+                        for path, methods in out.get("openapi",{}).get("paths",{}).items():
+                            be_openapi["paths"][path] = methods
+                elif nid.startswith("frontend-") and out.get("files"):
+                    ref = nid.replace("frontend-","")
+                    frag = _resolve_stored(nid, out)
+                    if frag and frag.get("files"):
+                        # P3 restore: real file contents, step stays done.
+                        frontend_pages[ref] = frag
+                        emit(wid, "step_restored", {"stepId": nid})
+                    else:
+                        # legacy hollow row: same hollow-restore problem as backend
+                        # steps (paths only, no content) — re-run fresh so validate
+                        # checks real code.
+                        frontend_pages[ref] = {"files": [{"path": p, "content": ""} for p in out.get("files",[])]}
+                        BUILD_STATE[wid]["steps"][nid]["status"] = "pending"
+                        emit(wid, "step_requeued", {"stepId": nid, "reason": "content not persisted; regenerating"})
+                elif nid == "wiring" and out.get("fe_scaffold"):
+                    # P3: restore FULL scaffolds/preview from the content store.
+                    full = _resolve_stored(nid, out)
+                    if full and full.get("fe_scaffold"):
+                        fe_scaffold = full["fe_scaffold"]
+                        be_scaffold = full.get("be_scaffold", {})
+                        preview = full.get("preview", {})
+                        emit(wid, "step_restored", {"stepId": nid})
+                    else:
+                        # legacy hollow row: wiring output has scaffold keys, reconstruct minimal
+                        fe_scaffold = {k: "" for k in out.get("fe_scaffold",[])}
+                        be_scaffold = {k: "" for k in out.get("be_scaffold",[])}
+                        preview = {k: "" for k in out.get("preview",[])}
+                        # if we have actual content in DB output, it would be files, but our wiring output only has keys, not content
+                        # For resume, we need full content, so we will re-run wiring if needed (it is cheap deterministic)
+                        # Mark wiring as not really done for resume purposes if content missing
+                        if len(fe_scaffold) < 5:  # wiring output truncated, need to re-run wiring
+                            BUILD_STATE[wid]["steps"][nid]["status"] = "pending"
     except Exception as e:
         print(f"resume sync failed for {wid}: {e}")
     emit(wid, "build_started", {"wid": wid, "graph": [n["id"] for n in graph]})
@@ -310,6 +363,7 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                 )
                 step_output = {"tables": schema["tables"], "prisma": schema["prisma"][:500], "sql": schema["sql"][:500],
                                "fallback_reason": _frag_fallback(schema)}
+                _store_step_content(step_output, schema)
                 BUILD_STATE[wid]["steps"][nid]["status"] = "done"
             elif kind == "backend_table":
                 single_prd = {**build_plan, "tables": [t for t in build_plan["tables"] if t["name"]==ref][:1], "pages": [], "apis": [a for a in build_plan.get("apis",[]) if ref in a["path"]]}
@@ -321,6 +375,7 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                 backend_tables[ref] = frag
                 step_output = {"files": [f["path"] for f in frag.get("files",[])], "openapi": frag.get("openapi"),
                                "fallback_reason": _frag_fallback(frag)}
+                _store_step_content(step_output, frag)
                 for path, methods in frag.get("openapi",{}).get("paths",{}).items():
                     if path not in be_openapi["paths"]:
                         be_openapi["paths"][path] = methods
@@ -337,6 +392,7 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                 frag = await _run_blocking(f"frontend {nid}", generate_frontend, single_prd)
                 step_output = {"files": [f["path"] for f in frag.get("files",[])], "page": page["name"],
                                "fallback_reason": _frag_fallback(frag)}
+                _store_step_content(step_output, frag)
                 frontend_pages[ref] = frag
                 BUILD_STATE[wid]["steps"][nid]["status"] = "done"
             elif kind == "wiring":
@@ -349,6 +405,7 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                                                ddl_for(_contract))
                 preview = generate_mock(build_plan)
                 step_output = {"fe_scaffold": list(fe_scaffold.keys())[:5], "be_scaffold": list(be_scaffold.keys())[:5], "preview": list(preview.keys())}
+                _store_step_content(step_output, {"fe_scaffold": fe_scaffold, "be_scaffold": be_scaffold, "preview": preview})
                 BUILD_STATE[wid]["steps"][nid]["status"] = "done"
             elif kind == "validate":
                 step_prompt = "Validate: blocking gates (tsc + vite build + import + TestClient CRUD)"
@@ -431,6 +488,7 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                     step_output = {"validated": len(validation_errors) == 0, "errors": validation_errors[:10], "fe_files": sum(len(v.get("files",[])) for v in frontend_pages.values()), "be_tables": len(backend_tables)}
                     if validation_errors:
                         raise RuntimeError("blocking gates failed: " + "; ".join(validation_errors[:5]))
+                    _store_step_content(step_output, dict(step_output))
                     BUILD_STATE[wid]["steps"][nid]["status"] = "done"
                 except Exception as e:
                     # Fail-closed: real gate failures must NEVER fall through to a green
@@ -471,6 +529,7 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
                             _c2 = _bc2(build_plan, (schema or {}).get("tables"))
                             be_scaffold = backend_scaffold(build_plan.get("appName","IntaraApp"), (schema or {"tables": build_plan["tables"]})["tables"], _ddl2(_c2))
                     step_output = {"validated": True, "fe_files": sum(len(v.get("files",[])) for v in frontend_pages.values()), "be_tables": len(backend_tables)}
+                    _store_step_content(step_output, dict(step_output))
                     BUILD_STATE[wid]["steps"][nid]["status"] = "done"
             else:
                 step_output = {"kind": kind}
