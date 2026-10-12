@@ -50,10 +50,14 @@ def _fresh_llm(monkeypatch, env):
     for k in ["OPENROUTER_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY", "NVIDIA_API_KEY",
               "DEEPSEEK_API_KEY", "OPENROUTER_MODEL", "OPENROUTER_FALLBACK",
               "GROQ_MODEL", "NVIDIA_MODEL", "DEEPSEEK_MODEL", "GEMINI_MODEL",
-              "LLM_COOLDOWN_SECONDS", "LLM_ONLY"]:
+              "LLM_COOLDOWN_SECONDS", "LLM_ONLY", "LLM_TELEMETRY", "LLM_CASSETTES",
+              "LLM_CASSETTE_DIR"]:
         monkeypatch.delenv(k, raising=False)
     for k, v in env.items():
         monkeypatch.setenv(k, v)
+    # Telemetry/cassettes stay off in chain unit tests (no Supabase writes, no disk).
+    monkeypatch.setenv("LLM_TELEMETRY", "0")
+    monkeypatch.setenv("LLM_CASSETTES", "off")
     _ensure_main_stub()
     import services.llm as llm
     importlib.reload(llm)

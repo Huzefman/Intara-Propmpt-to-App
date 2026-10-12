@@ -114,6 +114,19 @@ def _finish_reason_openai(resp) -> str | None:
         return None
 
 
+def _usage_openai(resp, info: dict | None) -> None:
+    """Best-effort token counts from an OpenAI-compatible response."""
+    if info is None:
+        return
+    try:
+        u = getattr(resp, "usage", None)
+        if u is not None:
+            info["tokens_in"] = getattr(u, "prompt_tokens", None)
+            info["tokens_out"] = getattr(u, "completion_tokens", None)
+    except Exception:
+        pass
+
+
 def _maybe_json_kwargs(provider: str, model: str, kwargs: dict, json_mode: bool) -> bool:
     """Attach response_format when requested and not known-unsupported.
     Returns True if structured mode was attempted."""
@@ -152,6 +165,7 @@ def _call_groq(prompt: str, model: str, temperature: float = 0.2, *, json_mode: 
         info.update({"provider": "groq", "model": model,
                      "finish_reason": _finish_reason_openai(resp),
                      "json_mode": tried_structured})
+        _usage_openai(resp, info)
     return (resp.choices[0].message.content or "").strip()
 
 def _nvidia_timeout() -> float:
@@ -241,6 +255,7 @@ def _call_nvidia(prompt: str, model: str, temperature: float = 0.2, stream: bool
     if info is not None:
         info.update({"provider": "nvidia", "model": model,
                      "finish_reason": _finish(resp), "json_mode": tried_structured})
+        _usage_openai(resp, info)
     # Handle reasoning for Nemotron non-streaming
     content = resp.choices[0].message.content or ""
     reasoning = getattr(resp.choices[0].message, "reasoning_content", None) or getattr(resp.choices[0].message, "reasoning", None)
@@ -296,23 +311,14 @@ def _call_openrouter(prompt: str, model: str, temperature: float = 0.2, max_toke
             info.update({"provider": "openrouter", "model": model,
                          "finish_reason": _finish_reason_openai(resp),
                          "json_mode": tried_structured})
+            _usage_openai(resp, info)
         content = resp.choices[0].message.content or ""
         return content.strip()
     except Exception as e:
         raise
 
-def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = None, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None) -> str:
-    """
-    Gemini → OpenRouter → Groq → Nvidia → DeepSeek — fall through until all exhausted.
-    Gemini is primary; others are fallback in that order.
-    Quota-exhausted providers get a 60s cooldown (LLM_COOLDOWN_SECONDS) then are retried,
-    so refreshed quota is reused automatically. Raises 429 only when every configured
-    provider is exhausted/cooldown; raises unconfigured only when no key is set at all.
-    max_tokens bounds OpenRouter output ( reasoning dribble guard); other providers ignore it.
-    json_mode requests structured output where supported (auto-fallback per model).
-    max_output_tokens caps output on every provider that accepts it.
-    info, when given, is populated with {provider, model, finish_reason, json_mode, attempts}.
-    """
+def _call_llm_inner(prompt: str, temperature: float = 0.2, max_tokens: int | None = None, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None) -> str:
+    """Chain core — see call_llm (public wrapper adds cassettes + telemetry)."""
     deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
     nvidia_model = os.getenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash-0731")
     groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
@@ -325,6 +331,10 @@ def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = Non
     attempts = 0
 
     def _track(sub: dict | None):
+        # Attribute fallthrough: when an earlier provider failed, stamp its
+        # error on the winning call so telemetry can record fallback_reason.
+        if sub is not None and last_err is not None:
+            sub["fallback_reason"] = str(last_err)[:500]
         if info is not None:
             attempts_local = info.get("attempts", 0) + 1
             info.update({"attempts": attempts_local})
@@ -453,8 +463,8 @@ def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = Non
         raise RuntimeError(f"429 All LLM providers exhausted (gemini→openrouter→groq→nvidia→deepseek): {last_err}")
     raise RuntimeError(f"All LLM providers failed (gemini→openrouter→groq→nvidia→deepseek): {last_err}")
 
-def call_llm_with_meta(prompt: str, temperature: float = 0.2, max_tokens: int | None = None, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None) -> tuple[str, dict]:
-    """Returns (text, meta) where meta has source/model for _meta badge — Gemini first, then OpenRouter → Groq → Nvidia → DeepSeek. Falls through until all exhausted (same cooldown as call_llm). json_mode/max_output_tokens/info behave as in call_llm."""
+def _call_llm_with_meta_inner(prompt: str, temperature: float = 0.2, max_tokens: int | None = None, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None) -> tuple[str, dict]:
+    """Chain core — see call_llm_with_meta (public wrapper adds cassettes + telemetry)."""
     primary = os.getenv("OPENROUTER_MODEL", "openrouter/free")
     fallback = os.getenv("OPENROUTER_FALLBACK", "openrouter/free")
     groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
@@ -465,6 +475,10 @@ def call_llm_with_meta(prompt: str, temperature: float = 0.2, max_tokens: int | 
     tried_any = False
 
     def _track(sub: dict | None):
+        # Attribute fallthrough: when an earlier provider failed, stamp its
+        # error on the winning call so telemetry can record fallback_reason.
+        if sub is not None and last_err is not None:
+            sub["fallback_reason"] = str(last_err)[:500]
         if info is not None:
             attempts_local = info.get("attempts", 0) + 1
             info.update({"attempts": attempts_local})
@@ -581,6 +595,99 @@ def call_llm_with_meta(prompt: str, temperature: float = 0.2, max_tokens: int | 
         raise RuntimeError(f"429 All LLM providers exhausted (gemini→openrouter→groq→nvidia→deepseek): {last_err}")
     raise RuntimeError(f"All LLM providers failed (gemini→openrouter→groq→nvidia→deepseek): {last_err}")
 
+def _record_gateway_call(sub: dict | None, elapsed_s: float, telemetry: dict | None) -> None:
+    """Best-effort llm_calls row for one successful chain call. Never raises."""
+    try:
+        if os.getenv("LLM_TELEMETRY", "1") != "1":
+            return
+        from services import telemetry as _tm
+        ctx = telemetry or {}
+        sub = sub or {}
+        _tm.record_llm_call(
+            provider=sub.get("provider") or "unknown",
+            model=sub.get("model"),
+            tokens_in=sub.get("tokens_in"),
+            tokens_out=sub.get("tokens_out"),
+            latency_ms=int(elapsed_s * 1000),
+            finish_reason=sub.get("finish_reason"),
+            wish_id=ctx.get("wish_id"),
+            step_key=ctx.get("step_key"),
+            agent=ctx.get("agent"),
+            prompt_version=ctx.get("prompt_version"),
+            parse_outcome=ctx.get("parse_outcome"),
+            repair_used=bool(ctx.get("repair_used", False)),
+            fallback_reason=sub.get("fallback_reason") or ctx.get("fallback_reason"),
+        )
+    except Exception:
+        pass
+
+
+def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = None, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None, telemetry: dict | None = None) -> str:
+    """
+    Gemini → OpenRouter → Groq → Nvidia → DeepSeek — fall through until all exhausted.
+    Gemini is primary; others are fallback in that order.
+    Quota-exhausted providers get a 60s cooldown (LLM_COOLDOWN_SECONDS) then are retried,
+    so refreshed quota is reused automatically. Raises 429 only when every configured
+    provider is exhausted/cooldown; raises unconfigured only when no key is set at all.
+    max_tokens bounds OpenRouter output (reasoning dribble guard); other providers ignore it.
+    json_mode requests structured output where supported (auto-fallback per model).
+    max_output_tokens caps output on every provider that accepts it.
+    info, when given, is populated with {provider, model, finish_reason, json_mode, attempts}.
+    telemetry, when given, carries {wish_id, step_key, agent, prompt_version} context
+    recorded into llm_calls (kill-switch: LLM_TELEMETRY=0). Cassettes: LLM_CASSETTES=
+    record saves prompt→response under evals/cassettes; replay serves saved responses
+    without hitting providers (miss falls through to live).
+    """
+    from services import cassettes as _cas
+    hit = _cas.replay_lookup(prompt, temperature=temperature, json_mode=json_mode,
+                             max_output_tokens=max_output_tokens, max_tokens=max_tokens)
+    if hit is not None:
+        if info is not None:
+            info.update({"attempts": info.get("attempts", 0) + 1, "provider": "cassette",
+                         "model": (hit.get("meta") or {}).get("model") or "replay",
+                         "finish_reason": "replay", "json_mode": json_mode})
+        return hit["text"]
+    t0 = time.perf_counter()
+    sub: dict = {}
+    text = _call_llm_inner(prompt, temperature, max_tokens, json_mode=json_mode,
+                           max_output_tokens=max_output_tokens, info=sub)
+    if info is not None:
+        info.update(sub)
+    _cas.record_save(prompt, text, meta={"provider": sub.get("provider"), "model": sub.get("model")},
+                     temperature=temperature, json_mode=json_mode,
+                     max_output_tokens=max_output_tokens, max_tokens=max_tokens)
+    _record_gateway_call(sub, time.perf_counter() - t0, telemetry)
+    return text
+
+
+def call_llm_with_meta(prompt: str, temperature: float = 0.2, max_tokens: int | None = None, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None, telemetry: dict | None = None) -> tuple[str, dict]:
+    """Returns (text, meta) where meta has source/model for _meta badge — same chain,
+    cooldown, info, telemetry and cassette behavior as call_llm."""
+    from services import cassettes as _cas
+    hit = _cas.replay_lookup(prompt, temperature=temperature, json_mode=json_mode,
+                             max_output_tokens=max_output_tokens, max_tokens=max_tokens)
+    if hit is not None:
+        meta = dict(hit.get("meta") or {})
+        meta.setdefault("source", "cassette")
+        meta.setdefault("model", "replay")
+        if info is not None:
+            info.update({"attempts": info.get("attempts", 0) + 1, "provider": "cassette",
+                         "model": meta.get("model"), "finish_reason": "replay",
+                         "json_mode": json_mode})
+        return hit["text"], meta
+    t0 = time.perf_counter()
+    sub: dict = {}
+    text, meta = _call_llm_with_meta_inner(prompt, temperature, max_tokens, json_mode=json_mode,
+                                           max_output_tokens=max_output_tokens, info=sub)
+    if info is not None:
+        info.update(sub)
+    _cas.record_save(prompt, text, meta=meta,
+                     temperature=temperature, json_mode=json_mode,
+                     max_output_tokens=max_output_tokens, max_tokens=max_tokens)
+    _record_gateway_call(sub, time.perf_counter() - t0, telemetry)
+    return text, meta
+
+
 def embed_texts(texts: list[str]) -> list[list[float]]:
     """OpenRouter embeddings first, then Gemini. Returns list of vectors (3072d padded/truncated for pgvector)."""
     # Try OpenRouter embeddings only if explicitly configured and model exists
@@ -666,6 +773,7 @@ def _call_deepseek(prompt: str, model: str, temperature: float = 0.2, *, json_mo
         info.update({"provider": "deepseek", "model": model,
                      "finish_reason": _finish_reason_openai(resp),
                      "json_mode": tried_structured})
+        _usage_openai(resp, info)
     return (resp.choices[0].message.content or "").strip()
 
 def get_llm_status() -> dict:

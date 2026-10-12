@@ -69,13 +69,13 @@
 - [x] P1.5 Re-run baseline, record delta → `evals/reports/baseline-20261012-104102.json`: **20/20 success, 0 fallback** (15 full plans: 10 nvidia + 5 groq; 5 clarify-Q&A)
 - **Accept:** fixtures green; live re-run shows parse-success ≥ baseline +15pp ✅ (0/10 → 15/15 full plans); 100% of fallbacks carry reason (mechanism shipped + tested; zero fallbacks occurred to display); suite green
 
-### Phase 2 — Telemetry + cassettes [ ]
+### Phase 2 — Telemetry + cassettes [ ] *(code done 2026-10-12, live verify blocked on migration apply)*
 *Goal: product health numbers + keyless CI. (Guide M0.3, M0.6)*
-- [ ] P2.1 Migration `006a_llm_calls.sql` + write path in gateway: provider, model, tokens in/out, latency, finish_reason, parse_outcome, repair_used, fallback_reason
-- [ ] P2.2 `GET /api/health/llm-stats` (counts by provider/outcome, last 24h)
-- [ ] P2.3 Record/replay cassettes for LLM calls; `eval.py --replay` runs offline, byte-identical
+- [x] P2.1 Migration `006a_llm_calls.sql` (additive-only, RLS append+public-read, no prompt text) + write path: `services/telemetry.py` (fail-soft, self-disables on missing table) + gateway wrappers (`call_llm`/`call_llm_with_meta` keep signatures; chain core renamed `_call_llm_inner`/`_call_llm_with_meta_inner`); records provider/model/tokens/latency/finish/fallback_reason + caller ctx (wish_id/step_key/agent/prompt_version); `_usage_openai` on all 4 OpenAI-compat providers + `usage_metadata` on Gemini; `LLM_TELEMETRY` kill-switch — **migration file NOT yet applied to Supabase (no psql/supabase CLI in env; needs dashboard SQL editor) → recorder self-disabled live until applied + backend restarted**
+- [x] P2.2 `GET /api/health/llm-stats` (per-provider/model aggregates: calls, tokens, avg latency, repaired/failed; fail-soft `ok:false`, never 500) — live verified fail-soft (`PGRST205`, HTTP 200)
+- [x] P2.3 `services/cassettes.py` (record/replay via `LLM_CASSETTES`, miss falls through to live, never fails a build) + `tests/test_telemetry.py` (10 tests: payload shape, disable-on-missing-table, gateway record, fallback attribution, kill-switch, record→replay, miss fallthrough, meta replay, endpoint aggregates, migration additive guard); chain unit-test helpers force `LLM_TELEMETRY=0`/`LLM_CASSETTES=off` so CI never writes Supabase/disk; `server/.env.example` documents new vars
 - [ ] P2.4 Prune/aggregate policy note (free-tier 500 MB guard)
-- **Accept:** post-build counts match logs; full eval passes with zero keys via replay
+- **Accept:** post-build counts match logs; full eval passes with zero keys via replay — **PENDING: apply 006a, restart backend, live-verify one row + `eval.py --replay` offline run**
 
 ### Phase 3 — Durable state [ ]
 *Goal: kills/restarts never lose work. (Guide M0.4–M0.5)*
@@ -157,6 +157,11 @@
 - **Problems:** see §5 #14–15.
 - **Next:** Phase 2 telemetry + cassettes.
 
+### Session 4 — 2026-10-12 — Phase 2 code complete, live verify pending [ ]
+- **Done:** P2.1–P2.3 code: `supabase/migrations/006a_llm_calls.sql`, `server/services/telemetry.py`, `server/services/cassettes.py`, gateway wrapper refactor in `server/services/llm.py` (all 30+ call sites untouched — signatures backward-compatible), Gemini `usage_metadata` + endpoint `GET /api/health/llm-stats` in `server/main.py`, `tests/test_telemetry.py` (10 tests), `server/.env.example` vars; backend restarted on new code, healthy; endpoint live-verified fail-soft (missing table → `ok:false`, HTTP 200); suite **134/134**, eval 5/5.
+- **Problems:** (a) no DDL path in this env (no psql/supabase CLI/direct DB URL) → 006a NOT applied, recorder self-disabled live — needs Supabase dashboard apply + backend restart; (b) found `server/.env` (not root) is the real key source after a env-hunt detour; removed stray root `.env.example` I created, vars live in `server/.env.example`; (c) see §5 #16.
+- **Next:** user applies 006a via dashboard → restart backend → verify one `llm_calls` row + endpoint `ok:true` → `eval.py --replay` offline run → P2.4 prune note → Phase 3.
+
 ---
 
 ## 5. Known problems / error register
@@ -178,6 +183,7 @@
 13. 2026-10-12 · Shipped `IndentationError` (`frontend_gen.py:181`, game branch) survived because full suite wasn't re-run post-edit in that session · rule: no session ends without the §0 verification trio · **FIXED (suite now gates it)**
 14. 2026-10-12 · `/api/wishes/health` returned UUID syntax error — router `/wishes/{wid}` matched first · fixed by mounting routers after direct routes + regression test · **FIXED**
 15. 2026-10-12 · Backend process died silently mid-session (health OK → port empty, no traceback) · cause unknown; single-process runs have no supervisor · consider restart check in session start routine · **OPEN, watch**
+16. 2026-10-12 · New telemetry test failed on `"prompt" in k` matching `prompt_version` — assertion too broad, not a product bug · narrowed to exact `prompt`/`prompt_text` keys · **FIXED**
 
 ---
 
@@ -193,7 +199,7 @@
 | Requirement coverage | n/a | — | ≥ 80 % (100 % musts) |
 | LLM calls per build (median) | _pending P0.2_ | — | ≤ 14 (≤ 6 strong) |
 | Time to live preview post-approval | _pending P0.2_ | — | ≤ 30 s |
-| Unit suite | 93/93 (2026-10-11) | 124/124 (2026-10-12) | green every session |
+| Unit suite | 93/93 (2026-10-11) | 134/134 (2026-10-12) | green every session |
 | Golden eval | 5/5 (2026-10-11) | 5/5 (2026-10-12) | 5/5 + new suites |
 
 **Baseline 2026-10-12, pre-Phase-1** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):

@@ -92,6 +92,13 @@ def call_gemini(prompt: str, *, response_mime_type: str | None = None, max_outpu
         info.update({"provider": "gemini", "model": MODEL,
                      "finish_reason": finish,
                      "json_mode": bool(response_mime_type)})
+        try:
+            u = getattr(resp, "usage_metadata", None)
+            if u is not None:
+                info["tokens_in"] = getattr(u, "prompt_token_count", None)
+                info["tokens_out"] = getattr(u, "candidates_token_count", None)
+        except Exception:
+            pass
     return resp.text
 
 @app.post("/generate")
@@ -150,6 +157,51 @@ def health():
 @app.get("/api/wishes/health")
 def wishes_health():
     return {"ok": True, "wishes": True}
+
+@app.get("/api/health/llm-stats")
+def llm_stats():
+    """Per-provider/model aggregates from llm_calls (Phase 2 telemetry).
+    Fail-soft: missing table/creds → ok False with empty aggregates, never 500."""
+    try:
+        from db.wishes import _client
+        supa = _client()
+        rows = (supa.table("llm_calls")
+                .select("provider,model,tokens_in,tokens_out,latency_ms,parse_outcome,repair_used")
+                .order("created_at", desc=True).limit(2000).execute().data or [])
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200], "n": 0, "by_provider": {}, "by_model": {}}
+    by_provider: dict = {}
+    by_model: dict = {}
+    for r in rows:
+        for bucket, key in ((by_provider, r.get("provider") or "unknown"),
+                            (by_model, r.get("model") or "unknown")):
+            b = bucket.setdefault(key, {"calls": 0, "tokens_in": 0, "tokens_out": 0,
+                                        "latency_ms_sum": 0, "latency_ms_n": 0,
+                                        "repaired": 0, "failed": 0})
+            b["calls"] += 1
+            try:
+                if r.get("tokens_in") is not None:
+                    b["tokens_in"] += int(r["tokens_in"])
+                if r.get("tokens_out") is not None:
+                    b["tokens_out"] += int(r["tokens_out"])
+            except Exception:
+                pass
+            try:
+                if r.get("latency_ms") is not None:
+                    b["latency_ms_sum"] += int(r["latency_ms"])
+                    b["latency_ms_n"] += 1
+            except Exception:
+                pass
+            if (r.get("parse_outcome") or "") in ("repaired", "llm_repaired") or r.get("repair_used"):
+                b["repaired"] += 1
+            if (r.get("parse_outcome") or "") == "failed":
+                b["failed"] += 1
+    for bucket in (by_provider, by_model):
+        for b in bucket.values():
+            n = b.pop("latency_ms_n")
+            s = b.pop("latency_ms_sum")
+            b["avg_latency_ms"] = round(s / n) if n else None
+    return {"ok": True, "n": len(rows), "by_provider": by_provider, "by_model": by_model}
 
 
 # Intara wish routers — mounted LAST so direct routes above take precedence
