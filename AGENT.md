@@ -167,7 +167,7 @@
 
 ### Session 5 — 2026-10-12 — Phase 3 durable state [x]
 - **Done:** P3.1–P3.4: `supabase/migrations/006b_artifact_contents.sql`, `server/services/artifacts.py`, `server/services/sweeper.py`, orchestrator restore/store wiring (5 step kinds), `@app.on_event("startup")` sweep in `main.py`, `tests/test_durability.py` (8 tests), `server/.env.example` var; backend restarted, healthy; sweeper proved live on boot (photovault orphan → failed + 2 requeued). Suite **142/142**, eval 5/5.
-- **Problems:** (a) 006b NOT yet applied — **new builds fail fast at schema step until user applies it via dashboard** (fail-fast by design, no hollow rows); (b) see §5 #17.
+- **Problems:** (a) 006b needed dashboard apply before any new build (fail-fast by design) — user applied 2026-10-12, live put→get round-trip verified, backend healthy; (b) see §5 #17.
 - **Next:** user applies 006b → Phase 4 (spec v1 + control-plane DB).
 
 ---
