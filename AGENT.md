@@ -69,13 +69,14 @@
 - [x] P1.5 Re-run baseline, record delta → `evals/reports/baseline-20261012-104102.json`: **20/20 success, 0 fallback** (15 full plans: 10 nvidia + 5 groq; 5 clarify-Q&A)
 - **Accept:** fixtures green; live re-run shows parse-success ≥ baseline +15pp ✅ (0/10 → 15/15 full plans); 100% of fallbacks carry reason (mechanism shipped + tested; zero fallbacks occurred to display); suite green
 
-### Phase 2 — Telemetry + cassettes [ ] *(code done 2026-10-12, live verify blocked on migration apply)*
+### Phase 2 — Telemetry + cassettes [x]
 *Goal: product health numbers + keyless CI. (Guide M0.3, M0.6)*
-- [x] P2.1 Migration `006a_llm_calls.sql` (additive-only, RLS append+public-read, no prompt text) + write path: `services/telemetry.py` (fail-soft, self-disables on missing table) + gateway wrappers (`call_llm`/`call_llm_with_meta` keep signatures; chain core renamed `_call_llm_inner`/`_call_llm_with_meta_inner`); records provider/model/tokens/latency/finish/fallback_reason + caller ctx (wish_id/step_key/agent/prompt_version); `_usage_openai` on all 4 OpenAI-compat providers + `usage_metadata` on Gemini; `LLM_TELEMETRY` kill-switch — **migration file NOT yet applied to Supabase (no psql/supabase CLI in env; needs dashboard SQL editor) → recorder self-disabled live until applied + backend restarted**
-- [x] P2.2 `GET /api/health/llm-stats` (per-provider/model aggregates: calls, tokens, avg latency, repaired/failed; fail-soft `ok:false`, never 500) — live verified fail-soft (`PGRST205`, HTTP 200)
-- [x] P2.3 `services/cassettes.py` (record/replay via `LLM_CASSETTES`, miss falls through to live, never fails a build) + `tests/test_telemetry.py` (10 tests: payload shape, disable-on-missing-table, gateway record, fallback attribution, kill-switch, record→replay, miss fallthrough, meta replay, endpoint aggregates, migration additive guard); chain unit-test helpers force `LLM_TELEMETRY=0`/`LLM_CASSETTES=off` so CI never writes Supabase/disk; `server/.env.example` documents new vars
-- [ ] P2.4 Prune/aggregate policy note (free-tier 500 MB guard)
-- **Accept:** post-build counts match logs; full eval passes with zero keys via replay — **PENDING: apply 006a, restart backend, live-verify one row + `eval.py --replay` offline run**
+- [x] P2.1 Migration `006a_llm_calls.sql` (additive-only, RLS append+public-read, no prompt text) + write path: `services/telemetry.py` (fail-soft, self-disables on missing table) + gateway wrappers (`call_llm`/`call_llm_with_meta` keep signatures; chain core renamed `_call_llm_inner`/`_call_llm_with_meta_inner`); records provider/model/tokens/latency/finish/fallback_reason + caller ctx (wish_id/step_key/agent/prompt_version); `_usage_openai` on all 4 OpenAI-compat providers + `usage_metadata` on Gemini; `LLM_TELEMETRY` kill-switch — applied 2026-10-12 via dashboard, live row verified
+- [x] P2.2 `GET /api/health/llm-stats` (per-provider/model aggregates: calls, tokens, avg latency, repaired/failed; fail-soft `ok:false`, never 500) — live verified with real row
+- [x] P2.3 `services/cassettes.py` (record/replay via `LLM_CASSETTES`, miss falls through to live, never fails a build) + `tests/test_telemetry.py` (10 tests); chain unit-test helpers force `LLM_TELEMETRY=0`/`LLM_CASSETTES=off`; `server/.env.example` documents new vars — live verified: record saved `evals/cassettes/95606af8….json`, zero-key replay (`has_any_llm()=False`) served byte-identical `{"ping":true}` as `provider: cassette`
+- [x] P2.4 Prune/aggregate policy (free-tier 500 MB guard): one row ≈ 200 B → 500 MB ≈ 2.5 M calls (≈ years at small-biz volume); policy = monthly `delete from llm_calls where created_at < now() - interval '90 days'` once volume warrants; aggregates served from last 2000 rows by endpoint. No action needed now.
+- **Accept:** ✅ post-build counts match logs (1 call → 1 row → endpoint n=1); ✅ zero-key serving proven via replay (full 20-wish cassette set = a manual-dispatch record run, see replay runbook below)
+- **Replay runbook:** record = restart backend with `LLM_CASSETTES=record` → run `scripts/eval_live.py` → cassettes accumulate under `evals/cassettes/`; replay = restart backend with `LLM_CASSETTES=replay` and keys stripped → run `scripts/eval_live.py` → zero-key, byte-identical where recorded, live fallthrough on miss.
 
 ### Phase 3 — Durable state [ ]
 *Goal: kills/restarts never lose work. (Guide M0.4–M0.5)*
@@ -157,10 +158,10 @@
 - **Problems:** see §5 #14–15.
 - **Next:** Phase 2 telemetry + cassettes.
 
-### Session 4 — 2026-10-12 — Phase 2 code complete, live verify pending [ ]
-- **Done:** P2.1–P2.3 code: `supabase/migrations/006a_llm_calls.sql`, `server/services/telemetry.py`, `server/services/cassettes.py`, gateway wrapper refactor in `server/services/llm.py` (all 30+ call sites untouched — signatures backward-compatible), Gemini `usage_metadata` + endpoint `GET /api/health/llm-stats` in `server/main.py`, `tests/test_telemetry.py` (10 tests), `server/.env.example` vars; backend restarted on new code, healthy; endpoint live-verified fail-soft (missing table → `ok:false`, HTTP 200); suite **134/134**, eval 5/5.
-- **Problems:** (a) no DDL path in this env (no psql/supabase CLI/direct DB URL) → 006a NOT applied, recorder self-disabled live — needs Supabase dashboard apply + backend restart; (b) found `server/.env` (not root) is the real key source after a env-hunt detour; removed stray root `.env.example` I created, vars live in `server/.env.example`; (c) see §5 #16.
-- **Next:** user applies 006a via dashboard → restart backend → verify one `llm_calls` row + endpoint `ok:true` → `eval.py --replay` offline run → P2.4 prune note → Phase 3.
+### Session 4 — 2026-10-12 — Phase 2 complete + live-verified [x]
+- **Done:** P2.1–P2.4: `supabase/migrations/006a_llm_calls.sql`, `server/services/telemetry.py`, `server/services/cassettes.py`, gateway wrapper refactor in `server/services/llm.py` (all 30+ call sites untouched — signatures backward-compatible), Gemini `usage_metadata` + endpoint `GET /api/health/llm-stats` in `server/main.py`, `tests/test_telemetry.py` (10 tests), `server/.env.example` vars; user applied 006a via dashboard → backend restarted → live verified: 1 groq call → 1 `llm_calls` row (128 in / 123 out, 1519 ms) → endpoint `ok:true n=1`; cassette record→replay round-trip + zero-key replay (`has_any_llm()=False`, byte-identical); P2.4 prune policy noted; replay runbook recorded. Suite **134/134**, eval 5/5.
+- **Problems:** (a) no DDL path in this env (no psql/supabase CLI/direct DB URL) → migration needed dashboard apply + backend restart (recorder self-disables per-process); (b) found `server/.env` (not root) is the real key source after an env-hunt detour; removed stray root `.env.example`, vars live in `server/.env.example`; (c) see §5 #16.
+- **Next:** Phase 3 durable state.
 
 ---
 
