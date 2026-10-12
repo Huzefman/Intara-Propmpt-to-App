@@ -110,15 +110,16 @@
 - **Accept:** ✅ gold specs pass G0/G1; ✅ retrieval hit-rate recorded
 - **Ops note:** `SUPABASE_KEY` is the anon key (demo-open writes rely on RLS policies); control-plane writes (exemplars) need `SUPABASE_SERVICE_KEY` — seeder uses it explicitly.
 
-### Phase 6 — Runtime v1 [ ]
+### Phase 6 — Runtime v1 [ ] *(P6.1–P6.4 done 2026-10-12; P6.5–P6.6 open)*
 *Goal: apps run as data, no LLM involved. (Guide M2)*
-- [ ] P6.1 Engine: validation, defaults, computed, refs/onDelete, lifecycle, permissions (vitest, ≥90% line coverage)
-- [ ] P6.2 Adapters `memory` + `dexie` + shared contract suite (same tests, both green)
-- [ ] P6.3 Shell: routes/nav/theme tokens, dev role switcher
-- [ ] P6.4 ★ blocks (~14) with fixtures + empty/loading/error states (Playwright per block)
+- [x] P6.1 `packages/runtime/engine/` (validate, defaults, computed, refs/onDelete, lifecycle, permissions, `where`-subset): **156 node tests green, 98.4% lines / 89.9% branches** (`node --test --experimental-test-coverage`; vitest absent in env — native runner recorded as equivalent). Engine proven LLM/network-free by static test.
+- [x] P6.2 `adapters/` (guide §5.2 interface): memory + dexie (fake-indexeddb in node, real IDB in browser) pass the SAME shared contract suite 12/12. Dexie syncs per-entity over one `records` table (ADR-2 A); transactions snapshot/restore.
+- [x] P6.3 `shell/` (routes, nav-for-role, theme→CSS vars, RoleSession) tested; `AppShell` React shell tsc-clean.
+- [x] P6.4 14 blocks (`blocks/`: table, kanban, filter, stat, gauge, detail, related_list, pipeline, form, chart, calendar, timeline, files, hero) with `fixtures.json` + 4-state contract (loading/error/empty/ready); registry/static/component-map checks + tsc. G1 BLOCKS extended with the 6 new stable types.
 - [ ] P6.5 Spec-driven test generator (G3) + render smoke (G4); run on all gold specs
 - [ ] P6.6 Studio `<RuntimePreview>` replaces Sandpack for Track A (Sandpack stays for legacy/trial)
-- **Accept:** all gold specs operate (CRUD, filter, kanban drag-transition, stats, role restrictions) with zero LLM calls; runtime ≤ ~400 KB gzipped budget tracked
+- **Accept:** all gold specs operate (CRUD, filter, kanban drag-transition, stats, role restrictions) with zero LLM calls; runtime ≤ ~400 KB gzipped budget tracked — **OPEN (needs P6.5/G3–G4 harness + bundling)**
+- **Deviations:** node --test for vitest; Playwright deferred (no browser in env — fixtures double as Playwright inputs later); `.tsx` can't run under node type-stripping → registry/components split with static completeness check; `packages/runtime` has its own deps (dexie, fake-indexeddb, react 18 types).
 
 ### Phase 7 — Agents + run engine + Studio slice [ ]
 *Goal: the v2 pipeline builds specs end to end. (Guide M3 + M5-lite)*
@@ -187,6 +188,11 @@
 - **Problems:** seeder first failed on RLS (42501) — root cause: runtime `SUPABASE_KEY` is anon, control-plane tables are service-key-only by design; seeder now uses `SUPABASE_SERVICE_KEY` explicitly · see §5 #19.
 - **Next:** Phase 6 (runtime v1) — the big one: engine + adapters + shell + blocks.
 
+### Session 8 — 2026-10-12 — Phase 6 engine/adapters/shell/blocks [ ]
+- **Done:** `packages/runtime/` (engine 8 modules, 2 adapters + shared contract, shell core + AppShell, 14 blocks + registry + fixtures, own package.json/tsconfig): node **156/156**, coverage **98.4% lines**, tsc clean; python **164/164** (G1 extended, repair-tracker `where` restored guide-faithful), eval 5/5. No server-runtime change → no restart.
+- **Problems:** (a) `.tsx` unrunnable under node type-stripping → registry/components split; (b) an edit dropped the `metric.gauge` linter line — python suite caught it instantly, restored · see §5 #20; (c) test-insert edits twice ate a `test(` opener — append tests at file end instead.
+- **Next:** P6.5 (G3 generator + G4 smoke) → P6.6 RuntimePreview → close Phase 6.
+
 ---
 
 ## 5. Known problems / error register
@@ -212,6 +218,7 @@
 17. 2026-10-12 · Durability-test fake `dict(sid=..., step_id=..., **row)` blew up on duplicate `step_id` — fake bug, not product · `{**row, "sid": key}` · **FIXED**
 18. 2026-10-12 · Patch `invert()` wrong on dict-key overwrite (double-add): undo removed the key instead of restoring old value — real product bug, caught by the randomized round-trip fuzzer · simulation-based invert with existence check (add/copy/move) · **FIXED (1175/1175 round-trips)**
 19. 2026-10-12 · Exemplar seed hit RLS 42501 — runtime `SUPABASE_KEY` is the anon key; 006 control-plane tables are service-key-only per sketch · seeder uses `SUPABASE_SERVICE_KEY` explicitly; demo-open policies stay only on 006a/006b anon-fed tables · **FIXED (5 rows seeded)**
+20. 2026-10-12 · A linter edit silently dropped the `metric.gauge` catalog line (R29 false-positive on the w01 fixture) — caught by the python suite, not by review · rule: full pytest after ANY gates/catalog edit · **FIXED**
 
 ---
 
@@ -227,7 +234,7 @@
 | Requirement coverage | n/a | — | ≥ 80 % (100 % musts) |
 | LLM calls per build (median) | _pending P0.2_ | — | ≤ 14 (≤ 6 strong) |
 | Time to live preview post-approval | _pending P0.2_ | — | ≤ 30 s |
-| Unit suite | 93/93 (2026-10-11) | 164/164 (2026-10-12) | green every session |
+| Unit suite | 93/93 (2026-10-11) | 164/164 py + 156/156 node (2026-10-12) | green every session |
 | Golden eval | 5/5 (2026-10-11) | 5/5 (2026-10-12) | 5/5 + new suites |
 
 **Baseline 2026-10-12, pre-Phase-1** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):

@@ -31,6 +31,12 @@ BLOCKS: dict = {
     "record.related_list": {"stability": "stable", "required_props": ["entity"]},
     "lifecycle.pipeline": {"stability": "stable", "required_props": ["entity"]},
     "metric.gauge": {"stability": "experimental", "required_props": ["entity"]},
+    "form.record": {"stability": "stable", "required_props": ["entity"]},
+    "chart.bar": {"stability": "stable", "required_props": ["entity"]},
+    "calendar.month": {"stability": "stable", "required_props": ["entity"]},
+    "activity.timeline": {"stability": "stable", "required_props": ["entity"]},
+    "file.list": {"stability": "stable", "required_props": ["entity"]},
+    "content.hero": {"stability": "stable", "required_props": []},
 }
 
 AUTO_ACTIONS = {"set_field", "create_record", "send_email", "notify", "webhook", "export_csv"}
