@@ -60,7 +60,7 @@
 - [x] P0.4 Commit `INTARA_ARCHITECTURE_GUIDE.md` + this file → `21b36a9` (6 files, +1889/−2; backend.log + run log excluded)
 - **Accept:** `evals/reports/baseline-*.json` exists; §6 filled; suite still 93/93
 
-### Phase 1 — Gateway + visible fallback [~]
+### Phase 1 — Gateway + visible fallback [x]
 *Goal: structured output everywhere; every fallback labelled.*
 - [x] P1.1 `server/services/llm.py` + `main.call_gemini`: `json_mode` (response_format/response_mime_type with cached per-model fallback), `max_output_tokens` on all providers, `info` telemetry (provider/model/finish_reason/attempts); wired into all JSON-expecting call sites (planner×2, analyzer, clarify, schema×2, backend×2, frontend×3, orchestrator×2, /generate×2)
 - [x] P1.2 `server/utils/json_parse.py`: parse ladder + `detect_truncation()` + `parse_json_with_repair()` (one capped repair call)
@@ -149,9 +149,13 @@
 - **Next:** commit (P0.4); then Phase 1 gateway work — the baseline says JSON-mode + tolerant parsing is the highest-leverage fix.
 
 ### Session 2 — 2026-10-12 — Phase 1 gateway + visible fallback [x]
-- **Done (so far):** P1.1 structured-output plumbing (`json_mode`/`max_output_tokens`/`info` through all 5 providers + `call_gemini`, cached per-model fallback, wired into all 17 JSON-expecting call sites); P1.2 parse ladder + `detect_truncation()` + `parse_json_with_repair()`; P1.3 `fallback_reason` from generators → orchestrator → DB → Studio badge; `tests/test_json_parse.py` (21 tests); fixed a shipped `IndentationError` in `frontend_gen.py` game branch found during verification; updated 5 existing fallback-test mocks for new kwarg signatures; suite 123/123, tsc clean, eval 5/5.
+- **Done (so far):** P1.1 structured-output plumbing (`json_mode`/`max_output_tokens`/`info` through all 5 providers + `call_gemini`, cached per-model fallback, wired into all 17 JSON-expecting call sites); P1.2 parse ladder + `detect_truncation()` + `parse_json_with_repair()` (one capped repair call); P1.3 `fallback_reason` from generators → orchestrator → DB → Studio badge; `tests/test_json_parse.py` (21 tests); fixed a shipped `IndentationError` in `frontend_gen.py` game branch found during verification; updated 5 existing fallback-test mocks for new kwarg signatures; suite 123/123, tsc clean, eval 5/5.
 - **Problems:** (a) two baseline runners briefly overlapped after a missed kill pid — restarted clean, stale partial log removed; (b) see §5 #13.
-- **Next:** finish P1.5 re-run, record delta, commit per protocol.
+
+### Session 3 — 2026-10-12 — Phase 1 completion + verification [x]
+- **Done:** Finished `json_mode=True` wiring at all remaining call sites (planner, analyzer, generators, orchestrator, /generate); `fallback_reason` metadata end-to-end (generator `_meta` → `step_output` → `wish_steps.output` → `artifacts.steps` → Studio badge via `_frag_fallback()`); fixed pre-existing route-precedence bug (`/api/wishes/health` shadowed by `/wishes/{wid}` — routers now mount last + regression test); suite 124/124, tsc clean, eval 5/5, backend restarted on final code.
+- **Problems:** see §5 #14–15.
+- **Next:** Phase 2 telemetry + cassettes.
 
 ---
 
@@ -171,7 +175,9 @@
 10. 2026-10-12 · Analyzer validator false-positive: `page Summary needs a table binding in crud mode` discarded a live LLM plan into mock fallback · relax/scope the rule in Phase 1 (with fixture) · **OPEN**
 11. 2026-10-12 · Free pools drain mid-run (Gemini 429 + OpenRouter upstream 429s during 20-wish baseline) · baseline cadence + per-tier budgets in Phase 1/2 · **OPEN**
 12. 2026-10-12 · `server/backend.log` is git-tracked runtime noise — never stage it · consider `git rm --cached` + gitignore entry · **OPEN**
-13. 2026-10-12 · Shipped `IndentationError` (`frontend_gen.py:181`, game branch) survived because full suite wasn't re-run post-edit in that session · rule: no session ends without the §0 verification trio · **FIXED this session (suite now gates it)**
+13. 2026-10-12 · Shipped `IndentationError` (`frontend_gen.py:181`, game branch) survived because full suite wasn't re-run post-edit in that session · rule: no session ends without the §0 verification trio · **FIXED (suite now gates it)**
+14. 2026-10-12 · `/api/wishes/health` returned UUID syntax error — router `/wishes/{wid}` matched first · fixed by mounting routers after direct routes + regression test · **FIXED**
+15. 2026-10-12 · Backend process died silently mid-session (health OK → port empty, no traceback) · cause unknown; single-process runs have no supervisor · consider restart check in session start routine · **OPEN, watch**
 
 ---
 
@@ -187,7 +193,7 @@
 | Requirement coverage | n/a | — | ≥ 80 % (100 % musts) |
 | LLM calls per build (median) | _pending P0.2_ | — | ≤ 14 (≤ 6 strong) |
 | Time to live preview post-approval | _pending P0.2_ | — | ≤ 30 s |
-| Unit suite | 93/93 (2026-10-11) | 123/123 (2026-10-12) | green every session |
+| Unit suite | 93/93 (2026-10-11) | 124/124 (2026-10-12) | green every session |
 | Golden eval | 5/5 (2026-10-11) | 5/5 (2026-10-12) | 5/5 + new suites |
 
 **Baseline 2026-10-12, pre-Phase-1** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):
@@ -212,4 +218,4 @@
 - **LLM spend:** measure first (Phase 0); cache by input hash; cassettes for CI; live evals only on manual dispatch; template gallery costs $0 — use it for demos.
 - **Commits:** code + AGENT.md update together, every session. Never leave the tree red.
 
-*End of AGENT.md v2 — Session 2 done (Phase 1 complete). Next: Phase 2 telemetry + cassettes.*
+*End of AGENT.md v3 — Sessions 0–2 done, Session 3 closed Phase 1. Next: Phase 2 telemetry + cassettes.*

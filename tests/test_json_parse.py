@@ -290,3 +290,15 @@ def test_call_gemini_structured_config(monkeypatch):
     assert seen["config"]["max_output_tokens"] == 128
     assert info == {"provider": "gemini", "model": seen["model"],
                     "finish_reason": "STOP", "json_mode": True}
+
+
+def test_wishes_health_beats_wid_pattern():
+    """Regression: /api/wishes/health must match before /wishes/{wid}."""
+    from fastapi.testclient import TestClient
+    sys.modules.pop("main", None)  # drop stub if present; need the real app
+    import main as main_mod
+    assert not getattr(main_mod, "_is_test_stub", False)
+    c = TestClient(main_mod.app, raise_server_exceptions=False)
+    r = c.get("/api/wishes/health")
+    assert r.status_code == 200, r.text[:200]
+    assert r.json() == {"ok": True, "wishes": True}

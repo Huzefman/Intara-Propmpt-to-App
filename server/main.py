@@ -47,13 +47,8 @@ supabase = create_client(SUPA_URL, SUPA_KEY) if SUPA_URL and SUPA_KEY else None
 app = FastAPI(title="Intara — Planet of Wishes")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# Intara wish routers — try load, fallback if missing
-try:
-    from routers.wishes import router as wishes_router
-    app.include_router(wishes_router, prefix="/api")
-    app.include_router(wishes_router, prefix="")  # also mount without prefix for /wish
-except Exception as e:
-    print(f"wishes router not loaded: {e}")
+# NOTE: routers are mounted at the END of this file (after all direct routes)
+# so /api/wishes/health etc. match before the router's /wishes/{wid} pattern.
 
 class PromptIn(BaseModel):
     prompt: str
@@ -155,3 +150,13 @@ def health():
 @app.get("/api/wishes/health")
 def wishes_health():
     return {"ok": True, "wishes": True}
+
+
+# Intara wish routers — mounted LAST so direct routes above take precedence
+# over router path params (e.g. /api/wishes/health must not match /wishes/{wid}).
+try:
+    from routers.wishes import router as wishes_router
+    app.include_router(wishes_router, prefix="/api")
+    app.include_router(wishes_router, prefix="")  # also mount without prefix for /wish
+except Exception as e:
+    print(f"wishes router not loaded: {e}")
