@@ -600,3 +600,52 @@ def test_upload_scaffold_storage_sql(monkeypatch):
     flat = [{"path": p, "content": c} for p, c in files.items()]
     assert check_placeholders(flat) == []
     assert check_no_template_tokens(flat) == []
+
+
+# ---------- eval_live outcome classification (pure, no network) ----------
+
+def _load_eval_live():
+    import importlib.util
+    path = ROOT / "scripts" / "eval_live.py"
+    spec = importlib.util.spec_from_file_location("eval_live", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_classify_success_live():
+    mod = _load_eval_live()
+    out, info = mod.classify({"status": "awaiting_approval",
+                              "prd": {"_meta": {"source": "gemini", "model": "m"}}})
+    assert out == "success" and info["meta_source"] == "gemini"
+
+
+def test_classify_success_planning_with_questions():
+    mod = _load_eval_live()
+    out, _ = mod.classify({"status": "planning",
+                           "prd": {"clarify": {"score": 40, "questions": [{"q": "x"}]}}})
+    assert out == "success"
+
+
+def test_classify_fallback_mock():
+    mod = _load_eval_live()
+    out, info = mod.classify({"status": "awaiting_approval",
+                              "prd": {"_meta": {"source": "mock", "warning": "quota"}}})
+    assert out == "fallback" and "quota" in info["warning"]
+
+
+def test_classify_failed_and_timeout():
+    mod = _load_eval_live()
+    assert mod.classify({"status": "failed", "prd": {}})[0] == "failed"
+    assert mod.classify({"status": "planning", "prd": {}})[0] == "timeout"
+    assert mod.classify({"status": "weird", "prd": {}})[0] == "timeout"
+
+
+def test_baseline_covers_five_domains():
+    mod = _load_eval_live()
+    from collections import Counter
+    assert len(mod.WISHES) == 20
+    counts = Counter(d for d, _ in mod.WISHES)
+    assert set(counts) == {"inventory", "booking", "crm", "repair", "hr"}
+    assert all(v == 4 for v in counts.values())
+    assert all(4 <= len(p) <= 500 for _, p in mod.WISHES)
