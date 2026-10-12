@@ -97,3 +97,19 @@ def test_migration_006_additive_only():
                    "delete from", "create table if not exists apps",
                    "create table if not exists records"):
         assert banned not in sql, f"migration must not contain: {banned}"
+
+
+def test_prd_adapter_legacy_fixtures_pass_gates():
+    """P5.1: all 5 legacy golden PRDs adapt to G0/G1-clean App Specs."""
+    from engine.prd_adapter import adapt_prd
+    from gates.g0_validate import validate
+    from gates.g1_lint import lint
+    with open(os.path.join(ROOT, "tests", "fixtures", "wishes.json")) as f:
+        wishes = json.load(f)
+    assert len(wishes) == 5
+    for w in wishes:
+        spec = adapt_prd(w["prd"], w["prompt"])
+        g0 = validate(spec)
+        assert g0 == [], f"{w['id']} G0: {g0[:3]}"
+        res = lint(spec)
+        assert res["errors"] == [], f"{w['id']} G1: {res['errors'][:3]}"
