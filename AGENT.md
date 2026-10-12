@@ -91,14 +91,14 @@
 - [x] P3.4 `tests/test_durability.py` (8 tests): store round-trip/canonicalization/limits, sweeper requeue+noop+DB-down, legacy-hollow regen, store-failure-fails-step, and **kill-resume: fault mid-wiring → residue (building+running) → fresh process → sweep → retry completes `ready` with ZERO repeated per-step LLM calls** (3 `step_restored`, real contents in final artifacts).
 - **Accept:** ✅ kill-resume test green; ✅ no row stuck in `building` (sweeper flips on boot, verified live)
 
-### Phase 4 — Spec v1 + control-plane DB [ ] *(code done 2026-10-12, live apply pending)*
+### Phase 4 — Spec v1 + control-plane DB [x]
 *Goal: the App Spec as data with a linter. (Guide M1.2–M1.5, M1.7)*
 - [x] P4.1 `packages/spec/app-spec.schema.json` + `scripts/gen_spec_types.py` → `packages/spec/app-spec.ts` + `server/engine/spec_models.py` (pydantic v2); `--check` drift green, both outputs compile/import. Generator lessons: `from`→alias, `field`→SpecField (pydantic import shadow), scalar `$defs` need alias emission.
 - [x] P4.2 `server/gates/g1_lint.py` (36 rules R01–R36 + W01) + `g0_validate.py`; fixtures as patches (`packages/spec/fixtures/base.json` + `fail-patches.json`, 37 cases incl. warning-only); 2 golds pass G0/G1 clean. Reachability readings recorded in module docstring (row_link counts, empty roles = public, BFS from initial).
 - [x] P4.3 Formula language (`grammar.md`): `server/engine/formula.py` + `packages/spec/formula/formula.ts` (erasable syntax, node ≥22) + 118 shared cases; node --test 120/120, pytest parity green, 500-input fuzz (only FormulaSyntaxError/FormulaError escape), no-eval grep enforced. Parity traps fixed: float/int strictness, non-finite rejection.
 - [x] P4.4 `server/engine/patch.py` (RFC 6902 + simulation-based invert: `-` resolution, overwrite→replace-old) + `server/engine/versions.py` (create/patch/get/history/undo); 1175 randomized round-trips green.
 - [x] P4.5 `supabase/migrations/006_v2_control_plane.sql` (projects, versions, runs, steps, events, exemplars, feedback + 006a run_id FK; RLS on, service-key only per sketch). Deviations: `artifacts` table omitted (006b covers it), `apps`/`records` deferred (data-plane migration), no monorepo move — paths adapted (`server/gates`, `server/engine`).
-- **Accept:** golds pass G0/G1 ✅ (2 now; remaining 3 + PRD adapter = Phase 5 P5.1); patch round-trip ✅; migration applies cleanly — **PENDING dashboard apply**
+- **Accept:** golds pass G0/G1 ✅ (2 now; remaining 3 + PRD adapter = Phase 5 P5.1); patch round-trip ✅; migration applies cleanly ✅ (dashboard 2026-10-12; all 7 tables live+empty, `llm_calls_run_id_fkey` enforced — bogus run_id rejected, existing telemetry row intact)
 - **Deviations from AGENT.md scope:** 2 gold specs now (guide: 1 per ~2 days; rest in Phase 5); Python formula port done now (guide said "later"); no M1.1 monorepo move (deferred to Phase 5/6 start).
 
 ### Phase 5 — Gold specs + retrieval seed [ ] *(parallelisable with Phase 4)*
@@ -174,10 +174,11 @@
 - **Problems:** (a) 006b needed dashboard apply before any new build (fail-fast by design) — user applied 2026-10-12, live put→get round-trip verified, backend healthy; (b) see §5 #17.
 - **Next:** Phase 4 (spec v1 + control-plane DB).
 
-### Session 6 — 2026-10-12 — Phase 4 code complete [ ]
+### Session 6 — 2026-10-12 — Phase 4 complete [x]
 - **Done:** P4.1–P4.5 code: spec schema + codegen (TS+Pydantic, drift green), G0/G1 gates (36 rules, 37 fixtures, 2 golds clean), formula twins (118 shared cases, 120/120 node, fuzz green), patch+versions (1175 randomized round-trips), 006 migration file. Suite **159/159**, eval 5/5, `app-spec.ts` compiles under `--strict`. No server-runtime change → no restart.
-- **Problems:** (a) 006 NOT yet applied — needs dashboard SQL editor (no DDL path in env); nothing reads the new tables yet, so no fail-fast risk meanwhile; (b) see §5 #18.
-- **Next:** user applies 006 → verify tables → close Phase 4 → Phase 5 (golds 3–5 + retrieval).
+- **Apply:** user ran 006 via dashboard 2026-10-12 → verified live: 7 tables exist+empty, FK rejects bogus run_id, llm-stats intact, backend healthy.
+- **Problems:** see §5 #18.
+- **Next:** Phase 5 (golds 3–5 + retrieval).
 
 ---
 
