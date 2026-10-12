@@ -41,6 +41,9 @@
 | Migrations | `supabase/migrations/001–005` | 006a/b are Phase 2/3 infra (applied); 006+ control-plane is Phase 4 |
 | Gateway telemetry | `server/services/telemetry.py`, `cassettes.py` | `llm_calls` writes, record/replay, `GET /api/health/llm-stats` |
 | Durable builds | `server/services/artifacts.py`, `sweeper.py` | `artifact_contents` store, boot orphan sweep |
+| App Spec v1 | `packages/spec/` (schema, TS types, formula, exemplars, fixtures) | source of truth; types generated, never hand-edited |
+| Spec engine | `server/engine/` (models, formula, patch, versions) | G0 validation, JSON Patch, version tree |
+| Spec gates | `server/gates/` (g0_validate, g1_lint) | deterministic gates, no LLM |
 | Tests | `tests/` (93 green baseline) | + `scripts/eval.py` (5/5) + `scripts/seed_components.py` |
 | Guide + spec | `INTARA_ARCHITECTURE_GUIDE.md`, `PROJECT_SPEC_FOR_PLANNING_AGENT.md` | Read both before planning |
 | Builds proof | `builds/photovault.zip` | Deterministic-build example |
@@ -88,14 +91,15 @@
 - [x] P3.4 `tests/test_durability.py` (8 tests): store round-trip/canonicalization/limits, sweeper requeue+noop+DB-down, legacy-hollow regen, store-failure-fails-step, and **kill-resume: fault mid-wiring → residue (building+running) → fresh process → sweep → retry completes `ready` with ZERO repeated per-step LLM calls** (3 `step_restored`, real contents in final artifacts).
 - **Accept:** ✅ kill-resume test green; ✅ no row stuck in `building` (sweeper flips on boot, verified live)
 
-### Phase 4 — Spec v1 + control-plane DB [ ]
+### Phase 4 — Spec v1 + control-plane DB [ ] *(code done 2026-10-12, live apply pending)*
 *Goal: the App Spec as data with a linter. (Guide M1.2–M1.5, M1.7)*
-- [ ] P4.1 `packages/spec/`: JSON Schema v1 (spec §4 shape), generated Pydantic + TS types, CI drift check (`scripts/gen_spec_types.py --check`)
-- [ ] P4.2 Linter G1 (refs, ids, naming, field-type fit, lifecycle reachability, nav/page/role coverage, formula parse) + ≥25 failing fixtures; gold specs pass
-- [ ] P4.3 Formula language: grammar + TS parser/evaluator + shared conformance JSON (≥100 cases, fuzz, no `eval`)
-- [ ] P4.4 JSON Patch apply/invert + version service (round-trip property test)
-- [ ] P4.5 Migration `006_v2_control_plane.sql`: projects, versions, runs, steps, events, artifacts, exemplars, feedback (+ RLS written now, service-key access until multi-tenant)
-- **Accept:** gold-spec fixtures pass G0/G1; patch round-trip green; migration applies cleanly after 001–005
+- [x] P4.1 `packages/spec/app-spec.schema.json` + `scripts/gen_spec_types.py` → `packages/spec/app-spec.ts` + `server/engine/spec_models.py` (pydantic v2); `--check` drift green, both outputs compile/import. Generator lessons: `from`→alias, `field`→SpecField (pydantic import shadow), scalar `$defs` need alias emission.
+- [x] P4.2 `server/gates/g1_lint.py` (36 rules R01–R36 + W01) + `g0_validate.py`; fixtures as patches (`packages/spec/fixtures/base.json` + `fail-patches.json`, 37 cases incl. warning-only); 2 golds pass G0/G1 clean. Reachability readings recorded in module docstring (row_link counts, empty roles = public, BFS from initial).
+- [x] P4.3 Formula language (`grammar.md`): `server/engine/formula.py` + `packages/spec/formula/formula.ts` (erasable syntax, node ≥22) + 118 shared cases; node --test 120/120, pytest parity green, 500-input fuzz (only FormulaSyntaxError/FormulaError escape), no-eval grep enforced. Parity traps fixed: float/int strictness, non-finite rejection.
+- [x] P4.4 `server/engine/patch.py` (RFC 6902 + simulation-based invert: `-` resolution, overwrite→replace-old) + `server/engine/versions.py` (create/patch/get/history/undo); 1175 randomized round-trips green.
+- [x] P4.5 `supabase/migrations/006_v2_control_plane.sql` (projects, versions, runs, steps, events, exemplars, feedback + 006a run_id FK; RLS on, service-key only per sketch). Deviations: `artifacts` table omitted (006b covers it), `apps`/`records` deferred (data-plane migration), no monorepo move — paths adapted (`server/gates`, `server/engine`).
+- **Accept:** golds pass G0/G1 ✅ (2 now; remaining 3 + PRD adapter = Phase 5 P5.1); patch round-trip ✅; migration applies cleanly — **PENDING dashboard apply**
+- **Deviations from AGENT.md scope:** 2 gold specs now (guide: 1 per ~2 days; rest in Phase 5); Python formula port done now (guide said "later"); no M1.1 monorepo move (deferred to Phase 5/6 start).
 
 ### Phase 5 — Gold specs + retrieval seed [ ] *(parallelisable with Phase 4)*
 *Goal: hand-authored truth to retrieve and eval against. (Guide M1.6, M7-start)*
@@ -168,7 +172,12 @@
 ### Session 5 — 2026-10-12 — Phase 3 durable state [x]
 - **Done:** P3.1–P3.4: `supabase/migrations/006b_artifact_contents.sql`, `server/services/artifacts.py`, `server/services/sweeper.py`, orchestrator restore/store wiring (5 step kinds), `@app.on_event("startup")` sweep in `main.py`, `tests/test_durability.py` (8 tests), `server/.env.example` var; backend restarted, healthy; sweeper proved live on boot (photovault orphan → failed + 2 requeued). Suite **142/142**, eval 5/5.
 - **Problems:** (a) 006b needed dashboard apply before any new build (fail-fast by design) — user applied 2026-10-12, live put→get round-trip verified, backend healthy; (b) see §5 #17.
-- **Next:** user applies 006b → Phase 4 (spec v1 + control-plane DB).
+- **Next:** Phase 4 (spec v1 + control-plane DB).
+
+### Session 6 — 2026-10-12 — Phase 4 code complete [ ]
+- **Done:** P4.1–P4.5 code: spec schema + codegen (TS+Pydantic, drift green), G0/G1 gates (36 rules, 37 fixtures, 2 golds clean), formula twins (118 shared cases, 120/120 node, fuzz green), patch+versions (1175 randomized round-trips), 006 migration file. Suite **159/159**, eval 5/5, `app-spec.ts` compiles under `--strict`. No server-runtime change → no restart.
+- **Problems:** (a) 006 NOT yet applied — needs dashboard SQL editor (no DDL path in env); nothing reads the new tables yet, so no fail-fast risk meanwhile; (b) see §5 #18.
+- **Next:** user applies 006 → verify tables → close Phase 4 → Phase 5 (golds 3–5 + retrieval).
 
 ---
 
@@ -193,6 +202,7 @@
 15. 2026-10-12 · Backend process died silently mid-session (health OK → port empty, no traceback) · cause unknown; single-process runs have no supervisor · consider restart check in session start routine · **OPEN, watch**
 16. 2026-10-12 · New telemetry test failed on `"prompt" in k` matching `prompt_version` — assertion too broad, not a product bug · narrowed to exact `prompt`/`prompt_text` keys · **FIXED**
 17. 2026-10-12 · Durability-test fake `dict(sid=..., step_id=..., **row)` blew up on duplicate `step_id` — fake bug, not product · `{**row, "sid": key}` · **FIXED**
+18. 2026-10-12 · Patch `invert()` wrong on dict-key overwrite (double-add): undo removed the key instead of restoring old value — real product bug, caught by the randomized round-trip fuzzer · simulation-based invert with existence check (add/copy/move) · **FIXED (1175/1175 round-trips)**
 
 ---
 
@@ -208,7 +218,7 @@
 | Requirement coverage | n/a | — | ≥ 80 % (100 % musts) |
 | LLM calls per build (median) | _pending P0.2_ | — | ≤ 14 (≤ 6 strong) |
 | Time to live preview post-approval | _pending P0.2_ | — | ≤ 30 s |
-| Unit suite | 93/93 (2026-10-11) | 142/142 (2026-10-12) | green every session |
+| Unit suite | 93/93 (2026-10-11) | 159/159 (2026-10-12) | green every session |
 | Golden eval | 5/5 (2026-10-11) | 5/5 (2026-10-12) | 5/5 + new suites |
 
 **Baseline 2026-10-12, pre-Phase-1** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):

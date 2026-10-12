@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://intara.app/spec/app-spec.schema.json",
+  "title": "Intara App Spec v1",
+  "description": "Source of truth for Track A apps (guide §4). Everything has a stable snake_case id; references are by id. Generated Pydantic + TS types must stay in sync via scripts/gen_spec_types.py.",
+  "type": "object",
+  "required": ["spec_version", "app", "model", "access", "ui"],
+  "properties": {
+    "spec_version": {"type": "string", "pattern": "^\\d+\\.\\d+$", "description": "semver minor; migrators keep old versions openable"},
+    "app": {"$ref": "#/$defs/app"},
+    "personas": {"type": "array", "items": {"$ref": "#/$defs/persona"}, "default": []},
+    "requirements": {"type": "array", "items": {"$ref": "#/$defs/requirement"}, "default": []},
+    "assumptions": {"type": "array", "items": {"type": "string"}, "default": []},
+    "model": {"$ref": "#/$defs/model"},
+    "access": {"$ref": "#/$defs/access"},
+    "ui": {"$ref": "#/$defs/ui"},
+    "automations": {"type": "array", "items": {"$ref": "#/$defs/automation"}, "default": []},
+    "seed": {"type": "object", "description": "entity id -> rows; refs use @key, rows may declare _key",
+             "additionalProperties": {"type": "array", "items": {"type": "object"}}, "default": {}},
+    "integrations": {"type": "array", "items": {"$ref": "#/$defs/integration"}, "default": []},
+    "trace": {"type": "array", "items": {"$ref": "#/$defs/trace_entry"}, "default": []}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "stable snake_case id, unique within kind"},
+    "field_type": {"type": "string", "enum": ["text", "longtext", "int", "decimal", "money", "bool", "date", "datetime", "time", "enum", "multi_enum", "ref", "multi_ref", "email", "phone", "url", "file", "image", "rating", "color", "json"]},
+    "app": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "tagline": {"type": "string"},
+        "domain": {"type": "string"},
+        "locale": {"type": "string"},
+        "currency": {"type": "string"},
+        "timezone": {"type": "string"}
+      }
+    },
+    "persona": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "name": {"type": "string"},
+        "goals": {"type": "array", "items": {"type": "string"}, "default": []}
+      }
+    },
+    "requirement": {
+      "type": "object",
+      "required": ["id", "text"],
+      "properties": {
+        "id": {"type": "string"},
+        "text": {"type": "string"},
+        "priority": {"type": "string", "enum": ["must", "should", "could"], "default": "should"},
+        "persona": {"type": "string"}
+      }
+    },
+    "enum_value": {
+      "type": "object",
+      "required": ["value", "label"],
+      "properties": {
+        "value": {"type": "string"},
+        "label": {"type": "string"},
+        "color": {"type": "string"}
+      }
+    },
+    "enum_def": {
+      "type": "object",
+      "required": ["id", "values"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "values": {"type": "array", "items": {"$ref": "#/$defs/enum_value"}, "minItems": 1}
+      }
+    },
+    "computed": {
+      "type": "object",
+      "required": ["formula"],
+      "properties": {"formula": {"type": "string", "minLength": 1}}
+    },
+    "field": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "type": {"$ref": "#/$defs/field_type"},
+        "required": {"type": "boolean"},
+        "unique": {"type": "boolean"},
+        "index": {"type": "boolean"},
+        "default": {"description": "must match the field type (checked by G1)"},
+        "enum": {"type": "string", "description": "enum id, required when type is enum/multi_enum"},
+        "target": {"type": "string", "description": "entity id, required when type is ref/multi_ref"},
+        "onDelete": {"type": "string", "enum": ["cascade", "restrict", "set_null"]},
+        "relation_name": {"type": "string", "description": "reverse accessor for formulas/related lists"},
+        "computed": {"$ref": "#/$defs/computed"}
+      }
+    },
+    "transition": {
+      "type": "object",
+      "required": ["id", "from", "to", "label"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "from": {"type": "string"},
+        "to": {"type": "string"},
+        "label": {"type": "string"},
+        "roles": {"type": "array", "items": {"type": "string"}, "default": []},
+        "guard": {"type": "string", "description": "formula; referenced fields must exist (G1)"}
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "required": ["field", "initial"],
+      "properties": {
+        "field": {"type": "string", "description": "must be an enum-typed field of the entity (G1)"},
+        "initial": {"type": "string"},
+        "states": {"type": "array", "items": {"type": "string"}, "description": "optional explicit state list"},
+        "transitions": {"type": "array", "items": {"$ref": "#/$defs/transition"}, "default": []}
+      }
+    },
+    "entity": {
+      "type": "object",
+      "required": ["id", "label", "fields"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "label": {"type": "string"},
+        "plural": {"type": "string"},
+        "icon": {"type": "string"},
+        "fields": {"type": "array", "items": {"$ref": "#/$defs/field"}, "minItems": 1},
+        "display": {"type": "object", "properties": {
+          "title": {"type": "string"}, "subtitle": {"type": "string"}}},
+        "lifecycle": {"$ref": "#/$defs/lifecycle"}
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": ["entities"],
+      "properties": {
+        "enums": {"type": "array", "items": {"$ref": "#/$defs/enum_def"}, "default": []},
+        "entities": {"type": "array", "items": {"$ref": "#/$defs/entity"}, "minItems": 1}
+      }
+    },
+    "role": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {"id": {"$ref": "#/$defs/id"}, "label": {"type": "string"}}
+    },
+    "access_rule": {
+      "type": "object",
+      "required": ["entity", "role", "ops"],
+      "properties": {
+        "entity": {"type": "string", "description": "entity id or *"},
+        "role": {"type": "string"},
+        "ops": {"type": "array", "items": {"type": "string", "enum": ["read", "create", "update", "delete"]}, "minItems": 1},
+        "where": {"type": "string", "description": "row filter expression; $user.* bindings"}
+      }
+    },
+    "access": {
+      "type": "object",
+      "required": ["roles", "rules"],
+      "properties": {
+        "roles": {"type": "array", "items": {"$ref": "#/$defs/role"}, "minItems": 1},
+        "rules": {"type": "array", "items": {"$ref": "#/$defs/access_rule"}}
+      }
+    },
+    "theme": {
+      "type": "object",
+      "properties": {
+        "archetype": {"type": "string"},
+        "palette": {"type": "string"},
+        "density": {"type": "string", "enum": ["compact", "comfortable", "spacious"]},
+        "radius": {"type": "string"},
+        "fonts": {"type": "string"}
+      }
+    },
+    "nav_item": {
+      "type": "object",
+      "required": ["page", "label"],
+      "properties": {
+        "page": {"type": "string", "description": "page id (G1: must exist)"},
+        "label": {"type": "string"},
+        "icon": {"type": "string"},
+        "roles": {"type": "array", "items": {"type": "string"}, "default": []}
+      }
+    },
+    "block": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "type": {"type": "string", "description": "catalog block type; stability + props checked by G1"},
+        "props": {"type": "object", "default": {}}
+      }
+    },
+    "page": {
+      "type": "object",
+      "required": ["id", "route", "title"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "route": {"type": "string"},
+        "title": {"type": "string"},
+        "roles": {"type": "array", "items": {"type": "string"}, "default": []},
+        "layout": {"type": "string"},
+        "blocks": {"type": "array", "items": {"$ref": "#/$defs/block"}, "default": []}
+      }
+    },
+    "ui": {
+      "type": "object",
+      "required": ["pages"],
+      "properties": {
+        "theme": {"$ref": "#/$defs/theme"},
+        "nav": {"type": "array", "items": {"$ref": "#/$defs/nav_item"}, "default": []},
+        "pages": {"type": "array", "items": {"$ref": "#/$defs/page"}, "minItems": 1}
+      }
+    },
+    "auto_trigger": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {"type": "string", "enum": ["record.created", "record.updated", "lifecycle.transition", "schedule", "manual_button"]},
+        "entity": {"type": "string"},
+        "transition": {"type": "string"},
+        "schedule": {"type": "string"}
+      }
+    },
+    "auto_step": {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": {"type": "string", "enum": ["set_field", "create_record", "send_email", "notify", "webhook", "export_csv"]},
+        "when": {"type": "string", "description": "formula guard; referenced fields must exist (G1)"},
+        "params": {"type": "object", "default": {}}
+      }
+    },
+    "automation": {
+      "type": "object",
+      "required": ["id", "trigger", "steps"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "trigger": {"$ref": "#/$defs/auto_trigger"},
+        "steps": {"type": "array", "items": {"$ref": "#/$defs/auto_step"}, "minItems": 1}
+      }
+    },
+    "integration": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {"type": "string", "enum": ["email", "file_storage", "webhook"]},
+        "provider": {"type": "string"}
+      }
+    },
+    "trace_entry": {
+      "type": "object",
+      "required": ["requirement", "satisfied_by"],
+      "properties": {
+        "requirement": {"type": "string"},
+        "satisfied_by": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}
