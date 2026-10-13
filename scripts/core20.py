@@ -59,7 +59,7 @@ def grade_g012(spec):
     from gates.g1_lint import lint as g1
     from gates.g2_coverage import check as g2
     g0e = g0(spec)
-    g1e = lint(spec)["errors"]
+    g1e = g1(spec)["errors"]
     reqs = spec.get("requirements") or []
     g2r = g2(reqs, spec.get("trace") or [])
     musts = [r.get("id") for r in reqs if r.get("priority") == "must"]
@@ -148,6 +148,9 @@ def main() -> int:
     ap.add_argument("--status-file", default="evals/reports/core20.progress.json",
                     help="live progress (rewritten every poll + every wish); "
                          "stuck = now - last_update > 900s")
+    ap.add_argument("--resume", action="store_true",
+                    help="skip prompts already terminal in the status file "
+                         "(saves quota after a harness crash)")
     args = ap.parse_args()
     if args.probe:
         targets = [WISHES[5], WISHES[15]]  # crm (corpus) + invoicing (heldout)
@@ -159,6 +162,18 @@ def main() -> int:
     status_path = os.path.join(ROOT, args.status_file)
     started_at = datetime.datetime.now().isoformat(timespec="seconds")
     results = []
+    if args.resume and os.path.exists(status_path):
+        try:
+            prior = json.load(open(status_path))
+            results = [r for r in prior.get("results", [])
+                       if r.get("status") in ("done", "degraded", "failed",
+                                              "cancelled", "error")]
+            done_prompts = {r["prompt"] for r in results}
+            targets = [t for t in targets if t[0] not in done_prompts]
+            print(f"resuming: {len(results)} already terminal, {len(targets)} to go")
+        except Exception as e:
+            print(f"resume unreadable ({e}), starting fresh")
+            results = []
 
     def snapshot(current=None):
         write_status(status_path, {
