@@ -107,7 +107,7 @@ def diversity(specs):
             "mean_entity_overlap": round(sum(overlaps) / len(overlaps), 3) if overlaps else 0.0}
 
 
-def run_wish(prompt, base, poll=5, timeout_s=1800):
+def run_wish(prompt, base, poll=5, timeout_s=1800, on_poll=None):
     t0 = time.time()
     started = api("POST", "/api/runs", {"wish": prompt, "kind": "build",
                                         "app_name": prompt.split()[0].title()},
@@ -119,6 +119,11 @@ def run_wish(prompt, base, poll=5, timeout_s=1800):
         st = api("GET", f"/api/runs/{run_id}", base=base)
         status = st["run"].get("status")
         spec, version = st.get("spec"), st.get("version_id")
+        if on_poll:
+            on_poll({"run_id": run_id, "status": status,
+                     "llm_calls": st.get("llm_calls", 0),
+                     "steps": [(s.get("step_key"), s.get("status"))
+                               for s in st.get("steps", [])]})
         if status in ("done", "degraded", "failed", "cancelled"):
             break
     st = api("GET", f"/api/runs/{run_id}", base=base)
@@ -128,12 +133,21 @@ def run_wish(prompt, base, poll=5, timeout_s=1800):
             "degraded_steps": st.get("degraded_steps", [])}
 
 
+def write_status(path, payload):
+    tmp = path + ".tmp"
+    json.dump(payload, open(tmp, "w"), indent=1)
+    os.replace(tmp, path)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--live", action="store_true")
     ap.add_argument("--probe", action="store_true")
     ap.add_argument("--limit", type=int, default=20)
     ap.add_argument("--base-url", default="http://localhost:8000")
+    ap.add_argument("--status-file", default="evals/reports/core20.progress.json",
+                    help="live progress (rewritten every poll + every wish); "
+                         "stuck = now - last_update > 900s")
     args = ap.parse_args()
     if args.probe:
         targets = [WISHES[5], WISHES[15]]  # crm (corpus) + invoicing (heldout)
@@ -142,15 +156,38 @@ def main() -> int:
     else:
         print("choose --probe (2 wishes) or --live (up to 20). Manual dispatch only.")
         return 2
+    status_path = os.path.join(ROOT, args.status_file)
+    started_at = datetime.datetime.now().isoformat(timespec="seconds")
     results = []
+
+    def snapshot(current=None):
+        write_status(status_path, {
+            "started_at": started_at,
+            "last_update": datetime.datetime.now().isoformat(timespec="seconds"),
+            "total": len(targets),
+            "finished": len(results),
+            "current": current,
+            "results": results,  # incremental: survives aborts
+        })
+
+    snapshot()
     for i, (prompt, domain, heldout) in enumerate(targets, 1):
-        print(f"[{i}/{len(targets)}] {domain} (heldout={heldout}): {prompt[:50]}...")
+        print(f"[{i}/{len(targets)}] {domain} (heldout={heldout}): {prompt[:50]}...",
+              flush=True)
+        current = {"i": i, "domain": domain, "run_id": None, "status": "starting"}
+        snapshot(current)
         try:
-            r = run_wish(prompt, args.base_url)
+            def _poll(state, _cur=current, _i=i, _n=len(targets)):
+                _cur.update({"run_id": state["run_id"], "status": state["status"],
+                             "llm_calls": state.get("llm_calls", 0),
+                             "steps": state.get("steps", [])})
+                snapshot(_cur)
+            r = run_wish(prompt, args.base_url, on_poll=_poll)
         except Exception as e:
             results.append({"prompt": prompt, "domain": domain, "heldout": heldout,
                             "status": "error", "error": str(e)[:300]})
-            print(f"  ERROR {e}")
+            print(f"  ERROR {e}", flush=True)
+            snapshot()
             continue
         row = {"prompt": prompt, "domain": domain, "heldout": heldout,
                "status": r["status"], "run_id": r["run_id"],
@@ -172,8 +209,9 @@ def main() -> int:
                 "entities": sorted(e.get("id", "") for e in (r["spec"].get("model") or {}).get("entities", [])),
             }
             row["spec"] = r["spec"]
-        print(f"  {r['status']} wall={r['wall_s']}s gates={row.get('gates', {})}")
+        print(f"  {r['status']} wall={r['wall_s']}s gates={row.get('gates', {})}", flush=True)
         results.append(row)
+        snapshot()
     ok = [r for r in results
           if r["status"] in ("done", "degraded")
           and (r.get("gates") or {}).get("g0") and (r.get("gates") or {}).get("g1")]
@@ -189,6 +227,14 @@ def main() -> int:
     ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     out = os.path.join(ROOT, "evals", "reports", f"core20-{ts}.json")
     json.dump(summary, open(out, "w"), indent=1)
+    summary["report"] = out
+    write_status(status_path, {
+        "started_at": started_at,
+        "last_update": datetime.datetime.now().isoformat(timespec="seconds"),
+        "total": len(targets), "finished": len(results),
+        "current": None, "done": True, "summary": summary,
+        "results": results,
+    })
     print(f"pass G0/G1: {len(ok)}/{len(results)}  diversity: {div}  -> {out}")
     return 0
 

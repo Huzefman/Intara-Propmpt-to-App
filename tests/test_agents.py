@@ -233,3 +233,18 @@ def test_s3_gate_requires_owner_anchor():
     out = st["model"](ui={"nav": [], "pages": []})
     assert any("owner" in e for e in st["gate"](out, {"entity_ids": set()})), \
         "owner anchor required"
+
+
+def test_s3_gate_catches_unreachable_page():
+    from agents.stages import STAGES
+    st = STAGES["s3"]
+    out = st["model"](ui={
+        "nav": [{"page": "home", "label": "Home"}],
+        "pages": [
+            {"id": "home", "route": "/", "title": "Home", "roles": ["owner"],
+             "blocks": [{"id": "b1", "type": "data.table",
+                         "props": {"entity": "w"}}]},
+            {"id": "detail", "route": "/d/:id", "title": "Detail",
+             "roles": ["owner"], "blocks": []}]})
+    errs = st["gate"](out, {"entity_ids": {"w"}})
+    assert any("detail" in e and "unreachable" in e for e in errs), errs

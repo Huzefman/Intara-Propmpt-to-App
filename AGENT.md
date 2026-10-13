@@ -206,6 +206,13 @@
 - **Live findings → fixed:** (a) S3/S4 role mismatch ×2 → S3-declares/S4-subset contract (owner anchor, page_roles input, subset gate) + S2 from/to gate + set_field/create_record gate (fields_of was undefined — crash-masked); (b) router double-created run rows (client polled an empty shell forever) → `run_id` passthrough; (c) resumed orphan run proved kill-resume live (5 calls to done); (d) Gemini free 5 RPM hit mid-probe, groq carried as designed. See §5 #22–24.
 - **Next:** user go → full core20-20 manual dispatch → record §6 → close Phase 7 → Phase 8.
 
+### Session 11 — 2026-10-13 — core20 readiness: status file + quota verdict [ ]
+- **Done:** `--status-file` + incremental results + per-poll snapshots in `core20.py` (dry-run proved the loop: progress file + final report written); S3 R20 reachability gate (live dry-run failed S5 on orphan detail pages → gate now catches it with repair feedback); suite **188/188**; backend restarted on final code, healthy.
+- **Quota verdict (live, 2026-10-13):** Gemini DAILY-exhausted until ~tomorrow (~10h); OpenRouter free pool congested (transient 429s); groq healthy (2.4s); nvidia alive but sloppy on structured JSON. Dry-run ran on groq, 7 calls, no quota errors.
+- **Recommendation:** launch full 20 on the groq-led chain now, OR wait ~10h for Gemini reset for max pass-rate. Optional speedup: `LLM_ONLY=groq,openrouter,nvidia` in `server/.env` + restart (skips dead-Gemini round-trips), revert after.
+- **Problems:** see §5 #25.
+- **Next:** user launches full core20 (steps below) → pings me → analyze + §6 + gold candidates → Phase 8.
+
 ---
 
 ## 5. Known problems / error register
@@ -236,6 +243,7 @@
 22. 2026-10-12 · Live v2 runs failed S5 twice on cross-stage mismatch (S3 pages role owner vs S4-invented roles; S2 from-state 'any') — stage gates were slice-local, G1 only ran at assembly · fix: S3-declares/S4-subset role contract + S2 from/to gate + S4 set_field gate; S3→S4 sequential (guide lists ui summary as S4 input) · **FIXED, proven live (Library2 full pass)**
 23. 2026-10-12 · v2 router created the run row AND engine.run created a second one — client polled an empty shell (running, no steps) while the shadow run did the work · `run_id` passthrough (exactly one row per run) · **FIXED, proven (steps under polled id)**
 24. 2026-10-12 · `_gate_s4` referenced undefined `fields_of` (NameError swallowed into gate-error noise) — set_field automation errors only surfaced at S5 · gate now takes entity_fields; unit-pinned · **FIXED**
+25. 2026-10-13 · core20 dry-run failed S5 on orphan detail pages (R20) — S3 gate lacked reachability (only G1 had it) · R20-equivalent added to `_gate_s3` (nav or row_link) + unit test · **FIXED (unproven live — full run exercises it)**
 
 ---
 

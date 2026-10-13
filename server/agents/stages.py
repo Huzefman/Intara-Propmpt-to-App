@@ -88,6 +88,7 @@ def _gate_s3(out: S3UiOut, entity_ids: set, requirements: str = "") -> list[str]
         if item.page not in page_ids:
             errs.append(f"nav page {item.page!r} missing")
     covered: set = set()
+    linked: set = set()
     for p in out.ui.pages:
         for b in p.blocks or []:
             ent = (b.props or {}).get("entity")
@@ -95,9 +96,16 @@ def _gate_s3(out: S3UiOut, entity_ids: set, requirements: str = "") -> list[str]
                 if ent not in entity_ids:
                     errs.append(f"block entity {ent!r} missing")
                 covered.add(ent)
+            rl = (b.props or {}).get("row_link")
+            if isinstance(rl, str):
+                linked.add(rl)
     for eid in entity_ids:
         if eid not in covered:
             errs.append(f"entity {eid!r} in no block")
+    nav_ids = {item.page for item in out.ui.nav}
+    for p in out.ui.pages:
+        if p.id not in nav_ids and p.id not in linked:
+            errs.append(f"page {p.id!r} unreachable (not in nav, no row_link)")
     return errs
 
 
