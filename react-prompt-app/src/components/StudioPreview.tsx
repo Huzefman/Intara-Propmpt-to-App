@@ -4,6 +4,7 @@ import type { Artifacts } from '../lib/zip'
 import { Code } from './ArtifactVault'
 const PreviewTrial = lazy(() => import('./PreviewTrial').then(m => ({ default: m.PreviewTrial })))
 const RuntimePreview = lazy(() => import('../runtime/RuntimePreview').then(m => ({ default: m.RuntimePreview })))
+const BlueprintView = lazy(() => import('./BlueprintView').then(m => ({ default: m.BlueprintView })))
 
 type CodeFile = { path: string; content: string; lang: string }
 
@@ -40,7 +41,7 @@ function stepLogLines(wish: Wish): { id: string; status: string; label: string }
 
 export function StudioPreview({ wish }: { wish: Wish }) {
   const [expanded, setExpanded] = useState(false)
-  const [mode, setMode] = useState<'preview' | 'code' | 'app'>('preview')
+  const [mode, setMode] = useState<'preview' | 'code' | 'app' | 'blueprint'>('preview')
   const [menuOpen, setMenuOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [activePath, setActivePath] = useState<string | null>(null)
@@ -55,6 +56,7 @@ export function StudioPreview({ wish }: { wish: Wish }) {
   const artifacts = wish.artifacts || {}
   const prd = wish.prd || {}
   const specV1 = (artifacts as any)?.spec_v1 || null
+  const v2run = (artifacts as any)?.v2?.run_id || null
   const hasTrial = !!(artifacts.preview || artifacts.frontend || artifacts.schema)
   const slug = (prd.appName || 'intara-app').toLowerCase().replace(/[^a-z0-9]+/g, '') || 'intara-app'
 
@@ -85,6 +87,11 @@ export function StudioPreview({ wish }: { wish: Wish }) {
               <span aria-hidden="true">✦</span> App
             </button>
           )}
+          {v2run && (
+            <button role="tab" aria-selected={mode === 'blueprint'} className={mode === 'blueprint' ? 'active' : ''} onClick={() => setMode('blueprint')}>
+              <span aria-hidden="true">▤</span> Blueprint
+            </button>
+          )}
         </div>
         <span className={`pill status-${wish.status}`}>{wish.status.replace('_', ' ')}</span>
         <button className="btn-ghost btn-sm" onClick={() => setExpanded(v => !v)} aria-expanded={expanded}>{expanded ? 'Exit full screen' : '⛶ Full screen'}</button>
@@ -101,7 +108,13 @@ export function StudioPreview({ wish }: { wish: Wish }) {
         <button className="btn-primary btn-sm" onClick={onZip} disabled={!artifacts.schema}>Download zip</button>
       </header>
 
-      {mode === 'app' && specV1 ? (
+      {mode === 'blueprint' && v2run ? (
+        <div className="studio-preview-body">
+          <Suspense fallback={<div className="glass" style={{ padding: 28, textAlign: 'center' }}>Loading blueprint…</div>}>
+            <BlueprintView runId={v2run} />
+          </Suspense>
+        </div>
+      ) : mode === 'app' && specV1 ? (
         <div className="studio-preview-body">
           <Suspense fallback={<div className="glass" style={{ padding: 28, textAlign: 'center' }}>Loading app…</div>}>
             <RuntimePreview spec={specV1} />

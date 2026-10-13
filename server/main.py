@@ -163,8 +163,9 @@ def _sweep_orphaned_builds():
     # Fresh boot owns no builds: requeue steps orphaned by kill/crash so no
     # wish stays stuck in `building`. Fail-soft — never blocks boot.
     try:
-        from services.sweeper import sweep_orphans
+        from services.sweeper import sweep_orphans, sweep_v2_orphans
         sweep_orphans()
+        sweep_v2_orphans()
     except Exception as e:
         print(f"startup sweep skipped: {e}")
 
@@ -216,6 +217,12 @@ def llm_stats():
 
 # Intara wish routers — mounted LAST so direct routes above take precedence
 # over router path params (e.g. /api/wishes/health must not match /wishes/{wid}).
+try:
+    from routers.runs import router as runs_router
+    app.include_router(runs_router, prefix="/api")
+    app.include_router(runs_router, prefix="")  # also mount without prefix for /runs
+except Exception as e:
+    print(f"runs router not loaded: {e}")
 try:
     from routers.wishes import router as wishes_router
     app.include_router(wishes_router, prefix="/api")

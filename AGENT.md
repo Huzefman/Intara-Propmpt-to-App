@@ -45,6 +45,8 @@
 | Spec engine | `server/engine/` (models, formula, patch, versions) | G0 validation, JSON Patch, version tree |
 | Spec gates | `server/gates/` (g0_validate, g1_lint) | deterministic gates, no LLM |
 | Retrieval | `server/services/retrieval.py`, `evals/retrieval_index.json` | 768-d cosine scan + tag filters; held-out enforced |
+| v2 pipeline | `server/agents/` (schemas/prompts/base/stages), `server/services/run_engine.py` | S0–S6 + Critic + Edit; budgets + resume + SSE v2 |
+| v2 API | `server/routers/runs.py` | start/status/events/approve/chat; wish writeback |
 | Tests | `tests/` (93 green baseline) | + `scripts/eval.py` (5/5) + `scripts/seed_components.py` |
 | Guide + spec | `INTARA_ARCHITECTURE_GUIDE.md`, `PROJECT_SPEC_FOR_PLANNING_AGENT.md` | Read both before planning |
 | Builds proof | `builds/photovault.zip` | Deterministic-build example |
@@ -121,14 +123,15 @@
 - **Accept:** all gold specs operate (CRUD, filter, kanban drag-transition, stats, role restrictions) with zero LLM calls — ✅ G3+G4 green (drag-transition = UI affordance, Playwright-deferred); runtime ≤ ~400 KB gzipped budget — **OPEN (track at bundling; current Studio chunk ~554 KB incl. app code, not runtime-isolated)** — **OPEN (needs P6.5/G3–G4 harness + bundling)**
 - **Deviations:** node --test for vitest; Playwright deferred (no browser in env — fixtures double as Playwright inputs later); `.tsx` can't run under node type-stripping → registry/components split with static completeness check; `packages/runtime` has its own deps (dexie, fake-indexeddb, react 18 types).
 
-### Phase 7 — Agents + run engine + Studio slice [ ]
+### Phase 7 — Agents + run engine + Studio slice [ ] *(P7.1–P7.4 done 2026-10-12; P7.5 core20-full = manual dispatch)*
 *Goal: the v2 pipeline builds specs end to end. (Guide M3 + M5-lite)*
-- [ ] P7.1 Run engine: state machine, budgets, resume, SSE v2 from `run_events`, replay
-- [ ] P7.2 Agents S0–S6 with versioned prompts + cassette unit tests; S3∥S4 capped at 2
-- [ ] P7.3 Retrieval wired (catalog slice + 1–2 exemplars, logged); Critic + `trace[]` + ≤2 repairs
-- [ ] P7.4 Blueprint view (Data/Screens/Rules/Assumptions cards) + approve + chat-patch + live preview
-- [ ] P7.5 Live `core20` eval; record §6; diversity check (≥5 distinct archetype/nav/theme combos per 10 outputs)
-- **Accept (MVP demo):** core20 ≥85% G0–G4 within ≤2 repairs; median ≤14 calls, ≤3 min; coverage ≥80%; type-a-wish → live distinct working app demoable
+- [x] P7.1 `server/services/run_engine.py`: RunStore ABC (memory + Supabase-service-key), budgets (calls/wall/repairs), resume via `resume_run` (same id), SSE v2 (history + live tail), replay, wish text in run_started; sweeper extended to runs/run_steps; single-flight NOT needed (versions tree-merge).
+- [x] P7.2 `server/agents/` (schemas/prompts/base/stages): versioned prompts (§8.4 structure, schema generated from Pydantic), `run_agent` repair loop (≤2, cooling temp) + deterministic fallbacks (edit: none, raises), quota propagates; S3→S4 sequential (S4 consumes S3 page roles — guide §7.2 lists ui summary as S4 input; parallelism dropped, semaphore kept).
+- [x] P7.3 Retrieval logged per stage (catalog slice + file-index exemplars); Critic fills `trace[]`; G2 deterministic gate (`gates/g2_coverage.py`: musts covered, should advisory); S5 repair ≤2 on uncovered musts, else explicit degrade.
+- [x] P7.4 `BlueprintView.tsx` (Data/Screens/Rules/Assumptions + approve + chat-patch with Details toggle + RuntimePreview) + `runs` client fns + Studio 4th tab (run link + spec write back to wish on start/finish).
+- [x] P7.5 `scripts/core20.py` (20 wishes incl. 5 heldout; G0/G1/G2 + G3-via-node grades, diversity, budgets → `evals/reports/core20-*.json`); probe: 1 full pass (Library, 8 calls, G0/G1/G2 clean) + 2 fail-closed S5s that exposed the role-mismatch class → fixed (S4 role contract + S2 from/to gate + sequential S3→S4).
+- **Accept (MVP demo):** core20 ≥85% — **OPEN (needs manual full-20 dispatch: ~1–2h + quota)**; median ≤14 calls (observed 8 on the pass), coverage via G2; type-a-wish→working-app demoable once a passed run links to Studio.
+- **Live findings:** (a) S3/S4 role mismatch failed 2 runs fail-closed → fixed, re-validating; (b) router double-created run rows (client polled an empty shell) → `run_id` passthrough fixed, proven by steps appearing under the polled id; (c) Gemini free-tier 5 RPM exhausted mid-probe — chain carried on groq as designed.
 
 ### Phase 8 — Capability depth [ ]
 *Goal: Track A covers real SMB work. (Guide M4)*
@@ -198,6 +201,11 @@
 - **Problems:** (a) one transient golden-eval failure under load (npx tsc 15s timeout in eval.py, not a product change — green on rerun) · see §5 #21; (b) tsx-loader needed `shortCircuit: true`; (c) `@types/react@19` hoisted into runtime broke studio JSX types — pinned v18.
 - **Next:** Phase 7 (agents + run engine + Studio slice).
 
+### Session 10 — 2026-10-12 — Phase 7 pipeline + live fire [ ]
+- **Done:** P7.1–P7.4 code (`server/agents/`, `run_engine.py`, `g2_coverage.py`, `routers/runs.py`, `BlueprintView`, runs client fns, `core20.py`): suite **185/185**, eval 5/5, both tscs + vite build green. Live: 4 v2 runs — 2 full passes (Library 8 calls, Library2 7 calls, both G0/G1/G2 clean, 0 degraded), 2 fail-closed S5s.
+- **Live findings → fixed:** (a) S3/S4 role mismatch ×2 → S3-declares/S4-subset contract (owner anchor, page_roles input, subset gate) + S2 from/to gate + set_field/create_record gate (fields_of was undefined — crash-masked); (b) router double-created run rows (client polled an empty shell forever) → `run_id` passthrough; (c) resumed orphan run proved kill-resume live (5 calls to done); (d) Gemini free 5 RPM hit mid-probe, groq carried as designed. See §5 #22–24.
+- **Next:** user go → full core20-20 manual dispatch → record §6 → close Phase 7 → Phase 8.
+
 ---
 
 ## 5. Known problems / error register
@@ -225,6 +233,9 @@
 19. 2026-10-12 · Exemplar seed hit RLS 42501 — runtime `SUPABASE_KEY` is the anon key; 006 control-plane tables are service-key-only per sketch · seeder uses `SUPABASE_SERVICE_KEY` explicitly; demo-open policies stay only on 006a/006b anon-fed tables · **FIXED (5 rows seeded)**
 20. 2026-10-12 · A linter edit silently dropped the `metric.gauge` catalog line (R29 false-positive on the w01 fixture) — caught by the python suite, not by review · rule: full pytest after ANY gates/catalog edit · **FIXED**
 21. 2026-10-12 · Transient golden-eval failure (4/5) under load — `eval.py` shells `npx tsc` with a 15s timeout; cold npx under contention exceeds it · not a product regression (green on immediate rerun ×3) · consider warming npx or raising timeout if it recurs · **FLAKE, watch**
+22. 2026-10-12 · Live v2 runs failed S5 twice on cross-stage mismatch (S3 pages role owner vs S4-invented roles; S2 from-state 'any') — stage gates were slice-local, G1 only ran at assembly · fix: S3-declares/S4-subset role contract + S2 from/to gate + S4 set_field gate; S3→S4 sequential (guide lists ui summary as S4 input) · **FIXED, proven live (Library2 full pass)**
+23. 2026-10-12 · v2 router created the run row AND engine.run created a second one — client polled an empty shell (running, no steps) while the shadow run did the work · `run_id` passthrough (exactly one row per run) · **FIXED, proven (steps under polled id)**
+24. 2026-10-12 · `_gate_s4` referenced undefined `fields_of` (NameError swallowed into gate-error noise) — set_field automation errors only surfaced at S5 · gate now takes entity_fields; unit-pinned · **FIXED**
 
 ---
 
@@ -240,7 +251,7 @@
 | Requirement coverage | n/a | — | ≥ 80 % (100 % musts) |
 | LLM calls per build (median) | _pending P0.2_ | — | ≤ 14 (≤ 6 strong) |
 | Time to live preview post-approval | _pending P0.2_ | — | ≤ 30 s |
-| Unit suite | 93/93 (2026-10-11) | 166/166 py + 169/169 node (2026-10-12) | green every session |
+| Unit suite | 93/93 (2026-10-11) | 185/185 py + 169/169 node (2026-10-12) | green every session |
 | Golden eval | 5/5 (2026-10-11) | 5/5 (2026-10-12) | 5/5 + new suites |
 
 **Baseline 2026-10-12, pre-Phase-1** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):

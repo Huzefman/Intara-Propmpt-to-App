@@ -204,3 +204,37 @@ export async function revertIterate(id: string, iterId: string): Promise<Wish> {
   if (!res.ok) throw apiError('revert', res, await res.text().catch(() => ''))
   return res.json()
 }
+
+// v2 runs (spec pipeline): start/status/events/approve/chat-patch
+export async function startRun(wish: string, appName?: string, wishId?: string): Promise<{ ok: boolean; run_id: string; project_id: string }> {
+  const res = await fetch('/api/runs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ wish, kind: 'build', app_name: appName || 'App', wish_id: wishId || null }) })
+  if (!res.ok) throw new Error(`start run failed ${res.status}`)
+  return res.json()
+}
+
+export async function getRun(runId: string): Promise<any> {
+  const res = await fetch(`/api/runs/${runId}`)
+  if (!res.ok) throw new Error(`get run failed ${res.status}`)
+  return res.json()
+}
+
+export function streamRun(runId: string, onEvent: (ev: any) => void): () => void {
+  const es = new EventSource(`/api/runs/${runId}/events`)
+  es.onmessage = (e) => {
+    try { onEvent(JSON.parse(e.data)) } catch { /* heartbeat */ }
+  }
+  es.onerror = () => { /* polling fallback covers */ }
+  return () => es.close()
+}
+
+export async function approveRun(runId: string, by?: string): Promise<{ ok: boolean; version_id: string }> {
+  const res = await fetch(`/api/runs/${runId}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ by: by || 'owner' }) })
+  if (!res.ok) throw new Error(`approve failed ${res.status}`)
+  return res.json()
+}
+
+export async function chatRun(runId: string, instruction: string): Promise<{ ok: boolean; version_id: string; summary: string; spec: any }> {
+  const res = await fetch(`/api/runs/${runId}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instruction }) })
+  if (!res.ok) throw new Error(`chat patch failed ${res.status}`)
+  return res.json()
+}

@@ -9,8 +9,53 @@ to `failed` with a pointer at the first non-done step — no row stays stuck in
 `building`, and the retry endpoint picks the build back up.
 
 Fail-soft: never blocks boot; returns counts for the startup log.
+Also sweeps v2 runs (sweep_v2_orphans): `running` runs → `failed`,
+`running` run_steps → `pending` — resume replays done steps from artifacts.
 """
 from __future__ import annotations
+
+
+def sweep_v2_orphans(*, limit: int = 500) -> dict:
+    summary: dict = {"runs": 0, "steps": 0}
+    try:
+        from services.run_engine import SupabaseRunStore
+        store = SupabaseRunStore()
+    except Exception as e:
+        print(f"startup v2 sweep skipped (store unavailable): {e}")
+        summary["error"] = str(e)[:200]
+        return summary
+    try:
+        runs = store.supa.table("runs").select("id").eq("status", "running").limit(limit).execute().data or []
+    except Exception as e:
+        print(f"startup v2 sweep skipped (list failed): {e}")
+        summary["error"] = str(e)[:200]
+        return summary
+    for r in runs:
+        rid = r["id"]
+        try:
+            steps = store.get_steps(rid)
+        except Exception:
+            continue
+        requeued = 0
+        for s in steps:
+            if (s or {}).get("status") != "running":
+                continue
+            try:
+                store.upsert_step(rid, s["step_key"], s.get("agent", "?"), "pending",
+                                  input_hash=s.get("input_hash"),
+                                  attempt=int(s.get("attempt") or 1) + 1,
+                                  fallback_reason="orphaned by process restart; requeued")
+                requeued += 1
+            except Exception as e:
+                print(f"v2 sweep {rid}/{s.get('step_key')}: requeue failed: {e}")
+        try:
+            store.set_status(rid, "failed", "unclean shutdown; retry resumes from artifacts")
+            summary["runs"] += 1
+            summary["steps"] += requeued
+            print(f"v2 sweep {rid}: orphaned run → failed, {requeued} step(s) requeued")
+        except Exception as e:
+            print(f"v2 sweep {rid}: run flip failed: {e}")
+    return summary
 
 
 def sweep_orphans(*, limit: int = 500) -> dict:
