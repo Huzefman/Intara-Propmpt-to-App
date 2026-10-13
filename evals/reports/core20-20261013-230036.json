@@ -1,0 +1,4337 @@
+{
+ "n": 20,
+ "pass_g0g1": 4,
+ "rate": 0.2,
+ "median_wall_s": 537.0,
+ "median_llm_calls": 11,
+ "diversity": {
+  "distinct_combos": 4,
+  "mean_entity_overlap": 0.0
+ },
+ "results": [
+  {
+   "prompt": "A task tracker with projects, tasks and due dates",
+   "domain": "productivity",
+   "heldout": false,
+   "status": "done",
+   "run_id": "12307819-5757-494f-898d-720774a0db5b",
+   "version_id": "686ab87c-0977-4154-880c-9ef6e4a38e67",
+   "wall_s": 266.6,
+   "llm_calls": 11,
+   "degraded_steps": [],
+   "gates": {
+    "g0": true,
+    "g1": true,
+    "g2": true,
+    "g0_errors": [],
+    "g1_errors": [],
+    "coverage": 1.0,
+    "g3": true,
+    "g3_checks": 40
+   },
+   "features": {
+    "archetype": "?",
+    "nav": [
+     "dashboard",
+     "project_detail",
+     "project_list",
+     "task_detail",
+     "task_list"
+    ],
+    "palette": "?",
+    "entities": [
+     "project",
+     "task"
+    ]
+   },
+   "spec": {
+    "ui": {
+     "nav": [
+      {
+       "icon": null,
+       "page": "dashboard",
+       "label": "Dashboard",
+       "roles": [
+        "owner"
+       ]
+      },
+      {
+       "icon": "folder",
+       "page": "project_list",
+       "label": "Projects",
+       "roles": [
+        "owner"
+       ]
+      },
+      {
+       "icon": "folder",
+       "page": "project_detail",
+       "label": "Project Details",
+       "roles": [
+        "owner"
+       ]
+      },
+      {
+       "icon": "check-square",
+       "page": "task_list",
+       "label": "Tasks",
+       "roles": [
+        "owner"
+       ]
+      },
+      {
+       "icon": "check-square",
+       "page": "task_detail",
+       "label": "Task Details",
+       "roles": [
+        "owner"
+       ]
+      }
+     ],
+     "pages": [
+      {
+       "id": "dashboard",
+       "roles": [
+        "owner"
+       ],
+       "route": "/",
+       "title": "Dashboard",
+       "blocks": [
+        {
+         "id": "task_status_chart",
+         "type": "chart.bar",
+         "props": {
+          "entity": "task",
+          "metric": "count",
+          "groupBy": "status"
+         }
+        },
+        {
+         "id": "task_timeline",
+         "type": "activity.timeline",
+         "props": {
+          "field": "due_date",
+          "entity": "task"
+         }
+        }
+       ],
+       "layout": null
+      },
+      {
+       "id": "project_list",
+       "roles": [
+        "owner"
+       ],
+       "route": "/projects",
+       "title": "Projects",
+       "blocks": [
+        {
+         "id": "project_filter",
+         "type": "filter.bar",
+         "props": {
+          "entity": "project",
+          "fields": [
+           "name"
+          ]
+         }
+        },
+        {
+         "id": "project_table",
+         "type": "data.table",
+         "props": {
+          "entity": "project",
+          "columns": [
+           "name",
+           "description",
+           "color"
+          ]
+         }
+        },
+        {
+         "id": "project_form",
+         "type": "form.record",
+         "props": {
+          "entity": "project"
+         }
+        }
+       ],
+       "layout": null
+      },
+      {
+       "id": "project_detail",
+       "roles": [
+        "owner"
+       ],
+       "route": "/projects/:id",
+       "title": "Project Details",
+       "blocks": [
+        {
+         "id": "project_hero",
+         "type": "content.hero",
+         "props": {
+          "entity": "project",
+          "titleField": "name",
+          "subtitleField": "description"
+         }
+        },
+        {
+         "id": "project_detail",
+         "type": "record.detail",
+         "props": {
+          "entity": "project"
+         }
+        },
+        {
+         "id": "task_related",
+         "type": "record.related_list",
+         "props": {
+          "entity": "task",
+          "relation": "tasks"
+         }
+        },
+        {
+         "id": "task_filter",
+         "type": "filter.bar",
+         "props": {
+          "entity": "task",
+          "fields": [
+           "status",
+           "due_date"
+          ]
+         }
+        },
+        {
+         "id": "task_table",
+         "type": "data.table",
+         "props": {
+          "entity": "task",
+          "columns": [
+           "title",
+           "due_date",
+           "status"
+          ]
+         }
+        },
+        {
+         "id": "task_form",
+         "type": "form.record",
+         "props": {
+          "entity": "task"
+         }
+        },
+        {
+         "id": "task_lifecycle",
+         "type": "lifecycle.pipeline",
+         "props": {
+          "field": "status",
+          "entity": "task"
+         }
+        }
+       ],
+       "layout": null
+      },
+      {
+       "id": "task_list",
+       "roles": [
+        "owner"
+       ],
+       "route": "/tasks",
+       "title": "Tasks",
+       "blocks": [
+        {
+         "id": "task_filter",
+         "type": "filter.bar",
+         "props": {
+          "entity": "task",
+          "fields": [
+           "status",
+           "due_date"
+          ]
+         }
+        },
+        {
+         "id": "task_table",
+         "type": "data.table",
+         "props": {
+          "entity": "task",
+          "columns": [
+           "title",
+           "due_date",
+           "status"
+          ]
+         }
+        },
+        {
+         "id": "task_form",
+         "type": "form.record",
+         "props": {
+          "entity": "task"
+         }
+        },
+        {
+         "id": "task_lifecycle",
+         "type": "lifecycle.pipeline",
+         "props": {
+          "field": "status",
+          "entity": "task"
+         }
+        },
+        {
+         "id": "task_status_chart",
+         "type": "chart.bar",
+         "props": {
+          "entity": "task",
+          "metric": "count",
+          "groupBy": "status"
+         }
+        },
+        {
+         "id": "task_timeline",
+         "type": "activity.timeline",
+         "props": {
+          "field": "due_date",
+          "entity": "task"
+         }
+        }
+       ],
+       "layout": null
+      },
+      {
+       "id": "task_detail",
+       "roles": [
+        "owner"
+       ],
+       "route": "/tasks/:id",
+       "title": "Task Details",
+       "blocks": [
+        {
+         "id": "task_detail",
+         "type": "record.detail",
+         "props": {
+          "entity": "task"
+         }
+        },
+        {
+         "id": "task_lifecycle",
+         "type": "lifecycle.pipeline",
+         "props": {
+          "field": "status",
+          "entity": "task"
+         }
+        },
+        {
+         "id": "task_status_chart",
+         "type": "chart.bar",
+         "props": {
+          "entity": "task",
+          "metric": "count",
+          "groupBy": "status"
+         }
+        }
+       ],
+       "layout": null
+      }
+     ],
+     "theme": null
+    },
+    "app": {
+     "name": "A",
+     "domain": "",
+     "locale": "en",
+     "tagline": "",
+     "currency": "USD",
+     "timezone": "UTC"
+    },
+    "seed": {
+     "task": [
+      {
+       "_key": "task_1",
+       "title": "Create wireframes",
+       "status": "todo",
+       "project": "@project_1",
+       "due_date": "2024-11-01",
+       "description": "Design wireframes for homepage"
+      },
+      {
+       "_key": "task_2",
+       "title": "Develop landing page",
+       "status": "in_progress",
+       "project": "@project_1",
+       "due_date": "2024-11-15",
+       "description": "Implement landing page with React"
+      },
+      {
+       "_key": "task_3",
+       "title": "Set up CI/CD",
+       "status": "done",
+       "project": "@project_2",
+       "due_date": "2024-10-20",
+       "description": "Configure GitHub Actions"
+      },
+      {
+       "_key": "task_4",
+       "title": "Create ad creatives",
+       "status": "todo",
+       "project": "@project_3",
+       "due_date": "2024-12-05",
+       "description": "Design banner ads"
+      },
+      {
+       "_key": "task_5",
+       "title": "Analyze metrics",
+       "status": "in_progress",
+       "project": "@project_3",
+       "due_date": "2025-01-10",
+       "description": "Review campaign performance"
+      }
+     ],
+     "project": [
+      {
+       "_key": "project_1",
+       "name": "Website Redesign",
+       "color": "#FF5733",
+       "description": "Redesign the corporate website"
+      },
+      {
+       "_key": "project_2",
+       "name": "Mobile App Launch",
+       "color": "#33C1FF",
+       "description": "Launch the new mobile app"
+      },
+      {
+       "_key": "project_3",
+       "name": "Marketing Campaign",
+       "color": "#28A745",
+       "description": "Q4 marketing campaign"
+      }
+     ]
+    },
+    "model": {
+     "enums": [
+      {
+       "id": "task_status",
+       "values": [
+        {
+         "color": "#6B7280",
+         "label": "To Do",
+         "value": "todo"
+        },
+        {
+         "color": "#3B82F6",
+         "label": "In Progress",
+         "value": "in_progress"
+        },
+        {
+         "color": "#10B981",
+         "label": "Done",
+         "value": "done"
+        }
+       ]
+      }
+     ],
+     "entities": [
+      {
+       "id": "project",
+       "icon": "folder",
+       "label": "Project",
+       "fields": [
+        {
+         "id": "name",
+         "enum": null,
+         "type": "text",
+         "index": true,
+         "target": null,
+         "unique": true,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "description",
+         "enum": null,
+         "type": "longtext",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": false,
+         "relation_name": null
+        },
+        {
+         "id": "color",
+         "enum": null,
+         "type": "color",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": "#3B82F6",
+         "computed": null,
+         "onDelete": null,
+         "required": false,
+         "relation_name": null
+        }
+       ],
+       "plural": "Projects",
+       "display": {
+        "title": "name",
+        "subtitle": "description"
+       },
+       "lifecycle": null
+      },
+      {
+       "id": "task",
+       "icon": "check-square",
+       "label": "Task",
+       "fields": [
+        {
+         "id": "project",
+         "enum": null,
+         "type": "ref",
+         "index": true,
+         "target": "project",
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": "cascade",
+         "required": true,
+         "relation_name": "tasks"
+        },
+        {
+         "id": "title",
+         "enum": null,
+         "type": "text",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "description",
+         "enum": null,
+         "type": "longtext",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": false,
+         "relation_name": null
+        },
+        {
+         "id": "due_date",
+         "enum": null,
+         "type": "date",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": false,
+         "relation_name": null
+        },
+        {
+         "id": "status",
+         "enum": "task_status",
+         "type": "enum",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": "todo",
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        }
+       ],
+       "plural": "Tasks",
+       "display": {
+        "title": "title",
+        "subtitle": "due_date \u2022 status"
+       },
+       "lifecycle": {
+        "field": "status",
+        "states": [
+         "todo",
+         "in_progress",
+         "done"
+        ],
+        "initial": "todo",
+        "transitions": [
+         {
+          "id": "start",
+          "to": "in_progress",
+          "from": "todo",
+          "guard": null,
+          "label": "Start",
+          "roles": []
+         },
+         {
+          "id": "complete",
+          "to": "done",
+          "from": "in_progress",
+          "guard": null,
+          "label": "Complete",
+          "roles": []
+         },
+         {
+          "id": "reopen",
+          "to": "todo",
+          "from": "in_progress",
+          "guard": null,
+          "label": "Reopen",
+          "roles": []
+         },
+         {
+          "id": "reopen_done",
+          "to": "in_progress",
+          "from": "done",
+          "guard": null,
+          "label": "Reopen",
+          "roles": []
+         }
+        ]
+       }
+      }
+     ]
+    },
+    "trace": [
+     {
+      "requirement": "R1",
+      "satisfied_by": [
+       "entity:project",
+       "entity:task",
+       "page:project_list",
+       "page:project_detail",
+       "page:task_list",
+       "page:task_detail",
+       "automation:notify_task_created"
+      ]
+     }
+    ],
+    "access": {
+     "roles": [
+      {
+       "id": "owner",
+       "label": "Owner"
+      }
+     ],
+     "rules": [
+      {
+       "ops": [
+        "read",
+        "create",
+        "update",
+        "delete"
+       ],
+       "role": "owner",
+       "where": null,
+       "entity": "project"
+      },
+      {
+       "ops": [
+        "read",
+        "create",
+        "update",
+        "delete"
+       ],
+       "role": "owner",
+       "where": null,
+       "entity": "task"
+      }
+     ]
+    },
+    "personas": [],
+    "assumptions": [
+     "Single user",
+     "Flat task list per project (no subtasks/dependencies)",
+     "No notifications; due dates shown in UI only",
+     "Projects have name, description, color",
+     "Tasks have title, description, due date, status (todo/in-progress/done)",
+     "Data stored locally (IndexedDB) with optional cloud sync later",
+     "Currency not applicable",
+     "No billing/subscription",
+     "Web app only (responsive), no native mobile",
+     "English only, no i18n"
+    ],
+    "automations": [
+     {
+      "id": "notify_task_created",
+      "steps": [
+       {
+        "when": null,
+        "action": "webhook",
+        "params": {
+         "url": "https://example.com/webhook"
+        }
+       }
+      ],
+      "trigger": {
+       "type": "record.created",
+       "entity": "task",
+       "schedule": null,
+       "transition": null
+      }
+     }
+    ],
+    "integrations": [],
+    "requirements": [
+     {
+      "id": "R1",
+      "text": "A task tracker with projects, tasks and due dates",
+      "priority": "must"
+     }
+    ],
+    "spec_version": "1.0"
+   }
+  },
+  {
+   "prompt": "A salon booking system with services and reminders",
+   "domain": "appointment_booking",
+   "heldout": false,
+   "status": "failed",
+   "run_id": "cc943ade-ee06-4864-911e-02512d452f0c",
+   "version_id": null,
+   "wall_s": 139.2,
+   "llm_calls": 6,
+   "degraded_steps": []
+  },
+  {
+   "prompt": "A parts inventory with reorder alerts",
+   "domain": "retail_inventory",
+   "heldout": false,
+   "status": "done",
+   "run_id": "0d088748-44c2-4e6c-a53f-9440d71b162c",
+   "version_id": "41059fb9-ba62-4004-ad36-f53ce4932e35",
+   "wall_s": 171.3,
+   "llm_calls": 8,
+   "degraded_steps": [],
+   "gates": {
+    "g0": true,
+    "g1": true,
+    "g2": true,
+    "g0_errors": [],
+    "g1_errors": [],
+    "coverage": 1.0,
+    "g3": true,
+    "g3_checks": 26
+   },
+   "features": {
+    "archetype": "?",
+    "nav": [
+     "inventory_dashboard"
+    ],
+    "palette": "?",
+    "entities": [
+     "part"
+    ]
+   },
+   "spec": {
+    "ui": {
+     "nav": [
+      {
+       "icon": null,
+       "page": "inventory_dashboard",
+       "label": "Inventory",
+       "roles": [
+        "owner",
+        "inventory_manager"
+       ]
+      }
+     ],
+     "pages": [
+      {
+       "id": "inventory_dashboard",
+       "roles": [
+        "owner",
+        "inventory_manager"
+       ],
+       "route": "/inventory",
+       "title": "Inventory Dashboard",
+       "blocks": [
+        {
+         "id": "part_table",
+         "type": "data.table",
+         "props": {
+          "entity": "part"
+         }
+        }
+       ],
+       "layout": null
+      }
+     ],
+     "theme": null
+    },
+    "app": {
+     "name": "A",
+     "domain": "",
+     "locale": "en",
+     "tagline": "",
+     "currency": "USD",
+     "timezone": "UTC"
+    },
+    "seed": {
+     "part": [
+      {
+       "id": "part-001",
+       "sku": "WGT-A-001",
+       "name": "Widget A",
+       "price": 19.99,
+       "status": "available",
+       "description": "Standard widget",
+       "current_stock": 15,
+       "needs_reorder": false,
+       "reorder_level": 10
+      },
+      {
+       "id": "part-002",
+       "sku": "GDT-B-002",
+       "name": "Gadget B",
+       "price": 49.5,
+       "status": "out_of_stock",
+       "description": "Advanced gadget",
+       "current_stock": 0,
+       "needs_reorder": true,
+       "reorder_level": 5
+      },
+      {
+       "id": "part-003",
+       "sku": "CMP-C-003",
+       "name": "Component C",
+       "price": 99,
+       "status": "reorder_needed",
+       "description": "High precision component",
+       "current_stock": 5,
+       "needs_reorder": true,
+       "reorder_level": 20
+      }
+     ]
+    },
+    "model": {
+     "enums": [
+      {
+       "id": "part_status",
+       "values": [
+        {
+         "color": null,
+         "label": "Available",
+         "value": "available"
+        },
+        {
+         "color": null,
+         "label": "Out of Stock",
+         "value": "out_of_stock"
+        },
+        {
+         "color": null,
+         "label": "Reorder Needed",
+         "value": "reorder_needed"
+        }
+       ]
+      }
+     ],
+     "entities": [
+      {
+       "id": "part",
+       "icon": null,
+       "label": "Part",
+       "fields": [
+        {
+         "id": "id",
+         "enum": null,
+         "type": "text",
+         "index": null,
+         "target": null,
+         "unique": true,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "name",
+         "enum": null,
+         "type": "text",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "description",
+         "enum": null,
+         "type": "longtext",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": null,
+         "relation_name": null
+        },
+        {
+         "id": "sku",
+         "enum": null,
+         "type": "text",
+         "index": null,
+         "target": null,
+         "unique": true,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": null,
+         "relation_name": null
+        },
+        {
+         "id": "price",
+         "enum": null,
+         "type": "money",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "status",
+         "enum": "part_status",
+         "type": "enum",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "reorder_level",
+         "enum": null,
+         "type": "int",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "current_stock",
+         "enum": null,
+         "type": "int",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "needs_reorder",
+         "enum": null,
+         "type": "bool",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": {
+          "formula": "current_stock <= reorder_level"
+         },
+         "onDelete": null,
+         "required": null,
+         "relation_name": null
+        }
+       ],
+       "plural": "Parts",
+       "display": null,
+       "lifecycle": {
+        "field": "status",
+        "states": [
+         "available",
+         "out_of_stock",
+         "reorder_needed"
+        ],
+        "initial": "available",
+        "transitions": [
+         {
+          "id": "to_out_of_stock",
+          "to": "out_of_stock",
+          "from": "available",
+          "guard": null,
+          "label": "Stock Depleted",
+          "roles": [
+           "inventory_manager"
+          ]
+         },
+         {
+          "id": "to_reorder_needed",
+          "to": "reorder_needed",
+          "from": "out_of_stock",
+          "guard": null,
+          "label": "Reorder Alert",
+          "roles": [
+           "inventory_manager"
+          ]
+         },
+         {
+          "id": "to_available",
+          "to": "available",
+          "from": "reorder_needed",
+          "guard": null,
+          "label": "Restocked",
+          "roles": [
+           "inventory_manager"
+          ]
+         }
+        ]
+       }
+      }
+     ]
+    },
+    "trace": [
+     {
+      "requirement": "R1",
+      "satisfied_by": [
+       "entity:part",
+       "page:inventory_dashboard",
+       "automation:notify_reorder_needed"
+      ]
+     }
+    ],
+    "access": {
+     "roles": [
+      {
+       "id": "inventory_manager",
+       "label": "Inventory Manager"
+      },
+      {
+       "id": "owner",
+       "label": "Owner"
+      }
+     ],
+     "rules": [
+      {
+       "ops": [
+        "read",
+        "create",
+        "update",
+        "delete"
+       ],
+       "role": "inventory_manager",
+       "where": null,
+       "entity": "part"
+      },
+      {
+       "ops": [
+        "read"
+       ],
+       "role": "owner",
+       "where": null,
+       "entity": "part"
+      }
+     ]
+    },
+    "personas": [],
+    "assumptions": [
+     "Single branch",
+     "Currency INR"
+    ],
+    "automations": [
+     {
+      "id": "notify_out_of_stock",
+      "steps": [
+       {
+        "when": null,
+        "action": "send_email",
+        "params": {
+         "to": "inventory_manager",
+         "body": "Part {{id}} is out of stock.",
+         "subject": "Part Out of Stock"
+        }
+       }
+      ],
+      "trigger": {
+       "type": "lifecycle.transition",
+       "entity": "part",
+       "schedule": null,
+       "transition": "to_out_of_stock"
+      }
+     },
+     {
+      "id": "notify_reorder_needed",
+      "steps": [
+       {
+        "when": null,
+        "action": "send_email",
+        "params": {
+         "to": "owner",
+         "body": "Part {{id}} needs reorder.",
+         "subject": "Reorder Needed"
+        }
+       }
+      ],
+      "trigger": {
+       "type": "lifecycle.transition",
+       "entity": "part",
+       "schedule": null,
+       "transition": "to_reorder_needed"
+      }
+     },
+     {
+      "id": "notify_restocked",
+      "steps": [
+       {
+        "when": null,
+        "action": "send_email",
+        "params": {
+         "to": "owner",
+         "body": "Part {{id}} has been restocked.",
+         "subject": "Part Restocked"
+        }
+       }
+      ],
+      "trigger": {
+       "type": "lifecycle.transition",
+       "entity": "part",
+       "schedule": null,
+       "transition": "to_available"
+      }
+     }
+    ],
+    "integrations": [],
+    "requirements": [
+     {
+      "id": "R1",
+      "text": "A parts inventory with reorder alerts",
+      "priority": "must"
+     }
+    ],
+    "spec_version": "1.0"
+   }
+  },
+  {
+   "prompt": "A repair shop tracker with jobs and billing",
+   "domain": "repair_shop",
+   "heldout": false,
+   "status": "failed",
+   "run_id": "fc6059b6-2219-45f9-94f1-d23cb4ffc2bc",
+   "version_id": null,
+   "wall_s": 456.6,
+   "llm_calls": 2,
+   "degraded_steps": []
+  },
+  {
+   "prompt": "A leave request system with approvals",
+   "domain": "hr_leave",
+   "heldout": false,
+   "status": "failed",
+   "run_id": "6811868c-e689-42f2-95ef-e45d7634f823",
+   "version_id": null,
+   "wall_s": 316.4,
+   "llm_calls": 10,
+   "degraded_steps": [
+    "s3",
+    "s4"
+   ]
+  },
+  {
+   "prompt": "A CRM with leads, pipeline and activities",
+   "domain": "crm",
+   "heldout": false,
+   "status": "error",
+   "error": "timed out"
+  },
+  {
+   "prompt": "A library catalog with books and loans",
+   "domain": "library",
+   "heldout": false,
+   "status": "error",
+   "error": "timed out"
+  },
+  {
+   "prompt": "A gym class schedule with trainers and bookings",
+   "domain": "fitness",
+   "heldout": false,
+   "status": "error",
+   "error": "timed out"
+  },
+  {
+   "prompt": "A recipe box with ingredients and meal plans",
+   "domain": "food",
+   "heldout": false,
+   "status": "error",
+   "error": "timed out"
+  },
+  {
+   "prompt": "A pet clinic with patients and visits",
+   "domain": "veterinary",
+   "heldout": false,
+   "status": "error",
+   "error": "timed out"
+  },
+  {
+   "prompt": "A freelance time tracker with clients and invoices-lite",
+   "domain": "freelance",
+   "heldout": false,
+   "status": "failed",
+   "run_id": "45c47da3-bf83-4f5d-ba05-4ab4f45a2122",
+   "version_id": null,
+   "wall_s": 843.8,
+   "llm_calls": 2,
+   "degraded_steps": []
+  },
+  {
+   "prompt": "A school club manager with members and events",
+   "domain": "education",
+   "heldout": false,
+   "status": "failed",
+   "run_id": "9279e009-4b76-4ea8-8c8e-30f19039ba2e",
+   "version_id": null,
+   "wall_s": 512.6,
+   "llm_calls": 5,
+   "degraded_steps": [
+    "s4"
+   ]
+  },
+  {
+   "prompt": "A garden planner with beds and plantings",
+   "domain": "gardening",
+   "heldout": false,
+   "status": "failed",
+   "run_id": "34276c24-3fd8-4795-9277-31956a574dca",
+   "version_id": null,
+   "wall_s": 376.6,
+   "llm_calls": 7,
+   "degraded_steps": []
+  },
+  {
+   "prompt": "A car service log with vehicles and services",
+   "domain": "automotive",
+   "heldout": false,
+   "status": "failed",
+   "run_id": "d477d290-1fbd-4bc0-91d6-7fa64afe9166",
+   "version_id": null,
+   "wall_s": 589.1,
+   "llm_calls": 8,
+   "degraded_steps": [
+    "s4"
+   ]
+  },
+  {
+   "prompt": "A book club with books, meetings and notes",
+   "domain": "social",
+   "heldout": false,
+   "status": "done",
+   "run_id": "392fe92a-e302-4e86-b6a4-63a84385075d",
+   "version_id": "e6fd6a8d-f2db-4ee7-9d84-17caefc6f14e",
+   "wall_s": 537.0,
+   "llm_calls": 8,
+   "degraded_steps": [],
+   "gates": {
+    "g0": true,
+    "g1": true,
+    "g2": true,
+    "g0_errors": [],
+    "g1_errors": [],
+    "coverage": 1.0,
+    "g3": true,
+    "g3_checks": 170
+   },
+   "features": {
+    "archetype": "modern",
+    "nav": [
+     "books",
+     "club_settings",
+     "dashboard",
+     "meetings",
+     "members"
+    ],
+    "palette": "indigo",
+    "entities": [
+     "book",
+     "club",
+     "invitation",
+     "meeting",
+     "member",
+     "note"
+    ]
+   },
+   "spec": {
+    "ui": {
+     "nav": [
+      {
+       "icon": "layout-dashboard",
+       "page": "dashboard",
+       "label": "Dashboard",
+       "roles": [
+        "owner",
+        "admin",
+        "member"
+       ]
+      },
+      {
+       "icon": "book",
+       "page": "books",
+       "label": "Books",
+       "roles": [
+        "owner",
+        "admin",
+        "member"
+       ]
+      },
+      {
+       "icon": "calendar",
+       "page": "meetings",
+       "label": "Meetings",
+       "roles": [
+        "owner",
+        "admin",
+        "member"
+       ]
+      },
+      {
+       "icon": "users",
+       "page": "members",
+       "label": "Members",
+       "roles": [
+        "owner",
+        "admin"
+       ]
+      },
+      {
+       "icon": "settings",
+       "page": "club_settings",
+       "label": "Club Settings",
+       "roles": [
+        "owner",
+        "admin"
+       ]
+      }
+     ],
+     "pages": [
+      {
+       "id": "dashboard",
+       "roles": [
+        "owner",
+        "admin",
+        "member"
+       ],
+       "route": "/dashboard",
+       "title": "Club Overview",
+       "blocks": [
+        {
+         "id": "hero_welcome",
+         "type": "content.hero",
+         "props": {
+          "title": "Welcome to the Book Club",
+          "subtitle": "Track your reading journey and upcoming meetings"
+         }
+        },
+        {
+         "id": "stat_members",
+         "type": "metric.stat",
+         "props": {
+          "label": "Total Members",
+          "entity": "member"
+         }
+        },
+        {
+         "id": "stat_books",
+         "type": "metric.stat",
+         "props": {
+          "label": "Books Read",
+          "entity": "book"
+         }
+        }
+       ],
+       "layout": null
+      },
+      {
+       "id": "books",
+       "roles": [
+        "owner",
+        "admin",
+        "member"
+       ],
+       "route": "/books",
+       "title": "Library",
+       "blocks": [
+        {
+         "id": "book_filter",
+         "type": "filter.bar",
+         "props": {
+          "entity": "book"
+         }
+        },
+        {
+         "id": "book_list",
+         "type": "data.table",
+         "props": {
+          "entity": "book",
+          "row_link": "book_detail"
+         }
+        },
+        {
+         "id": "book_pipeline",
+         "type": "lifecycle.pipeline",
+         "props": {
+          "entity": "book",
+          "lifecycle": "status"
+         }
+        }
+       ],
+       "layout": null
+      },
+      {
+       "id": "book_detail",
+       "roles": [
+        "owner",
+        "admin",
+        "member"
+       ],
+       "route": "/books/:id",
+       "title": "Book Details",
+       "blocks": [
+        {
+         "id": "book_info",
+         "type": "record.detail",
+         "props": {
+          "entity": "book"
+         }
+        },
+        {
+         "id": "book_notes",
+         "type": "record.related_list",
+         "props": {
+          "entity": "note",
+          "relation": "book"
+         }
+        },
+        {
+         "id": "book_edit_form",
+         "type": "form.record",
+         "props": {
+          "entity": "book"
+         }
+        }
+       ],
+       "layout": null
+      },
+      {
+       "id": "meetings",
+       "roles": [
+        "owner",
+        "admin",
+        "member"
+       ],
+       "route": "/meetings",
+       "title": "Meetings",
+       "blocks": [
+        {
+         "id": "meeting_calendar",
+         "type": "calendar.month",
+         "props": {
+          "entity": "meeting",
+          "row_link": "meeting_detail"
+         }
+        },
+        {
+         "id": "meeting_list",
+         "type": "data.table",
+         "props": {
+          "entity": "meeting",
+          "row_link": "meeting_detail"
+         }
+        }
+       ],
+       "layout": null
+      },
+      {
+       "id": "meeting_detail",
+       "roles": [
+        "owner",
+        "admin",
+        "member"
+       ],
+       "route": "/meetings/:id",
+       "title": "Meeting Details",
+       "blocks": [
+        {
+         "id": "meeting_info",
+         "type": "record.detail",
+         "props": {
+          "entity": "meeting"
+         }
+        },
+        {
+         "id": "meeting_notes",
+         "type": "record.related_list",
+         "props": {
+          "entity": "note",
+          "relation": "meeting"
+         }
+        }
+       ],
+       "layout": null
+      },
+      {
+       "id": "members",
+       "roles": [
+        "owner",
+        "admin"
+       ],
+       "route": "/members",
+       "title": "Member Management",
+       "blocks": [
+        {
+         "id": "member_kanban",
+         "type": "data.kanban",
+         "props": {
+          "entity": "member",
+          "group_by": "role"
+         }
+        },
+        {
+         "id": "invitation_list",
+         "type": "data.table",
+         "props": {
+          "entity": "invitation"
+         }
+        }
+       ],
+       "layout": null
+      },
+      {
+       "id": "club_settings",
+       "roles": [
+        "owner",
+        "admin"
+       ],
+       "route": "/settings",
+       "title": "Club Settings",
+       "blocks": [
+        {
+         "id": "club_form",
+         "type": "form.record",
+         "props": {
+          "entity": "club"
+         }
+        },
+        {
+         "id": "club_activity",
+         "type": "activity.timeline",
+         "props": {
+          "entity": "club"
+         }
+        }
+       ],
+       "layout": null
+      }
+     ],
+     "theme": {
+      "fonts": "Inter",
+      "radius": "md",
+      "density": "comfortable",
+      "palette": "indigo",
+      "archetype": "modern"
+     }
+    },
+    "app": {
+     "name": "A",
+     "domain": "",
+     "locale": "en",
+     "tagline": "",
+     "currency": "USD",
+     "timezone": "UTC"
+    },
+    "seed": {
+     "book": [
+      {
+       "_key": "book_1",
+       "club": "@club_1",
+       "title": "The White Tiger",
+       "author": "Aravind Adiga",
+       "isbn13": "9780143422344",
+       "status": "selected",
+       "created_at": "2024-01-18T14:00:00Z",
+       "page_count": 320,
+       "updated_at": "2024-01-25T12:00:00Z",
+       "cover_image": null,
+       "description": "A darkly humorous novel about class struggle in modern India.",
+       "proposed_by": "@member_2",
+       "selected_at": "2024-01-25T12:00:00Z",
+       "published_date": "2008-10-14"
+      },
+      {
+       "_key": "book_2",
+       "club": "@club_1",
+       "title": "Midnight's Children",
+       "author": "Salman Rushdie",
+       "isbn13": "9780670089898",
+       "status": "proposed",
+       "created_at": "2024-02-05T10:30:00Z",
+       "page_count": 536,
+       "updated_at": "2024-02-05T10:30:00Z",
+       "cover_image": null,
+       "description": "A magical realism masterpiece about India's transition from colonialism.",
+       "proposed_by": "@member_3",
+       "selected_at": null,
+       "published_date": "1981-09-01"
+      },
+      {
+       "_key": "book_3",
+       "club": "@club_2",
+       "title": "The Girl with the Dragon Tattoo",
+       "author": "Stieg Larsson",
+       "isbn13": "9780143127553",
+       "status": "selected",
+       "created_at": "2024-02-28T15:20:00Z",
+       "page_count": 465,
+       "updated_at": "2024-03-01T11:00:00Z",
+       "cover_image": null,
+       "description": "A gripping Swedish mystery featuring journalist Mikael Blomkvist and hacker Lisbeth Salander.",
+       "proposed_by": "@member_5",
+       "selected_at": "2024-03-01T11:00:00Z",
+       "published_date": "2005-08-01"
+      },
+      {
+       "_key": "book_4",
+       "club": "@club_2",
+       "title": "Gone Girl",
+       "author": "Gillian Flynn",
+       "isbn13": "9780307949486",
+       "status": "proposed",
+       "created_at": "2024-03-10T09:00:00Z",
+       "page_count": 432,
+       "updated_at": "2024-03-10T09:00:00Z",
+       "cover_image": null,
+       "description": "A psychological thriller about a marriage gone terribly wrong.",
+       "proposed_by": "@member_4",
+       "selected_at": null,
+       "published_date": "2012-06-05"
+      },
+      {
+       "_key": "book_5",
+       "club": "@club_3",
+       "title": "Pride and Prejudice",
+       "author": "Jane Austen",
+       "isbn13": "9780141439518",
+       "status": "selected",
+       "created_at": "2024-03-12T16:30:00Z",
+       "page_count": 432,
+       "updated_at": "2024-03-20T14:00:00Z",
+       "cover_image": null,
+       "description": "A classic romance novel exploring manners, marriage, and morality in Regency England.",
+       "proposed_by": "@member_7",
+       "selected_at": "2024-03-20T14:00:00Z",
+       "published_date": "1813-01-28"
+      },
+      {
+       "_key": "book_6",
+       "club": "@club_3",
+       "title": "1984",
+       "author": "George Orwell",
+       "isbn13": "9780141441146",
+       "status": "proposed",
+       "created_at": "2024-03-18T11:45:00Z",
+       "page_count": 328,
+       "updated_at": "2024-03-18T11:45:00Z",
+       "cover_image": null,
+       "description": "A dystopian masterpiece about totalitarianism and surveillance.",
+       "proposed_by": "@member_6",
+       "selected_at": null,
+       "published_date": "1949-06-08"
+      }
+     ],
+     "club": [
+      {
+       "_key": "club_1",
+       "name": "Bangalore Book Lovers",
+       "timezone": "Asia/Kolkata",
+       "created_at": "2024-01-15T10:00:00Z",
+       "updated_at": "2024-01-15T10:00:00Z",
+       "description": "A vibrant community of book enthusiasts meeting monthly in Bangalore."
+      },
+      {
+       "_key": "club_2",
+       "name": "Mumbai Mystery Readers",
+       "timezone": "Asia/Kolkata",
+       "created_at": "2024-02-20T14:30:00Z",
+       "updated_at": "2024-02-20T14:30:00Z",
+       "description": "Focused on mystery, thriller, and crime fiction discussions."
+      },
+      {
+       "_key": "club_3",
+       "name": "Delhi Classic Literature Circle",
+       "timezone": "Asia/Kolkata",
+       "created_at": "2024-03-10T09:15:00Z",
+       "updated_at": "2024-03-10T09:15:00Z",
+       "description": "Exploring timeless classics from world literature."
+      }
+     ],
+     "note": [
+      {
+       "_key": "note_1",
+       "book": "@book_1",
+       "member": "@member_2",
+       "content": "Loved how Adiga portrays the duality of India - the Light and the Darkness. Balram's journey from servant to entrepreneur is both disturbing and compelling. The rooster coop metaphor stayed with me.",
+       "meeting": "@meeting_1",
+       "created_at": "2024-02-10T20:15:00Z",
+       "updated_at": "2024-02-10T20:15:00Z"
+      },
+      {
+       "_key": "note_2",
+       "book": "@book_1",
+       "member": "@member_3",
+       "content": "The epistolary format (letter to Wen Jiabao) was an interesting choice. Made me question the reliability of the narrator. Great discussion on whether Balram's actions were justified.",
+       "meeting": "@meeting_1",
+       "created_at": "2024-02-10T20:20:00Z",
+       "updated_at": "2024-02-10T20:20:00Z"
+      },
+      {
+       "_key": "note_3",
+       "book": "@book_3",
+       "member": "@member_5",
+       "content": "Reading this for the second time - noticing more details about Swedish corporate culture and the Vanger family dynamics. Lisbeth Salander remains one of the most complex female protagonists.",
+       "meeting": null,
+       "created_at": "2024-03-05T14:30:00Z",
+       "updated_at": "2024-03-05T14:30:00Z"
+      },
+      {
+       "_key": "note_4",
+       "book": "@book_5",
+       "member": "@member_7",
+       "content": "Austen's wit shines through every page. Elizabeth Bennet's refusal of Mr. Collins was revolutionary for its time. The social commentary on entailment and women's limited options is still relevant.",
+       "meeting": null,
+       "created_at": "2024-03-22T11:00:00Z",
+       "updated_at": "2024-03-22T11:00:00Z"
+      }
+     ],
+     "member": [
+      {
+       "_key": "member_1",
+       "club": "@club_1",
+       "name": "Priya Sharma",
+       "role": "admin",
+       "email": "priya.sharma@example.com",
+       "avatar": null,
+       "joined_at": "2024-01-15T10:05:00Z",
+       "created_at": "2024-01-15T10:05:00Z",
+       "updated_at": "2024-01-15T10:05:00Z",
+       "notification_email": true
+      },
+      {
+       "_key": "member_2",
+       "club": "@club_1",
+       "name": "Arjun Patel",
+       "role": "member",
+       "email": "arjun.patel@example.com",
+       "avatar": null,
+       "joined_at": "2024-01-20T16:20:00Z",
+       "created_at": "2024-01-20T16:20:00Z",
+       "updated_at": "2024-01-20T16:20:00Z",
+       "notification_email": true
+      },
+      {
+       "_key": "member_3",
+       "club": "@club_1",
+       "name": "Sneha Reddy",
+       "role": "member",
+       "email": "sneha.reddy@example.com",
+       "avatar": null,
+       "joined_at": "2024-02-01T11:00:00Z",
+       "created_at": "2024-02-01T11:00:00Z",
+       "updated_at": "2024-02-01T11:00:00Z",
+       "notification_email": false
+      },
+      {
+       "_key": "member_4",
+       "club": "@club_2",
+       "name": "Vikram Singh",
+       "role": "admin",
+       "email": "vikram.singh@example.com",
+       "avatar": null,
+       "joined_at": "2024-02-20T14:35:00Z",
+       "created_at": "2024-02-20T14:35:00Z",
+       "updated_at": "2024-02-20T14:35:00Z",
+       "notification_email": true
+      },
+      {
+       "_key": "member_5",
+       "club": "@club_2",
+       "name": "Ananya Gupta",
+       "role": "member",
+       "email": "ananya.gupta@example.com",
+       "avatar": null,
+       "joined_at": "2024-02-25T10:15:00Z",
+       "created_at": "2024-02-25T10:15:00Z",
+       "updated_at": "2024-02-25T10:15:00Z",
+       "notification_email": true
+      },
+      {
+       "_key": "member_6",
+       "club": "@club_3",
+       "name": "Rahul Verma",
+       "role": "admin",
+       "email": "rahul.verma@example.com",
+       "avatar": null,
+       "joined_at": "2024-03-10T09:20:00Z",
+       "created_at": "2024-03-10T09:20:00Z",
+       "updated_at": "2024-03-10T09:20:00Z",
+       "notification_email": true
+      },
+      {
+       "_key": "member_7",
+       "club": "@club_3",
+       "name": "Meera Iyer",
+       "role": "member",
+       "email": "meera.iyer@example.com",
+       "avatar": null,
+       "joined_at": "2024-03-15T13:45:00Z",
+       "created_at": "2024-03-15T13:45:00Z",
+       "updated_at": "2024-03-15T13:45:00Z",
+       "notification_email": true
+      }
+     ],
+     "meeting": [
+      {
+       "_key": "meeting_1",
+       "book": "@book_1",
+       "club": "@club_1",
+       "title": "Discussion: The White Tiger",
+       "status": "completed",
+       "end_time": "2024-02-10T20:00:00Z",
+       "location": "Caf\u00e9 Coffee Day, Koramangala",
+       "timezone": "Asia/Kolkata",
+       "created_at": "2024-01-26T10:00:00Z",
+       "created_by": "@member_1",
+       "start_time": "2024-02-10T18:30:00Z",
+       "updated_at": "2024-02-10T20:05:00Z",
+       "description": "Monthly book discussion meeting for The White Tiger.",
+       "meeting_type": "hybrid",
+       "virtual_link": "https://meet.example.com/white-tiger"
+      },
+      {
+       "_key": "meeting_2",
+       "book": "@book_2",
+       "club": "@club_1",
+       "title": "Proposed: Midnight's Children",
+       "status": "scheduled",
+       "end_time": "2024-03-15T20:30:00Z",
+       "location": null,
+       "timezone": "Asia/Kolkata",
+       "created_at": "2024-02-06T12:00:00Z",
+       "created_by": "@member_1",
+       "start_time": "2024-03-15T19:00:00Z",
+       "updated_at": "2024-02-06T12:00:00Z",
+       "description": "Discussion meeting for Midnight's Children (if selected).",
+       "meeting_type": "virtual",
+       "virtual_link": "https://meet.example.com/midnights-children"
+      },
+      {
+       "_key": "meeting_3",
+       "book": "@book_3",
+       "club": "@club_2",
+       "title": "Mystery Night: The Girl with the Dragon Tattoo",
+       "status": "scheduled",
+       "end_time": "2024-03-20T19:30:00Z",
+       "location": "The Bookshop, Bandra West",
+       "timezone": "Asia/Kolkata",
+       "created_at": "2024-03-02T14:00:00Z",
+       "created_by": "@member_4",
+       "start_time": "2024-03-20T18:00:00Z",
+       "updated_at": "2024-03-02T14:00:00Z",
+       "description": "Deep dive into Larsson's masterpiece with Swedish snacks.",
+       "meeting_type": "in_person",
+       "virtual_link": null
+      },
+      {
+       "_key": "meeting_4",
+       "book": "@book_5",
+       "club": "@club_3",
+       "title": "Classic Circle: Pride and Prejudice",
+       "status": "scheduled",
+       "end_time": "2024-04-05T18:00:00Z",
+       "location": "India Habitat Centre, Lodhi Road",
+       "timezone": "Asia/Kolkata",
+       "created_at": "2024-03-21T10:00:00Z",
+       "created_by": "@member_6",
+       "start_time": "2024-04-05T16:30:00Z",
+       "updated_at": "2024-03-21T10:00:00Z",
+       "description": "Discussing Austen's beloved novel with tea and scones.",
+       "meeting_type": "hybrid",
+       "virtual_link": "https://meet.example.com/pride-prejudice"
+      }
+     ],
+     "invitation": [
+      {
+       "_key": "invitation_1",
+       "club": "@club_1",
+       "email": "kavya.nair@example.com",
+       "token": "inv_abc123xyz",
+       "status": "accepted",
+       "created_at": "2024-03-15T10:00:00Z",
+       "expires_at": "2024-04-15T10:00:00Z",
+       "invited_by": "@member_1",
+       "updated_at": "2024-03-16T09:30:00Z"
+      },
+      {
+       "_key": "invitation_2",
+       "club": "@club_1",
+       "email": "rohit.kumar@example.com",
+       "token": "inv_def456uvw",
+       "status": "pending",
+       "created_at": "2024-03-20T14:30:00Z",
+       "expires_at": "2024-04-20T14:30:00Z",
+       "invited_by": "@member_1",
+       "updated_at": "2024-03-20T14:30:00Z"
+      },
+      {
+       "_key": "invitation_3",
+       "club": "@club_2",
+       "email": "divya.menon@example.com",
+       "token": "inv_ghi789rst",
+       "status": "declined",
+       "created_at": "2024-03-10T16:00:00Z",
+       "expires_at": "2024-04-10T16:00:00Z",
+       "invited_by": "@member_4",
+       "updated_at": "2024-03-12T11:45:00Z"
+      },
+      {
+       "_key": "invitation_4",
+       "club": "@club_3",
+       "email": "sanjay.rao@example.com",
+       "token": "inv_jkl012mno",
+       "status": "pending",
+       "created_at": "2024-03-25T09:15:00Z",
+       "expires_at": "2024-04-25T09:15:00Z",
+       "invited_by": "@member_6",
+       "updated_at": "2024-03-25T09:15:00Z"
+      }
+     ]
+    },
+    "model": {
+     "enums": [
+      {
+       "id": "member_role",
+       "values": [
+        {
+         "color": "#dc2626",
+         "label": "Admin",
+         "value": "admin"
+        },
+        {
+         "color": "#2563eb",
+         "label": "Member",
+         "value": "member"
+        }
+       ]
+      },
+      {
+       "id": "meeting_type",
+       "values": [
+        {
+         "color": "#3b82f6",
+         "label": "Virtual",
+         "value": "virtual"
+        },
+        {
+         "color": "#16a34a",
+         "label": "In Person",
+         "value": "in_person"
+        },
+        {
+         "color": "#9333ea",
+         "label": "Hybrid",
+         "value": "hybrid"
+        }
+       ]
+      },
+      {
+       "id": "meeting_status",
+       "values": [
+        {
+         "color": "#3b82f6",
+         "label": "Scheduled",
+         "value": "scheduled"
+        },
+        {
+         "color": "#16a34a",
+         "label": "Completed",
+         "value": "completed"
+        },
+        {
+         "color": "#dc2626",
+         "label": "Cancelled",
+         "value": "cancelled"
+        }
+       ]
+      },
+      {
+       "id": "book_status",
+       "values": [
+        {
+         "color": "#f59e0b",
+         "label": "Proposed",
+         "value": "proposed"
+        },
+        {
+         "color": "#3b82f6",
+         "label": "Selected",
+         "value": "selected"
+        },
+        {
+         "color": "#6b7280",
+         "label": "Archived",
+         "value": "archived"
+        }
+       ]
+      },
+      {
+       "id": "invitation_status",
+       "values": [
+        {
+         "color": "#f59e0b",
+         "label": "Pending",
+         "value": "pending"
+        },
+        {
+         "color": "#16a34a",
+         "label": "Accepted",
+         "value": "accepted"
+        },
+        {
+         "color": "#dc2626",
+         "label": "Declined",
+         "value": "declined"
+        }
+       ]
+      }
+     ],
+     "entities": [
+      {
+       "id": "club",
+       "icon": "users",
+       "label": "Club",
+       "fields": [
+        {
+         "id": "name",
+         "enum": null,
+         "type": "text",
+         "index": null,
+         "target": null,
+         "unique": true,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "description",
+         "enum": null,
+         "type": "longtext",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": null,
+         "relation_name": null
+        },
+        {
+         "id": "timezone",
+         "enum": null,
+         "type": "text",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": "Asia/Kolkata",
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "created_at",
+         "enum": null,
+         "type": "datetime",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "updated_at",
+         "enum": null,
+         "type": "datetime",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        }
+       ],
+       "plural": "Clubs",
+       "display": {
+        "title": "name",
+        "subtitle": "timezone"
+       },
+       "lifecycle": null
+      },
+      {
+       "id": "member",
+       "icon": "user",
+       "label": "Member",
+       "fields": [
+        {
+         "id": "club",
+         "enum": null,
+         "type": "ref",
+         "index": null,
+         "target": "club",
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": "cascade",
+         "required": true,
+         "relation_name": "members"
+        },
+        {
+         "id": "email",
+         "enum": null,
+         "type": "email",
+         "index": null,
+         "target": null,
+         "unique": true,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "name",
+         "enum": null,
+         "type": "text",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "role",
+         "enum": "member_role",
+         "type": "enum",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": "member",
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "joined_at",
+         "enum": null,
+         "type": "datetime",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "avatar",
+         "enum": null,
+         "type": "image",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": null,
+         "relation_name": null
+        },
+        {
+         "id": "notification_email",
+         "enum": null,
+         "type": "bool",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": true,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "created_at",
+         "enum": null,
+         "type": "datetime",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "updated_at",
+         "enum": null,
+         "type": "datetime",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        }
+       ],
+       "plural": "Members",
+       "display": {
+        "title": "name",
+        "subtitle": "email"
+       },
+       "lifecycle": null
+      },
+      {
+       "id": "book",
+       "icon": "book",
+       "label": "Book",
+       "fields": [
+        {
+         "id": "club",
+         "enum": null,
+         "type": "ref",
+         "index": null,
+         "target": "club",
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": "cascade",
+         "required": true,
+         "relation_name": "books"
+        },
+        {
+         "id": "isbn13",
+         "enum": null,
+         "type": "text",
+         "index": null,
+         "target": null,
+         "unique": true,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "title",
+         "enum": null,
+         "type": "text",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "author",
+         "enum": null,
+         "type": "text",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "cover_image",
+         "enum": null,
+         "type": "image",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": null,
+         "relation_name": null
+        },
+        {
+         "id": "description",
+         "enum": null,
+         "type": "longtext",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": null,
+         "relation_name": null
+        },
+        {
+         "id": "published_date",
+         "enum": null,
+         "type": "date",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": null,
+         "relation_name": null
+        },
+        {
+         "id": "page_count",
+         "enum": null,
+         "type": "int",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": null,
+         "relation_name": null
+        },
+        {
+         "id": "status",
+         "enum": "book_status",
+         "type": "enum",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": "proposed",
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "proposed_by",
+         "enum": null,
+         "type": "ref",
+         "index": null,
+         "target": "member",
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": "restrict",
+         "required": null,
+         "relation_name": "proposed_books"
+        },
+        {
+         "id": "selected_at",
+         "enum": null,
+         "type": "datetime",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": null,
+         "relation_name": null
+        },
+        {
+         "id": "created_at",
+         "enum": null,
+         "type": "datetime",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "updated_at",
+         "enum": null,
+         "type": "datetime",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        }
+       ],
+       "plural": "Books",
+       "display": {
+        "title": "title",
+        "subtitle": "author"
+       },
+       "lifecycle": {
+        "field": "status",
+        "states": [
+         "proposed",
+         "selected",
+         "archived"
+        ],
+        "initial": "proposed",
+        "transitions": [
+         {
+          "id": "select_book",
+          "to": "selected",
+          "from": "proposed",
+          "guard": null,
+          "label": "Select Book",
+          "roles": [
+           "admin"
+          ]
+         },
+         {
+          "id": "archive_book",
+          "to": "archived",
+          "from": "selected",
+          "guard": null,
+          "label": "Archive Book",
+          "roles": [
+           "admin"
+          ]
+         },
+         {
+          "id": "archive_proposed",
+          "to": "archived",
+          "from": "proposed",
+          "guard": null,
+          "label": "Archive Proposed",
+          "roles": [
+           "admin"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "id": "meeting",
+       "icon": "calendar",
+       "label": "Meeting",
+       "fields": [
+        {
+         "id": "club",
+         "enum": null,
+         "type": "ref",
+         "index": null,
+         "target": "club",
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": "cascade",
+         "required": true,
+         "relation_name": "meetings"
+        },
+        {
+         "id": "book",
+         "enum": null,
+         "type": "ref",
+         "index": null,
+         "target": "book",
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": "restrict",
+         "required": true,
+         "relation_name": "meetings"
+        },
+        {
+         "id": "title",
+         "enum": null,
+         "type": "text",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "description",
+         "enum": null,
+         "type": "longtext",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": null,
+         "relation_name": null
+        },
+        {
+         "id": "meeting_type",
+         "enum": "meeting_type",
+         "type": "enum",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": "hybrid",
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "virtual_link",
+         "enum": null,
+         "type": "url",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": null,
+         "relation_name": null
+        },
+        {
+         "id": "location",
+         "enum": null,
+         "type": "text",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": null,
+         "relation_name": null
+        },
+        {
+         "id": "start_time",
+         "enum": null,
+         "type": "datetime",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "end_time",
+         "enum": null,
+         "type": "datetime",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "timezone",
+         "enum": null,
+         "type": "text",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": "Asia/Kolkata",
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "status",
+         "enum": "meeting_status",
+         "type": "enum",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": "scheduled",
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "created_by",
+         "enum": null,
+         "type": "ref",
+         "index": null,
+         "target": "member",
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": "restrict",
+         "required": null,
+         "relation_name": "created_meetings"
+        },
+        {
+         "id": "created_at",
+         "enum": null,
+         "type": "datetime",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "updated_at",
+         "enum": null,
+         "type": "datetime",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        }
+       ],
+       "plural": "Meetings",
+       "display": {
+        "title": "title",
+        "subtitle": "start_time"
+       },
+       "lifecycle": {
+        "field": "status",
+        "states": [
+         "scheduled",
+         "completed",
+         "cancelled"
+        ],
+        "initial": "scheduled",
+        "transitions": [
+         {
+          "id": "complete_meeting",
+          "to": "completed",
+          "from": "scheduled",
+          "guard": null,
+          "label": "Mark Completed",
+          "roles": [
+           "admin"
+          ]
+         },
+         {
+          "id": "cancel_meeting",
+          "to": "cancelled",
+          "from": "scheduled",
+          "guard": null,
+          "label": "Cancel Meeting",
+          "roles": [
+           "admin"
+          ]
+         },
+         {
+          "id": "reschedule_meeting",
+          "to": "scheduled",
+          "from": "completed",
+          "guard": null,
+          "label": "Reschedule",
+          "roles": [
+           "admin"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "id": "note",
+       "icon": "file-text",
+       "label": "Note",
+       "fields": [
+        {
+         "id": "member",
+         "enum": null,
+         "type": "ref",
+         "index": null,
+         "target": "member",
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": "cascade",
+         "required": true,
+         "relation_name": "notes"
+        },
+        {
+         "id": "book",
+         "enum": null,
+         "type": "ref",
+         "index": null,
+         "target": "book",
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": "cascade",
+         "required": true,
+         "relation_name": "notes"
+        },
+        {
+         "id": "meeting",
+         "enum": null,
+         "type": "ref",
+         "index": null,
+         "target": "meeting",
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": "set_null",
+         "required": null,
+         "relation_name": "notes"
+        },
+        {
+         "id": "content",
+         "enum": null,
+         "type": "longtext",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "created_at",
+         "enum": null,
+         "type": "datetime",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "updated_at",
+         "enum": null,
+         "type": "datetime",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        }
+       ],
+       "plural": "Notes",
+       "display": {
+        "title": "content",
+        "subtitle": "created_at"
+       },
+       "lifecycle": null
+      },
+      {
+       "id": "invitation",
+       "icon": "mail",
+       "label": "Invitation",
+       "fields": [
+        {
+         "id": "club",
+         "enum": null,
+         "type": "ref",
+         "index": null,
+         "target": "club",
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": "cascade",
+         "required": true,
+         "relation_name": "invitations"
+        },
+        {
+         "id": "email",
+         "enum": null,
+         "type": "email",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "invited_by",
+         "enum": null,
+         "type": "ref",
+         "index": null,
+         "target": "member",
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": "restrict",
+         "required": true,
+         "relation_name": "sent_invitations"
+        },
+        {
+         "id": "status",
+         "enum": "invitation_status",
+         "type": "enum",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": "pending",
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "token",
+         "enum": null,
+         "type": "text",
+         "index": null,
+         "target": null,
+         "unique": true,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "expires_at",
+         "enum": null,
+         "type": "datetime",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "created_at",
+         "enum": null,
+         "type": "datetime",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "updated_at",
+         "enum": null,
+         "type": "datetime",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        }
+       ],
+       "plural": "Invitations",
+       "display": {
+        "title": "email",
+        "subtitle": "status"
+       },
+       "lifecycle": {
+        "field": "status",
+        "states": [
+         "pending",
+         "accepted",
+         "declined"
+        ],
+        "initial": "pending",
+        "transitions": [
+         {
+          "id": "accept_invitation",
+          "to": "accepted",
+          "from": "pending",
+          "guard": null,
+          "label": "Accept",
+          "roles": []
+         },
+         {
+          "id": "decline_invitation",
+          "to": "declined",
+          "from": "pending",
+          "guard": null,
+          "label": "Decline",
+          "roles": []
+         }
+        ]
+       }
+      }
+     ]
+    },
+    "trace": [
+     {
+      "requirement": "R1",
+      "satisfied_by": [
+       "entity:club",
+       "entity:book",
+       "entity:meeting",
+       "entity:note",
+       "page:dashboard",
+       "page:books",
+       "page:book_detail",
+       "page:meetings",
+       "page:meeting_detail",
+       "page:members",
+       "page:club_settings",
+       "automation:notify_book_selection",
+       "automation:set_selected_date",
+       "automation:welcome_email_on_join"
+      ]
+     }
+    ],
+    "access": {
+     "roles": [
+      {
+       "id": "admin",
+       "label": "Administrator"
+      },
+      {
+       "id": "member",
+       "label": "Member"
+      },
+      {
+       "id": "owner",
+       "label": "Owner"
+      }
+     ],
+     "rules": [
+      {
+       "ops": [
+        "read",
+        "update",
+        "delete"
+       ],
+       "role": "owner",
+       "where": null,
+       "entity": "club"
+      },
+      {
+       "ops": [
+        "read",
+        "update"
+       ],
+       "role": "admin",
+       "where": null,
+       "entity": "club"
+      },
+      {
+       "ops": [
+        "read"
+       ],
+       "role": "member",
+       "where": null,
+       "entity": "club"
+      },
+      {
+       "ops": [
+        "read",
+        "update",
+        "delete"
+       ],
+       "role": "admin",
+       "where": null,
+       "entity": "member"
+      },
+      {
+       "ops": [
+        "read",
+        "update"
+       ],
+       "role": "member",
+       "where": "id = current_user_id",
+       "entity": "member"
+      },
+      {
+       "ops": [
+        "read",
+        "create",
+        "update",
+        "delete"
+       ],
+       "role": "admin",
+       "where": null,
+       "entity": "book"
+      },
+      {
+       "ops": [
+        "read",
+        "create"
+       ],
+       "role": "member",
+       "where": "status = 'proposed'",
+       "entity": "book"
+      },
+      {
+       "ops": [
+        "read",
+        "create",
+        "update",
+        "delete"
+       ],
+       "role": "admin",
+       "where": null,
+       "entity": "meeting"
+      },
+      {
+       "ops": [
+        "read"
+       ],
+       "role": "member",
+       "where": null,
+       "entity": "meeting"
+      },
+      {
+       "ops": [
+        "read",
+        "create",
+        "update",
+        "delete"
+       ],
+       "role": "admin",
+       "where": null,
+       "entity": "note"
+      },
+      {
+       "ops": [
+        "read",
+        "create",
+        "update",
+        "delete"
+       ],
+       "role": "member",
+       "where": "member.id = current_user_id",
+       "entity": "note"
+      },
+      {
+       "ops": [
+        "read",
+        "create",
+        "update",
+        "delete"
+       ],
+       "role": "admin",
+       "where": null,
+       "entity": "invitation"
+      },
+      {
+       "ops": [
+        "read"
+       ],
+       "role": "member",
+       "where": "email = current_user_email",
+       "entity": "invitation"
+      }
+     ]
+    },
+    "personas": [],
+    "assumptions": [
+     "Single club instance (no multi-tenancy)",
+     "Private invite-only membership",
+     "Admin selects books by default",
+     "Hybrid meetings supported (virtual + in-person per meeting)",
+     "Individual note-taking per member (not real-time collaborative)",
+     "Email notifications only (no push/SMS)",
+     "English language only",
+     "Mobile-responsive web application",
+     "No payment integration",
+     "No third-party calendar sync (Google/Outlook) in v1",
+     "Currency INR if any future payments",
+     "Single timezone per club (club admin sets)",
+     "Books identified by ISBN-13",
+     "Meeting notes stored per member per book",
+     "No audio/video recording of meetings"
+    ],
+    "automations": [
+     {
+      "id": "notify_book_selection",
+      "steps": [
+       {
+        "when": null,
+        "action": "notify",
+        "params": {
+         "message": "A new book has been selected for the club!",
+         "recipients": "club.members"
+        }
+       }
+      ],
+      "trigger": {
+       "type": "lifecycle.transition",
+       "entity": "book",
+       "schedule": null,
+       "transition": "select_book"
+      }
+     },
+     {
+      "id": "set_selected_date",
+      "steps": [
+       {
+        "when": null,
+        "action": "set_field",
+        "params": {
+         "field": "selected_at",
+         "value": "now()"
+        }
+       }
+      ],
+      "trigger": {
+       "type": "lifecycle.transition",
+       "entity": "book",
+       "schedule": null,
+       "transition": "select_book"
+      }
+     },
+     {
+      "id": "welcome_email_on_join",
+      "steps": [
+       {
+        "when": null,
+        "action": "send_email",
+        "params": {
+         "to": "email",
+         "body": "We are glad to have you join us!",
+         "subject": "Welcome to the Book Club"
+        }
+       }
+      ],
+      "trigger": {
+       "type": "record.created",
+       "entity": "member",
+       "schedule": null,
+       "transition": null
+      }
+     }
+    ],
+    "integrations": [],
+    "requirements": [
+     {
+      "id": "R1",
+      "text": "A book club with books, meetings and notes",
+      "priority": "must"
+     }
+    ],
+    "spec_version": "1.0"
+   }
+  },
+  {
+   "prompt": "An invoicing tracker with line items and payment status",
+   "domain": "invoicing",
+   "heldout": true,
+   "status": "degraded",
+   "run_id": "270f3be7-aa9a-4f2e-b60d-7492882430d8",
+   "version_id": "c0245992-5e5f-46a5-a347-b882135459df",
+   "wall_s": 1117.3,
+   "llm_calls": 12,
+   "degraded_steps": [
+    "s6"
+   ],
+   "gates": {
+    "g0": true,
+    "g1": true,
+    "g2": true,
+    "g0_errors": [],
+    "g1_errors": [],
+    "coverage": 1.0,
+    "g3": true,
+    "g3_checks": 67
+   },
+   "features": {
+    "archetype": "default",
+    "nav": [
+     "customers",
+     "dashboard",
+     "invoice_detail",
+     "invoices",
+     "payments"
+    ],
+    "palette": "blue",
+    "entities": [
+     "customer",
+     "invoice",
+     "line_item",
+     "payment"
+    ]
+   },
+   "spec": {
+    "ui": {
+     "nav": [
+      {
+       "icon": "layout-dashboard",
+       "page": "dashboard",
+       "label": "Dashboard",
+       "roles": [
+        "owner",
+        "admin",
+        "sales",
+        "finance"
+       ]
+      },
+      {
+       "icon": "users",
+       "page": "customers",
+       "label": "Customers",
+       "roles": [
+        "owner",
+        "admin",
+        "sales"
+       ]
+      },
+      {
+       "icon": "file-text",
+       "page": "invoices",
+       "label": "Invoices",
+       "roles": [
+        "owner",
+        "admin",
+        "sales",
+        "finance"
+       ]
+      },
+      {
+       "icon": "file-text",
+       "page": "invoice_detail",
+       "label": "Invoice Detail",
+       "roles": [
+        "owner",
+        "admin",
+        "sales",
+        "finance"
+       ]
+      },
+      {
+       "icon": "credit-card",
+       "page": "payments",
+       "label": "Payments",
+       "roles": [
+        "owner",
+        "admin",
+        "finance"
+       ]
+      }
+     ],
+     "pages": [
+      {
+       "id": "dashboard",
+       "roles": [
+        "owner",
+        "admin",
+        "sales",
+        "finance"
+       ],
+       "route": "/dashboard",
+       "title": "Dashboard",
+       "blocks": [
+        {
+         "id": "total_invoices",
+         "type": "metric.stat",
+         "props": {
+          "label": "Total Invoices",
+          "entity": "invoice",
+          "metric": "count"
+         }
+        },
+        {
+         "id": "total_paid",
+         "type": "metric.stat",
+         "props": {
+          "label": "Paid Invoices",
+          "entity": "invoice",
+          "filter": {
+           "status": "paid"
+          },
+          "metric": "count"
+         }
+        },
+        {
+         "id": "total_overdue",
+         "type": "metric.stat",
+         "props": {
+          "label": "Overdue Invoices",
+          "entity": "invoice",
+          "filter": {
+           "status": "overdue"
+          },
+          "metric": "count"
+         }
+        },
+        {
+         "id": "total_customers",
+         "type": "metric.stat",
+         "props": {
+          "label": "Total Customers",
+          "entity": "customer",
+          "metric": "count"
+         }
+        },
+        {
+         "id": "invoices_by_status",
+         "type": "chart.bar",
+         "props": {
+          "x": "status",
+          "y": "count",
+          "title": "Invoices by Status",
+          "entity": "invoice"
+         }
+        },
+        {
+         "id": "recent_activity",
+         "type": "activity.timeline",
+         "props": {
+          "limit": 10,
+          "title": "Recent Invoice Activity",
+          "entity": "invoice"
+         }
+        }
+       ],
+       "layout": "default"
+      },
+      {
+       "id": "customers",
+       "roles": [
+        "owner",
+        "admin",
+        "sales"
+       ],
+       "route": "/customers",
+       "title": "Customers",
+       "blocks": [
+        {
+         "id": "customer_filter",
+         "type": "filter.bar",
+         "props": {
+          "entity": "customer",
+          "fields": [
+           "name",
+           "email",
+           "phone"
+          ]
+         }
+        },
+        {
+         "id": "customer_table",
+         "type": "data.table",
+         "props": {
+          "entity": "customer",
+          "columns": [
+           "name",
+           "email",
+           "phone",
+           "address"
+          ],
+          "pageSize": 20,
+          "sortable": true,
+          "filterable": true
+         }
+        }
+       ],
+       "layout": "default"
+      },
+      {
+       "id": "invoices",
+       "roles": [
+        "owner",
+        "admin",
+        "sales",
+        "finance"
+       ],
+       "route": "/invoices",
+       "title": "Invoices",
+       "blocks": [
+        {
+         "id": "invoice_filter",
+         "type": "filter.bar",
+         "props": {
+          "entity": "invoice",
+          "fields": [
+           "invoice_number",
+           "customer",
+           "status",
+           "date",
+           "due_date"
+          ]
+         }
+        },
+        {
+         "id": "invoice_table",
+         "type": "data.table",
+         "props": {
+          "entity": "invoice",
+          "columns": [
+           "invoice_number",
+           "customer",
+           "date",
+           "due_date",
+           "status",
+           "total"
+          ],
+          "rowLink": "invoice_detail",
+          "pageSize": 20,
+          "sortable": true,
+          "filterable": true
+         }
+        },
+        {
+         "id": "invoice_pipeline",
+         "type": "lifecycle.pipeline",
+         "props": {
+          "field": "status",
+          "entity": "invoice",
+          "stages": [
+           "draft",
+           "sent",
+           "paid",
+           "overdue",
+           "cancelled"
+          ]
+         }
+        }
+       ],
+       "layout": "default"
+      },
+      {
+       "id": "invoice_detail",
+       "roles": [
+        "owner",
+        "admin",
+        "sales",
+        "finance"
+       ],
+       "route": "/invoices/:id",
+       "title": "Invoice Detail",
+       "blocks": [
+        {
+         "id": "invoice_detail",
+         "type": "record.detail",
+         "props": {
+          "entity": "invoice",
+          "fields": [
+           "invoice_number",
+           "customer",
+           "date",
+           "due_date",
+           "status",
+           "subtotal",
+           "tax",
+           "total",
+           "notes"
+          ]
+         }
+        },
+        {
+         "id": "line_items_list",
+         "type": "record.related_list",
+         "props": {
+          "entity": "line_item",
+          "fields": [
+           "description",
+           "quantity",
+           "unit_price",
+           "total"
+          ],
+          "parentField": "invoice",
+          "parentEntity": "invoice"
+         }
+        },
+        {
+         "id": "payments_list",
+         "type": "record.related_list",
+         "props": {
+          "entity": "payment",
+          "fields": [
+           "amount",
+           "date",
+           "method",
+           "status",
+           "reference"
+          ],
+          "parentField": "invoice",
+          "parentEntity": "invoice"
+         }
+        }
+       ],
+       "layout": "default"
+      },
+      {
+       "id": "payments",
+       "roles": [
+        "owner",
+        "admin",
+        "finance"
+       ],
+       "route": "/payments",
+       "title": "Payments",
+       "blocks": [
+        {
+         "id": "payment_filter",
+         "type": "filter.bar",
+         "props": {
+          "entity": "payment",
+          "fields": [
+           "invoice",
+           "amount",
+           "date",
+           "method",
+           "status"
+          ]
+         }
+        },
+        {
+         "id": "payment_table",
+         "type": "data.table",
+         "props": {
+          "entity": "payment",
+          "columns": [
+           "invoice",
+           "amount",
+           "date",
+           "method",
+           "status",
+           "reference"
+          ],
+          "pageSize": 20,
+          "sortable": true,
+          "filterable": true
+         }
+        }
+       ],
+       "layout": "default"
+      }
+     ],
+     "theme": {
+      "fonts": "inter",
+      "radius": "md",
+      "density": "comfortable",
+      "palette": "blue",
+      "archetype": "default"
+     }
+    },
+    "app": {
+     "name": "An",
+     "domain": "",
+     "locale": "en",
+     "tagline": "",
+     "currency": "USD",
+     "timezone": "UTC"
+    },
+    "seed": {},
+    "model": {
+     "enums": [
+      {
+       "id": "invoice_status",
+       "values": [
+        {
+         "color": "#6b7280",
+         "label": "Draft",
+         "value": "draft"
+        },
+        {
+         "color": "#3b82f6",
+         "label": "Sent",
+         "value": "sent"
+        },
+        {
+         "color": "#10b981",
+         "label": "Paid",
+         "value": "paid"
+        },
+        {
+         "color": "#f59e0b",
+         "label": "Overdue",
+         "value": "overdue"
+        },
+        {
+         "color": "#ef4444",
+         "label": "Cancelled",
+         "value": "cancelled"
+        }
+       ]
+      },
+      {
+       "id": "payment_status",
+       "values": [
+        {
+         "color": "#f59e0b",
+         "label": "Pending",
+         "value": "pending"
+        },
+        {
+         "color": "#10b981",
+         "label": "Completed",
+         "value": "completed"
+        },
+        {
+         "color": "#ef4444",
+         "label": "Failed",
+         "value": "failed"
+        },
+        {
+         "color": "#6b7280",
+         "label": "Refunded",
+         "value": "refunded"
+        }
+       ]
+      },
+      {
+       "id": "payment_method",
+       "values": [
+        {
+         "color": "#10b981",
+         "label": "Cash",
+         "value": "cash"
+        },
+        {
+         "color": "#3b82f6",
+         "label": "Card",
+         "value": "card"
+        },
+        {
+         "color": "#8b5cf6",
+         "label": "Bank Transfer",
+         "value": "bank_transfer"
+        },
+        {
+         "color": "#f59e0b",
+         "label": "Check",
+         "value": "check"
+        },
+        {
+         "color": "#6b7280",
+         "label": "Other",
+         "value": "other"
+        }
+       ]
+      }
+     ],
+     "entities": [
+      {
+       "id": "customer",
+       "icon": "users",
+       "label": "Customer",
+       "fields": [
+        {
+         "id": "name",
+         "enum": null,
+         "type": "text",
+         "index": true,
+         "target": null,
+         "unique": false,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "email",
+         "enum": null,
+         "type": "email",
+         "index": true,
+         "target": null,
+         "unique": true,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": false,
+         "relation_name": null
+        },
+        {
+         "id": "phone",
+         "enum": null,
+         "type": "phone",
+         "index": false,
+         "target": null,
+         "unique": false,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": false,
+         "relation_name": null
+        },
+        {
+         "id": "address",
+         "enum": null,
+         "type": "longtext",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": false,
+         "relation_name": null
+        }
+       ],
+       "plural": "Customers",
+       "display": {
+        "title": "name",
+        "subtitle": "email"
+       },
+       "lifecycle": null
+      },
+      {
+       "id": "invoice",
+       "icon": "file-text",
+       "label": "Invoice",
+       "fields": [
+        {
+         "id": "invoice_number",
+         "enum": null,
+         "type": "text",
+         "index": true,
+         "target": null,
+         "unique": true,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "customer",
+         "enum": null,
+         "type": "ref",
+         "index": null,
+         "target": "customer",
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": "restrict",
+         "required": true,
+         "relation_name": "invoices"
+        },
+        {
+         "id": "date",
+         "enum": null,
+         "type": "date",
+         "index": true,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "due_date",
+         "enum": null,
+         "type": "date",
+         "index": true,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "status",
+         "enum": "invoice_status",
+         "type": "enum",
+         "index": true,
+         "target": null,
+         "unique": null,
+         "default": "draft",
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "subtotal",
+         "enum": null,
+         "type": "money",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": 0,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "tax",
+         "enum": null,
+         "type": "money",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": 0,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "total",
+         "enum": null,
+         "type": "money",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": {
+          "formula": "subtotal + tax"
+         },
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "notes",
+         "enum": null,
+         "type": "longtext",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": false,
+         "relation_name": null
+        }
+       ],
+       "plural": "Invoices",
+       "display": {
+        "title": "invoice_number",
+        "subtitle": "customer.name"
+       },
+       "lifecycle": {
+        "field": "status",
+        "states": [
+         "draft",
+         "sent",
+         "paid",
+         "overdue",
+         "cancelled"
+        ],
+        "initial": "draft",
+        "transitions": [
+         {
+          "id": "send",
+          "to": "sent",
+          "from": "draft",
+          "guard": null,
+          "label": "Send",
+          "roles": [
+           "admin",
+           "sales"
+          ]
+         },
+         {
+          "id": "mark_paid",
+          "to": "paid",
+          "from": "sent",
+          "guard": null,
+          "label": "Mark Paid",
+          "roles": [
+           "admin",
+           "finance"
+          ]
+         },
+         {
+          "id": "mark_overdue",
+          "to": "overdue",
+          "from": "sent",
+          "guard": null,
+          "label": "Mark Overdue",
+          "roles": [
+           "admin",
+           "finance"
+          ]
+         },
+         {
+          "id": "cancel_draft",
+          "to": "cancelled",
+          "from": "draft",
+          "guard": null,
+          "label": "Cancel",
+          "roles": [
+           "admin"
+          ]
+         },
+         {
+          "id": "cancel_sent",
+          "to": "cancelled",
+          "from": "sent",
+          "guard": null,
+          "label": "Cancel",
+          "roles": [
+           "admin"
+          ]
+         },
+         {
+          "id": "pay_overdue",
+          "to": "paid",
+          "from": "overdue",
+          "guard": null,
+          "label": "Receive Payment",
+          "roles": [
+           "admin",
+           "finance"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "id": "line_item",
+       "icon": "list",
+       "label": "Line Item",
+       "fields": [
+        {
+         "id": "invoice",
+         "enum": null,
+         "type": "ref",
+         "index": null,
+         "target": "invoice",
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": "cascade",
+         "required": true,
+         "relation_name": "line_items"
+        },
+        {
+         "id": "description",
+         "enum": null,
+         "type": "text",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "quantity",
+         "enum": null,
+         "type": "int",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": 1,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "unit_price",
+         "enum": null,
+         "type": "money",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "total",
+         "enum": null,
+         "type": "money",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": {
+          "formula": "quantity * unit_price"
+         },
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        }
+       ],
+       "plural": "Line Items",
+       "display": {
+        "title": "description",
+        "subtitle": "total"
+       },
+       "lifecycle": null
+      },
+      {
+       "id": "payment",
+       "icon": "credit-card",
+       "label": "Payment",
+       "fields": [
+        {
+         "id": "invoice",
+         "enum": null,
+         "type": "ref",
+         "index": null,
+         "target": "invoice",
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": "cascade",
+         "required": true,
+         "relation_name": "payments"
+        },
+        {
+         "id": "amount",
+         "enum": null,
+         "type": "money",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "date",
+         "enum": null,
+         "type": "date",
+         "index": true,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "method",
+         "enum": "payment_method",
+         "type": "enum",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "status",
+         "enum": "payment_status",
+         "type": "enum",
+         "index": true,
+         "target": null,
+         "unique": null,
+         "default": "pending",
+         "computed": null,
+         "onDelete": null,
+         "required": true,
+         "relation_name": null
+        },
+        {
+         "id": "reference",
+         "enum": null,
+         "type": "text",
+         "index": null,
+         "target": null,
+         "unique": null,
+         "default": null,
+         "computed": null,
+         "onDelete": null,
+         "required": false,
+         "relation_name": null
+        }
+       ],
+       "plural": "Payments",
+       "display": {
+        "title": "amount",
+        "subtitle": "date"
+       },
+       "lifecycle": null
+      }
+     ]
+    },
+    "trace": [
+     {
+      "requirement": "R1",
+      "satisfied_by": [
+       "entity:invoice",
+       "entity:line_item",
+       "entity:payment",
+       "page:invoices",
+       "page:invoice_detail",
+       "page:payments"
+      ]
+     }
+    ],
+    "access": {
+     "roles": [
+      {
+       "id": "admin",
+       "label": "Administrator"
+      },
+      {
+       "id": "finance",
+       "label": "Finance"
+      },
+      {
+       "id": "owner",
+       "label": "Owner"
+      },
+      {
+       "id": "sales",
+       "label": "Sales"
+      }
+     ],
+     "rules": [
+      {
+       "ops": [
+        "read",
+        "create",
+        "update",
+        "delete"
+       ],
+       "role": "admin",
+       "where": null,
+       "entity": "customer"
+      },
+      {
+       "ops": [
+        "read"
+       ],
+       "role": "finance",
+       "where": null,
+       "entity": "customer"
+      },
+      {
+       "ops": [
+        "read",
+        "create",
+        "update",
+        "delete"
+       ],
+       "role": "owner",
+       "where": null,
+       "entity": "customer"
+      },
+      {
+       "ops": [
+        "read",
+        "create",
+        "update"
+       ],
+       "role": "sales",
+       "where": null,
+       "entity": "customer"
+      },
+      {
+       "ops": [
+        "read",
+        "create",
+        "update",
+        "delete"
+       ],
+       "role": "admin",
+       "where": null,
+       "entity": "invoice"
+      },
+      {
+       "ops": [
+        "read",
+        "create",
+        "update"
+       ],
+       "role": "finance",
+       "where": null,
+       "entity": "invoice"
+      },
+      {
+       "ops": [
+        "read",
+        "create",
+        "update",
+        "delete"
+       ],
+       "role": "owner",
+       "where": null,
+       "entity": "invoice"
+      },
+      {
+       "ops": [
+        "read",
+        "create",
+        "update"
+       ],
+       "role": "sales",
+       "where": "status == 'draft'",
+       "entity": "invoice"
+      },
+      {
+       "ops": [
+        "read",
+        "create",
+        "update",
+        "delete"
+       ],
+       "role": "admin",
+       "where": null,
+       "entity": "line_item"
+      },
+      {
+       "ops": [
+        "read",
+        "create",
+        "update"
+       ],
+       "role": "finance",
+       "where": null,
+       "entity": "line_item"
+      },
+      {
+       "ops": [
+        "read",
+        "create",
+        "update",
+        "delete"
+       ],
+       "role": "owner",
+       "where": null,
+       "entity": "line_item"
+      }
+     ]
+    },
+    "personas": [],
+    "assumptions": [],
+    "automations": [],
+    "integrations": [],
+    "requirements": [
+     {
+      "id": "R1",
+      "text": "An invoicing tracker with line items and payment status",
+      "priority": "must"
+     }
+    ],
+    "spec_version": "1.0"
+   }
+  },
+  {
+   "prompt": "A restaurant order board with tables and kitchen queue",
+   "domain": "restaurant_orders",
+   "heldout": true,
+   "status": "failed",
+   "run_id": "9bd1474f-ed84-4812-9bdd-d07768c045d5",
+   "version_id": null,
+   "wall_s": 617.5,
+   "llm_calls": 6,
+   "degraded_steps": [
+    "s2",
+    "s3"
+   ]
+  },
+  {
+   "prompt": "A gym membership manager with expiry and payments",
+   "domain": "gym_membership",
+   "heldout": true,
+   "status": "failed",
+   "run_id": "703eed87-6765-4ee9-9430-0ab534c0ea68",
+   "version_id": null,
+   "wall_s": 646.2,
+   "llm_calls": 3,
+   "degraded_steps": [
+    "s0"
+   ]
+  },
+  {
+   "prompt": "A school fee tracker with students and installments",
+   "domain": "school_fees",
+   "heldout": true,
+   "status": "running",
+   "run_id": "276cee72-2186-4a19-b2c4-74c059ac977a",
+   "version_id": null,
+   "wall_s": 1959.7,
+   "llm_calls": 4,
+   "degraded_steps": [
+    "s2"
+   ]
+  },
+  {
+   "prompt": "A helpdesk with tickets, priorities and assignment",
+   "domain": "helpdesk",
+   "heldout": true,
+   "status": "error",
+   "error": "timed out"
+  }
+ ]
+}

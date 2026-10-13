@@ -130,7 +130,7 @@
 - [x] P7.3 Retrieval logged per stage (catalog slice + file-index exemplars); Critic fills `trace[]`; G2 deterministic gate (`gates/g2_coverage.py`: musts covered, should advisory); S5 repair ≤2 on uncovered musts, else explicit degrade.
 - [x] P7.4 `BlueprintView.tsx` (Data/Screens/Rules/Assumptions + approve + chat-patch with Details toggle + RuntimePreview) + `runs` client fns + Studio 4th tab (run link + spec write back to wish on start/finish).
 - [x] P7.5 `scripts/core20.py` (20 wishes incl. 5 heldout; G0/G1/G2 + G3-via-node grades, diversity, budgets → `evals/reports/core20-*.json`); probe: 1 full pass (Library, 8 calls, G0/G1/G2 clean) + 2 fail-closed S5s that exposed the role-mismatch class → fixed (S4 role contract + S2 from/to gate + sequential S3→S4).
-- **Accept (MVP demo):** core20 ≥85% — **OPEN (needs manual full-20 dispatch: ~1–2h + quota)**; median ≤14 calls (observed 8 on the pass), coverage via G2; type-a-wish→working-app demoable once a passed run links to Studio.
+- **Accept (MVP demo):** core20 ≥85% — **OPEN: measured 4/20 (20%) on first full run 2026-10-13**; median 11 calls ✅ ≤14; median wall 537s ❌ (quota-throttled, target ≤3min); coverage 1.0 on green; diversity 4/5 combos, overlap 0.0; rerun of 16 non-green after fix batch → §6 close; type-a-wish→working-app demoable once a passed run links to Studio.
 - **Live findings:** (a) S3/S4 role mismatch failed 2 runs fail-closed → fixed, re-validating; (b) router double-created run rows (client polled an empty shell) → `run_id` passthrough fixed, proven by steps appearing under the polled id; (c) Gemini free-tier 5 RPM exhausted mid-probe — chain carried on groq as designed.
 
 ### Phase 8 — Capability depth [ ]
@@ -213,6 +213,13 @@
 - **Problems:** see §5 #25.
 - **Next:** user launches full core20 (steps below) → pings me → analyze + §6 + gold candidates → Phase 8.
 
+### Session 12 — 2026-10-13 — core20 full run: measured 4/20, taxonomy complete [x]
+- **Result** (`evals/reports/core20-20261013-230036.json`, ~3h wall): **4/20 green** (productivity, retail, social done G0–G3; invoicing-HELDOUT degraded-but-green, coverage 1.0) · 10 failed · 6 harness HTTP timeouts (backend stalls, recovered) · median 11 calls (✅ ≤14) · median wall 537s (❌ >3min — quota-throttled) · diversity 4 combos (target ≥5), overlap 0.0 ✅.
+- **Failure taxonomy (all fail-closed, all specific):** quota deaths ×3 (repair/freelance/restaurant 503s, gym timeout); R12-direction roles ×3 (education hr? no — education/automotive/school: pages use roles access lacks); lifecycle reachability ×1 (appointment); kanban group_by ×1 (gardening); role cascade ×1 (hr); empty-response parse degradations (education/school s4 — provider returned "").
+- **Queued fixes:** S4 gate role-set EQUALITY (both directions), S3 required-props gate, S2 reachability gate, step-row hygiene on raise (rows stuck `running`), harness api timeout 30→120. Then restart + rerun the 16 non-green.
+- **Generalisation read:** heldout 1/5 green (invoicing), rest lost to quota/timeouts more than quality — inconclusive, rerun will tell.
+- **Next:** apply fix batch → restart → rerun non-green → §6 close → Phase 8.
+
 ---
 
 ## 5. Known problems / error register
@@ -244,6 +251,9 @@
 23. 2026-10-12 · v2 router created the run row AND engine.run created a second one — client polled an empty shell (running, no steps) while the shadow run did the work · `run_id` passthrough (exactly one row per run) · **FIXED, proven (steps under polled id)**
 24. 2026-10-12 · `_gate_s4` referenced undefined `fields_of` (NameError swallowed into gate-error noise) — set_field automation errors only surfaced at S5 · gate now takes entity_fields; unit-pinned · **FIXED**
 25. 2026-10-13 · core20 dry-run failed S5 on orphan detail pages (R20) — S3 gate lacked reachability (only G1 had it) · R20-equivalent added to `_gate_s3` (nav or row_link) + unit test · **FIXED (unproven live — full run exercises it)**
+26. 2026-10-13 · core20 full run: role mismatch ALSO fires R12-direction (S3 pages use roles S4 never declares — education/automotive/school) · fix queued: S4 gate role-set EQUALITY both directions · **OPEN**
+27. 2026-10-13 · core20: raising steps leave `running` rows (restaurant s5, gym s4) — only the return-failure path flips rows · wrap step execution to mark failed on raise · **OPEN**
+28. 2026-10-13 · core20: 6 harness timeouts from 30s api() timeout during backend stalls (recovered alone) · bump to 120s for rerun · **OPEN**
 
 ---
 
