@@ -35,7 +35,7 @@ _TOKEN_RE = re.compile(r"""
     (?P<ws>\s+)
   | (?P<num>\d+(?:\.\d+)?)
   | (?P<str>'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")
-  | (?P<op>==|!=|<=|>=|[+\-*/%<>()\.,])
+  | (?P<op>==|!=|<=|>=|&&|\|\||[+\-*/%<>()\.,!])
   | (?P<ident>[A-Za-z_][A-Za-z0-9_]*)
   | (?P<bad>.)
 """, re.VERBOSE)
@@ -114,20 +114,22 @@ class _Parser:
 
     def parse_or(self):
         node = self.parse_and()
-        while self.peek() == ("ident", "or"):
+        while (self.peek()[0] == "ident" and self.peek()[1] == "or") or \
+                self.peek() == ("op", "||"):
             self.next()
             node = ("binop", "or", node, self.parse_and())
         return node
 
     def parse_and(self):
         node = self.parse_not()
-        while self.peek() == ("ident", "and"):
+        while (self.peek()[0] == "ident" and self.peek()[1] == "and") or \
+                self.peek() == ("op", "&&"):
             self.next()
             node = ("binop", "and", node, self.parse_not())
         return node
 
     def parse_not(self):
-        if self.peek() == ("ident", "not"):
+        if self.peek() == ("ident", "not") or self.peek() == ("op", "!"):
             self.next()
             return ("not", self.parse_not())
         return self.parse_cmp()

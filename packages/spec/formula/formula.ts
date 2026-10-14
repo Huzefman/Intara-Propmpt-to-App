@@ -23,7 +23,7 @@ const ESCAPES: Record<string, string> = { n: "\n", t: "\t", r: "\r", "\\": "\\",
 
 export function tokenize(src: string): Tok[] {
   const toks: Tok[] = [];
-  const re = /\s+|\d+(?:\.\d+)?|'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|==|!=|<=|>=|[+\-*/%<>()\.,]|[A-Za-z_][A-Za-z0-9_]*/y;
+  const re = /\s+|\d+(?:\.\d+)?|'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|==|!=|<=|>=|&&|\|\||[+\-*/%<>()\.,!]|[A-Za-z_][A-Za-z0-9_]*/y;
   let pos = 0;
   if (!src.trim()) throw new FormulaSyntaxError("empty formula");
   while (pos < src.length) {
@@ -51,7 +51,7 @@ export function tokenize(src: string): Tok[] {
       toks.push({ kind: "str", text: out });
     } else if (/^[A-Za-z_]/.test(text)) {
       toks.push({ kind: "ident", text });
-    } else if (/^[+\-*/%<>()\.,=]$/.test(text) || ["==", "!=", "<=", ">="].includes(text)) {
+    } else if (/^[+\-*/%<>()\.,!=]$/.test(text) || ["==", "!=", "<=", ">=", "&&", "||"].includes(text)) {
       toks.push({ kind: "op", text });
     } else {
       throw new FormulaSyntaxError(`unexpected character ${JSON.stringify(text)} at ${m.index}`);
@@ -91,16 +91,16 @@ class Parser {
   }
   parseOr(): AstNode {
     let node = this.parseAnd();
-    while (this.isIdent("or")) { this.next(); node = ["binop", "or", node, this.parseAnd()]; }
+    while (this.isIdent("or") || this.isOp("||")) { this.next(); node = ["binop", "or", node, this.parseAnd()]; }
     return node;
   }
   parseAnd(): AstNode {
     let node = this.parseNot();
-    while (this.isIdent("and")) { this.next(); node = ["binop", "and", node, this.parseNot()]; }
+    while (this.isIdent("and") || this.isOp("&&")) { this.next(); node = ["binop", "and", node, this.parseNot()]; }
     return node;
   }
   parseNot(): AstNode {
-    if (this.isIdent("not")) { this.next(); return ["not", this.parseNot()]; }
+    if (this.isIdent("not") || this.isOp("!")) { this.next(); return ["not", this.parseNot()]; }
     return this.parseCmp();
   }
   parseCmp(): AstNode {

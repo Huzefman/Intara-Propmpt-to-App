@@ -23,6 +23,7 @@ call    := ident "(" [expr ("," expr)*] ")"
 
 Precedence (low→high): `or`, `and`, `not`, comparison, `+ -`, `* / %`, unary `-`.
 `and`/`or` return booleans. `if` is lazy (untaken branch never evaluates).
+C-style aliases: `&&` = `and`, `||` = `or`, `!x` = `not x` (single `&`/`|` are errors).
 
 ## Values
 

@@ -46,6 +46,11 @@
   {"id": "logic-truthy-str", "formula": "'' or 'x'", "expect": true},
   {"id": "logic-falsy-null", "formula": "null and true", "expect": false},
   {"id": "logic-cmp-mix", "formula": "1 < 2 and 3 > 4 or true", "expect": true},
+  {"id": "logic-andand", "formula": "true && true", "expect": true},
+  {"id": "logic-oror", "formula": "false || true", "expect": true},
+  {"id": "logic-bang", "formula": "!false", "expect": true},
+  {"id": "logic-mixed-sym", "formula": "1 < 2 && 3 > 4 || true", "expect": true},
+  {"id": "logic-where-sym", "formula": "status != 'x' && qty > 0", "record": {"status": "ok", "qty": 3}, "expect": true},
 
   {"id": "if-basic", "formula": "if(true, 1, 2)", "expect": 1},
   {"id": "if-else", "formula": "if(false, 1, 2)", "expect": 2},
@@ -126,5 +131,7 @@
   {"id": "syn-kw-value", "formula": "and", "expect_error": "syntax"},
   {"id": "syn-trailing-comma", "formula": "sum(1,)", "expect_error": "syntax"},
   {"id": "syn-bare-dot", "formula": ".", "expect_error": "syntax"},
-  {"id": "syn-at", "formula": "@x", "expect_error": "syntax"}
+  {"id": "syn-at", "formula": "@x", "expect_error": "syntax"},
+  {"id": "syn-amp", "formula": "true & true", "expect_error": "syntax"},
+  {"id": "syn-pipe", "formula": "true | false", "expect_error": "syntax"}
 ]}

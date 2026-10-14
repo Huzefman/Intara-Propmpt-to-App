@@ -222,7 +222,9 @@
 ### Session 13 — 2026-10-14 — fix batch + rerun launch [ ]
 - **Fixes:** S4 role-equality (both directions) + S3 required-props (G1 catalog) + S2 reachability (BFS) + set_field/create_record checks (fields_of wired) + step-row hygiene on raise (`_run_simple/_run_s5/_run_iterate` bodies; unexpected throws fail gracefully, kill test updated) + harness api timeout 30→120 + `--resume` keeps green only + engine real-path test. Suite **189/189**.
 - **Rerun:** `core20.py --live --resume` (4 green kept, 16 rerun) launched 18:10 IST.
-- **Next:** analyze delta → §6 close → gold candidates → Phase 8.
+- **Fix batch v2 (from rerun failures):** formula `&&`/`||`/`!` aliases (both impls + 7 conformance cases + grammar) for S4 `when` clauses; G3 guarded-transition probe made guard-aware (was flagging valid specs). Node **176/176**, pytest **189/189**, both tscs clean. Backend restarted on final code.
+- **Standing limitation (recorded, not fixed):** cross-stage role coherence has no sound automatic repair — S2 invents transition roles, S3/S4 can't see them, and rewriting access at assembly would be fail-open. Fail-closed with specific errors stands; rerun measures it.
+- **Next:** rerun result → §6 close → gold candidates → Phase 8.
 
 ---
 
@@ -258,7 +260,7 @@
 26. 2026-10-13 · core20 full run: role mismatch ALSO fires R12-direction (S3 pages use roles S4 never declares — education/automotive/school) · fix queued: S4 gate role-set EQUALITY both directions · **OPEN**
 27. 2026-10-13 · core20: raising steps leave `running` rows (restaurant s5, gym s4) — only the return-failure path flips rows · wrap step execution to mark failed on raise · **OPEN**
 28. 2026-10-13 · core20: 6 harness timeouts from 30s api() timeout during backend stalls (recovered alone) · bump to 120s for rerun · **OPEN**
-
+29. 2026-10-14 · Formula `&&`/`||` parsed in Python but TS tokenizer rejected them (op allowlist missed the new tokens — 5 conformance failures) · allowlist extended; parity rule: tokenizer changes always need both impls + cases · **FIXED (127/127)**
 ---
 
 ## 6. Metrics dashboard

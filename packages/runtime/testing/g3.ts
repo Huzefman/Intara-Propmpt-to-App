@@ -123,12 +123,28 @@ export async function runG3(spec: AppSpec, name: string): Promise<G3Result> {
     if (!lc) continue;
     for (const t of lc.transitions ?? []) {
       const from = { [lc.field]: t.from } as Record<string, unknown>;
-      checks++;
-      try {
-        const moved = applyTransition(spec, e.id, from, t.id, {});
-        if (moved[lc.field] !== t.to) fail(`lifecycle:${e.id}.${t.id}`, "wrong target state");
-      } catch (err) {
-        fail(`lifecycle:${e.id}.${t.id}`, `valid transition threw: ${(err as Error).message}`);
+      if (!t.guard) {
+        // Guarded transitions need full records to evaluate; the probe only
+        // asserts their negative paths (guarded-positive is engine-tested).
+        checks++;
+        try {
+          const moved = applyTransition(spec, e.id, from, t.id, {});
+          if (moved[lc.field] !== t.to) fail(`lifecycle:${e.id}.${t.id}`, "wrong target state");
+        } catch (err) {
+          fail(`lifecycle:${e.id}.${t.id}`, `valid transition threw: ${(err as Error).message}`);
+        }
+      } else {
+        // Guarded transitions need full records; the probe asserts the guard
+        // is actually consulted (pass-through or guard-block, never a crash
+        // or a wrong-state/role verdict on a bare probe record).
+        checks++;
+        try {
+          applyTransition(spec, e.id, from, t.id, {});
+        } catch (err) {
+          const msg = (err as Error).message;
+          if (!/guard|fields|unknown/i.test(msg))
+            fail(`lifecycle:${e.id}.${t.id}`, `guarded transition misbehaved: ${msg}`);
+        }
       }
       checks++;
       try {
