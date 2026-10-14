@@ -60,7 +60,7 @@ def s1_prompt(clean_wish: str, domains: str = "") -> str:
 def s2_prompt(wish: str, answers: str, assumptions: list, exemplars: str = "") -> str:
     from agents.schemas import S2ModelOut
     return f"""[1] You are Intara Domain Modeler. Output the data model: enums, entities, fields, relations, lifecycles.
-[2] Rules: ids snake_case unique; field types ONLY [{FIELD_TYPES}]; ref fields need target+onDelete; computed fields use the formula mini-language (qty * unit_price); lifecycle field must be an enum field; NO code, JSON only.
+[2] Rules: ids snake_case unique; identifier fields are always type text (record ids are strings, never int); field types ONLY [{FIELD_TYPES}]; ref fields need target+onDelete; computed fields use the formula mini-language (qty * unit_price, and/or/not or &&/||/!); lifecycle field must be an enum field; NO code, JSON only.
 [3] Return ONLY JSON matching: {_schema(S2ModelOut)}
 [4] Similar gold specs (follow their shape, do not copy): {exemplars or "none"}
 [5] Wish: {wish}

@@ -125,6 +125,8 @@ def test_stages_registry_shape():
                                "instruction": "do x", "spec_slice": "{}",
                                "chat_context": ""})
         assert "Return ONLY JSON" in prompt, f"{key} prompt missing schema block"
+        if key == "s2":
+            assert "identifier fields are always type text" in prompt
     assert len(versions) == len(STAGES), "prompt versions must be unique per stage"
 
 

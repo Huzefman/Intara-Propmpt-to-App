@@ -213,7 +213,8 @@
 - **Problems:** see §5 #25.
 - **Next:** user launches full core20 (steps below) → pings me → analyze + §6 + gold candidates → Phase 8.
 
-### Session 12 — 2026-10-13 — core20 full run: measured 4/20, taxonomy complete [x]- **Result** (`evals/reports/core20-20261013-230036.json`, ~3h wall): **4/20 green** (productivity, retail, social done G0–G3; invoicing-HELDOUT degraded-but-green, coverage 1.0) · 10 failed · 6 harness HTTP timeouts (backend stalls, recovered) · median 11 calls (✅ ≤14) · median wall 537s (❌ >3min — quota-throttled) · diversity 4 combos (target ≥5), overlap 0.0 ✅.
+### Session 12 — 2026-10-13 — core20 full run: measured 4/20, taxonomy complete [x]
+- **Result** (`evals/reports/core20-20261013-230036.json`, ~3h wall): **4/20 green** (productivity, retail, social done G0–G3; invoicing-HELDOUT degraded-but-green, coverage 1.0) · 10 failed · 6 harness HTTP timeouts (backend stalls, recovered) · median 11 calls (✅ ≤14) · median wall 537s (❌ >3min — quota-throttled) · diversity 4 combos (target ≥5), overlap 0.0 ✅.
 - **Failure taxonomy (all fail-closed, all specific):** quota deaths ×3 (repair/freelance/restaurant 503s, gym timeout); R12-direction roles ×3 (education hr? no — education/automotive/school: pages use roles access lacks); lifecycle reachability ×1 (appointment); kanban group_by ×1 (gardening); role cascade ×1 (hr); empty-response parse degradations (education/school s4 — provider returned "").
 - **Queued fixes:** S4 gate role-set EQUALITY (both directions), S3 required-props gate, S2 reachability gate, step-row hygiene on raise (rows stuck `running`), harness api timeout 30→120. Then restart + rerun the 16 non-green.
 - **Generalisation read:** heldout 1/5 green (invoicing), rest lost to quota/timeouts more than quality — inconclusive, rerun will tell.
@@ -224,7 +225,9 @@
 - **Rerun:** `core20.py --live --resume` (4 green kept, 16 rerun) launched 18:10 IST.
 - **Fix batch v2 (from rerun failures):** formula `&&`/`||`/`!` aliases (both impls + 7 conformance cases + grammar) for S4 `when` clauses; G3 guarded-transition probe made guard-aware (was flagging valid specs). Node **176/176**, pytest **189/189**, both tscs clean. Backend restarted on final code.
 - **Standing limitation (recorded, not fixed):** cross-stage role coherence has no sound automatic repair — S2 invents transition roles, S3/S4 can't see them, and rewriting access at assembly would be fail-open. Fail-closed with specific errors stands; rerun measures it.
-- **Next:** rerun result → §6 close → gold candidates → Phase 8.
+- **Rerun 1 result: 4/20 → 13/20 G0/G1** (`core20-20261014-212416.json`).
+- **Rerun 2:** `--resume` (13 green kept — incl. food on g0/g1; 7 rerun: appointment, freelance, education, gardening, automotive, restaurant, school) launched 21:52 IST. (Food flips fully green on re-grade with fixed G3; library stays red on its int-id spec bug pending the S2 text-id rule proving live.)
+- **Next:** rerun-2 result → §6 close → gold candidates → Phase 8.
 
 ---
 
@@ -261,6 +264,8 @@
 27. 2026-10-13 · core20: raising steps leave `running` rows (restaurant s5, gym s4) — only the return-failure path flips rows · wrap step execution to mark failed on raise · **OPEN**
 28. 2026-10-13 · core20: 6 harness timeouts from 30s api() timeout during backend stalls (recovered alone) · bump to 120s for rerun · **OPEN**
 29. 2026-10-14 · Formula `&&`/`||` parsed in Python but TS tokenizer rejected them (op allowlist missed the new tokens — 5 conformance failures) · allowlist extended; parity rule: tokenizer changes always need both impls + cases · **FIXED (127/127)**
+30. 2026-10-14 · G3 flagged valid guarded transitions (probe record lacks guard fields) — harness bug, not spec bug · guarded transitions now assert guard-consulted-only · **FIXED**
+30. 2026-10-14 · G3 flagged valid guarded transitions (probe record lacks guard fields) — harness bug, not spec bug · guarded transitions now assert guard-consulted-only · **FIXED**
 ---
 
 ## 6. Metrics dashboard
