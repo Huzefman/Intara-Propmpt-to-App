@@ -46,7 +46,7 @@ WISHES = [
 ]
 
 
-def api(method, path, payload=None, base="http://localhost:8000", timeout=30):
+def api(method, path, payload=None, base="http://localhost:8000", timeout=120):
     data = json.dumps(payload).encode() if payload is not None else None
     req = urllib.request.Request(base + path, data=data, method=method,
                                  headers={"Content-Type": "application/json"})
@@ -165,12 +165,14 @@ def main() -> int:
     if args.resume and os.path.exists(status_path):
         try:
             prior = json.load(open(status_path))
+            # resume skips GREEN only; failed/error/running rerun (fresh measurement)
             results = [r for r in prior.get("results", [])
-                       if r.get("status") in ("done", "degraded", "failed",
-                                              "cancelled", "error")]
+                       if r.get("status") in ("done", "degraded")
+                       and (r.get("gates") or {}).get("g0")
+                       and (r.get("gates") or {}).get("g1")]
             done_prompts = {r["prompt"] for r in results}
             targets = [t for t in targets if t[0] not in done_prompts]
-            print(f"resuming: {len(results)} already terminal, {len(targets)} to go")
+            print(f"resuming: {len(results)} green kept, {len(targets)} to (re)run")
         except Exception as e:
             print(f"resume unreadable ({e}), starting fresh")
             results = []

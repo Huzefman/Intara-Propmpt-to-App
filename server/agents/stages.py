@@ -57,6 +57,7 @@ def _gate_s2(out: S2ModelOut) -> list[str]:
         lc = e.lifecycle
         if lc and (not lc.transitions or lc.initial in (None, "")):
             errs.append(f"lifecycle on {e.id} needs initial + transitions")
+            continue
         if lc and lc.transitions:
             # from/to must be values of the lifecycle field's enum (G1 R16 early)
             fld = next((x for x in e.fields if x.id == lc.field), None)
@@ -73,6 +74,22 @@ def _gate_s2(out: S2ModelOut) -> list[str]:
                         errs.append(f"transition from-state {t.from_!r} unknown")
                     if t.to not in enum_vals:
                         errs.append(f"transition to-state {t.to!r} unknown")
+                # reachability from initial (G1 R18 early)
+                states = set(lc.states) if lc.states else set(enum_vals)
+                adj: dict = {}
+                for t in lc.transitions:
+                    adj.setdefault(t.from_, set()).add(t.to)
+                seen = {lc.initial}
+                stack = [lc.initial]
+                while stack:
+                    cur = stack.pop()
+                    for nxt in adj.get(cur, ()):
+                        if nxt not in seen:
+                            seen.add(nxt)
+                            stack.append(nxt)
+                for s in states:
+                    if s not in seen:
+                        errs.append(f"lifecycle state {s!r} unreachable from initial")
     return errs
 
 
@@ -89,8 +106,18 @@ def _gate_s3(out: S3UiOut, entity_ids: set, requirements: str = "") -> list[str]
             errs.append(f"nav page {item.page!r} missing")
     covered: set = set()
     linked: set = set()
+    try:
+        from gates.g1_lint import BLOCKS as _BLOCKS
+    except Exception:
+        _BLOCKS = {}
     for p in out.ui.pages:
         for b in p.blocks or []:
+            btype = b.type or ""
+            info = _BLOCKS.get(btype)
+            if info is not None:
+                for req in info.get("required_props", []):
+                    if req not in (b.props or {}):
+                        errs.append(f"block {btype!r} missing required prop {req!r}")
             ent = (b.props or {}).get("entity")
             if isinstance(ent, str):
                 if ent not in entity_ids:
@@ -118,10 +145,14 @@ def _gate_s4(out: S4LogicOut, entity_ids: set, page_roles: set | None = None,
     for e in out.access.roles:
         if not ID_RE.match(e.id or ""):
             errs.append(f"bad role id {e.id!r}")
-    # cross-stage contract: access.roles ⊆ UI page roles (S3 declares, S4 reuses)
+    # cross-stage contract: role SET EQUALITY with the UI (both directions).
+    # S3 declares (owner anchor + approval roles), S4 reuses exactly.
     for r in role_ids:
         if r not in (page_roles or set()):
             errs.append(f"role {r!r} has no page (S3 must declare it first)")
+    for pr in page_roles or ():
+        if pr not in role_ids:
+            errs.append(f"page role {pr!r} missing from access.roles")
     for a in out.automations:
         trig = a.trigger
         if trig.type in ("record.created", "record.updated", "lifecycle.transition"):

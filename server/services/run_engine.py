@@ -334,6 +334,24 @@ class RunEngine:
         self.store.upsert_step(run_id, key, meta["agent"], "running",
                                input_hash=ihash)
         self.emit(run_id, "step_started", {"step": key, "agent": meta["agent"]})
+        try:
+            return await self._run_simple_body(run_id, key, ctx, st, meta,
+                                               payload, ihash)
+        except Exception as e:
+            # hygiene: unexpected throws flip the row (never an orphaned running)
+            try:
+                self.store.upsert_step(run_id, key, meta["agent"], "failed",
+                                       input_hash=ihash,
+                                       fallback_reason=f"threw: {e}"[:500])
+            except Exception:
+                pass
+            self.emit(run_id, "step_failed", {"step": key, "error": str(e)[:300]})
+            return {"failed": True, "reason": f"step {key} threw: {e}"}
+
+    async def _run_simple_body(self, run_id: str, key: str, ctx: dict,
+                               st: dict, meta: dict, payload: dict,
+                               ihash: str) -> dict:
+        from agents.base import run_agent
         tele = {"wish_id": ctx.get("wish_id"), "step_key": key,
                 "agent": meta["agent"], "prompt_version": meta["prompt_version"]}
         if key in self.agents_override:
@@ -407,6 +425,26 @@ class RunEngine:
                     return {"skipped": True, "output": stored, "output_hash": s["output_hash"]}
         self.store.upsert_step(run_id, "s5", agent, "running")
         self.emit(run_id, "step_started", {"step": "s5", "agent": agent})
+        try:
+            return await self._run_s5_body(run_id, ctx, agent)
+        except Exception as e:
+            try:
+                self.store.upsert_step(run_id, "s5", agent, "failed",
+                                       fallback_reason=f"threw: {e}"[:500])
+            except Exception:
+                pass
+            self.emit(run_id, "step_failed", {"step": "s5", "error": str(e)[:300]})
+            return {"failed": True, "reason": f"step s5 threw: {e}"}
+
+    async def _run_s5_body(self, run_id: str, ctx: dict, agent: str) -> dict:
+        """Assemble → G0/G1 → Critic → G2 → repair(≤2) → finalize."""
+        from agents.stages import assemble_spec, summarize_spec
+        from agents.base import run_agent
+        from agents.schemas import S5CriticOut
+        from agents import prompts as P
+        from gates.g0_validate import validate as g0
+        from gates.g1_lint import lint as g1
+        from gates.g2_coverage import check as g2
         spec = assemble_spec(ctx.get("spec") or {})
         problems = g0(spec) + [e["message"] for e in g1(spec)["errors"]]
         if problems:
@@ -609,6 +647,17 @@ class RunEngine:
 
     async def _run_iterate(self, run_id: str, project_id: str, ctx: dict, inputs: dict) -> dict:
         """Chat edit: base version spec + instruction → validated patch → child version."""
+        try:
+            return await self._run_iterate_body(run_id, project_id, ctx, inputs)
+        except Exception as e:
+            try:
+                self.store.set_status(run_id, "failed", f"iterate threw: {e}"[:500])
+            except Exception:
+                pass
+            self.emit(run_id, "run_failed", {"error": f"iterate threw: {e}"[:300]})
+            return {"run_id": run_id, "status": "failed", "error": f"iterate threw: {e}"}
+
+    async def _run_iterate_body(self, run_id: str, project_id: str, ctx: dict, inputs: dict) -> dict:
         from agents.base import run_agent
         from agents.schemas import IterationOut
         from agents import prompts as P

@@ -213,12 +213,16 @@
 - **Problems:** see §5 #25.
 - **Next:** user launches full core20 (steps below) → pings me → analyze + §6 + gold candidates → Phase 8.
 
-### Session 12 — 2026-10-13 — core20 full run: measured 4/20, taxonomy complete [x]
-- **Result** (`evals/reports/core20-20261013-230036.json`, ~3h wall): **4/20 green** (productivity, retail, social done G0–G3; invoicing-HELDOUT degraded-but-green, coverage 1.0) · 10 failed · 6 harness HTTP timeouts (backend stalls, recovered) · median 11 calls (✅ ≤14) · median wall 537s (❌ >3min — quota-throttled) · diversity 4 combos (target ≥5), overlap 0.0 ✅.
+### Session 12 — 2026-10-13 — core20 full run: measured 4/20, taxonomy complete [x]- **Result** (`evals/reports/core20-20261013-230036.json`, ~3h wall): **4/20 green** (productivity, retail, social done G0–G3; invoicing-HELDOUT degraded-but-green, coverage 1.0) · 10 failed · 6 harness HTTP timeouts (backend stalls, recovered) · median 11 calls (✅ ≤14) · median wall 537s (❌ >3min — quota-throttled) · diversity 4 combos (target ≥5), overlap 0.0 ✅.
 - **Failure taxonomy (all fail-closed, all specific):** quota deaths ×3 (repair/freelance/restaurant 503s, gym timeout); R12-direction roles ×3 (education hr? no — education/automotive/school: pages use roles access lacks); lifecycle reachability ×1 (appointment); kanban group_by ×1 (gardening); role cascade ×1 (hr); empty-response parse degradations (education/school s4 — provider returned "").
 - **Queued fixes:** S4 gate role-set EQUALITY (both directions), S3 required-props gate, S2 reachability gate, step-row hygiene on raise (rows stuck `running`), harness api timeout 30→120. Then restart + rerun the 16 non-green.
 - **Generalisation read:** heldout 1/5 green (invoicing), rest lost to quota/timeouts more than quality — inconclusive, rerun will tell.
 - **Next:** apply fix batch → restart → rerun non-green → §6 close → Phase 8.
+
+### Session 13 — 2026-10-14 — fix batch + rerun launch [ ]
+- **Fixes:** S4 role-equality (both directions) + S3 required-props (G1 catalog) + S2 reachability (BFS) + set_field/create_record checks (fields_of wired) + step-row hygiene on raise (`_run_simple/_run_s5/_run_iterate` bodies; unexpected throws fail gracefully, kill test updated) + harness api timeout 30→120 + `--resume` keeps green only + engine real-path test. Suite **189/189**.
+- **Rerun:** `core20.py --live --resume` (4 green kept, 16 rerun) launched 18:10 IST.
+- **Next:** analyze delta → §6 close → gold candidates → Phase 8.
 
 ---
 

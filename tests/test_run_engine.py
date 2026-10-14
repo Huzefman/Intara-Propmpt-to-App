@@ -144,13 +144,16 @@ def test_kill_resume_zero_repeated_calls(monkeypatch):
     store = MemoryRunStore()
     calls: list = []
     eng = RunEngine(store, agents_override=_overrides(calls, fail_at="s6"))
-    with pytest.raises(RuntimeError, match="kill"):
-        asyncio.run(eng.run(project_id="p1", kind="build", inputs=_inputs()))
+    # unexpected throws fail the step/run gracefully (never an orphaned running row)
+    rep0 = asyncio.run(eng.run(project_id="p1", kind="build", inputs=_inputs()))
+    assert rep0["status"] == "failed" and "kill" in rep0["error"]
     run_id = next(iter(store.runs))
-    # residue as after kill -9: s5 persisted done; sweeper flips run to failed
+    # residue: s5 persisted done; run failed (sweeper-equivalent state)
     statuses = {s["step_key"]: s["status"] for s in store.get_steps(run_id)}
-    assert statuses.get("s5") == "done" and len(calls) == 6
-    store.set_status(run_id, "failed", "simulated kill -9")
+    assert statuses.get("s5") == "done" and statuses.get("s6") == "failed"
+    assert len(calls) == 6
+    assert not any(s["status"] == "running" for s in store.get_steps(run_id)), \
+        "no orphaned running rows after a throw"
     # fresh process, resume the SAME run: only missing s6 reruns
     calls2: list = []
     eng2 = RunEngine(store, agents_override=_overrides(calls2))
@@ -159,6 +162,29 @@ def test_kill_resume_zero_repeated_calls(monkeypatch):
     assert calls2 == [1], "only the missing s6 may burn a call"
     assert rep["spec"]["model"]["entities"][0]["id"] == "widget"
     assert not any(s["status"] in ("running",) for s in rep["steps"])
+
+
+def test_engine_real_agent_path_uses_caller(monkeypatch):
+    """No agents_override: engine drives run_agent with injected caller."""
+    import json as _json
+    _patch_artifacts(monkeypatch)
+    from services.run_engine import RunEngine, MemoryRunStore
+    store = MemoryRunStore()
+    rid = store.create_run("p1", "build", {"wish": "track widgets"})
+    out = {"clean_wish": "track widgets", "track": "business", "scope": "mvp",
+           "risk_flags": [], "language": "en"}
+
+    def _caller(prompt, temperature=0.2, **kw):
+        info = kw.get("info")
+        if info is not None:
+            info.update({"provider": "mock", "model": "m", "finish_reason": "stop"})
+        return _json.dumps(out), {"source": "mock", "model": "m"}
+
+    eng = RunEngine(store, caller=_caller)
+    res = asyncio.run(eng._run_simple(rid, "s0", {"wish": "track widgets"}))
+    assert res["output"]["clean_wish"] == "track widgets"
+    assert res["output"]["track"] == "business"
+    assert store.get_steps(rid)[0]["status"] == "done"
 
 
 def test_resume_rejects_running(monkeypatch):
