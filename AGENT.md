@@ -227,6 +227,7 @@
 - **Standing limitation (recorded, not fixed):** cross-stage role coherence has no sound automatic repair — S2 invents transition roles, S3/S4 can't see them, and rewriting access at assembly would be fail-open. Fail-closed with specific errors stands; rerun measures it.
 - **Rerun 1 result: 4/20 → 13/20 G0/G1** (`core20-20261014-212416.json`).
 - **Rerun 2:** `--resume` (13 green kept — incl. food on g0/g1; 7 rerun: appointment, freelance, education, gardening, automotive, restaurant, school) launched 21:52 IST. (Food flips fully green on re-grade with fixed G3; library stays red on its int-id spec bug pending the S2 text-id rule proving live.)
+- **Rerun 2 PAUSED by user at wish 1/7** (appointment run may still complete in backend — harmless, rerun redoes it). Backend left running healthy. Resume tomorrow with the same launch command.
 - **Next:** rerun-2 result → §6 close → gold candidates → Phase 8.
 
 ---
