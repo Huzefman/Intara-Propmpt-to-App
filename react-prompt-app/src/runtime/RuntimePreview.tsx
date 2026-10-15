@@ -86,14 +86,17 @@ export function RuntimePreview({ spec }: { spec: AppSpec }) {
         const props = { ...(b.props as Record<string, unknown>) };
         const entity = props['entity'] as string | undefined;
         let record: Record<string, unknown> | null | undefined;
+        let pipe: { transitions: Array<{ id: string; label: string; allowed: boolean }>; current: string } | null = null;
         if (b.type === 'record.detail' || b.type === 'lifecycle.pipeline') {
           record = selected ?? (entity ? (rows[entity] ?? [])[0] ?? null : null);
           if (b.type === 'lifecycle.pipeline' && entity && record) {
             const ent = spec.model.entities.find((e) => e.id === entity)!;
             const field = ent.lifecycle?.field ?? 'status';
-            props['transitions'] = allowedTransitions(spec, entity, record, { role: session.current })
-              .map((t) => ({ id: t.id, label: t.label, allowed: true }));
-            props['current'] = String(record[field] ?? '');
+            pipe = {
+              transitions: allowedTransitions(spec, entity, record, { role: session.current })
+                .map((t) => ({ id: t.id, label: t.label, allowed: true })),
+              current: String(record[field] ?? ''),
+            };
           }
         }
         if (b.type === 'form.record' && entity) record = selected ?? undefined;
@@ -102,6 +105,7 @@ export function RuntimePreview({ spec }: { spec: AppSpec }) {
             block={{ id: b.id, type: b.type, props }}
             rows={entity ? rows[entity] : undefined}
             record={record}
+            {...(pipe ?? {})}
             onAction={(a, p) => { onAction(b.type, props, a, p).catch((e) => console.error(e)); }}
           />
         );

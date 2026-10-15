@@ -55,7 +55,7 @@ def _run_s2(caller, **kw):
     st = STAGES["s2"]
     payload = {"wish": "widgets", "answers": "", "assumptions": [],
                "exemplars": "", "entity_ids": []}
-    return run_agent(stage=st["agent"], prompt_version="s2-v1",
+    return run_agent(stage=st["agent"], prompt_version="s2-v2",
                      prompt=st["prompt"](payload), output_model=st["model"],
                      fallback_fn=lambda: st["fallback"](payload),
                      gate_fn=lambda o: st["gate"](o, payload),

@@ -49,19 +49,17 @@ export function RelatedList({ block, rows, state, error, onAction }: BlockHostPr
 
 export interface PipeTransition { id: string; label: string; allowed: boolean }
 
-export function LifecyclePipeline({ block, record, state, error, onAction }: BlockHostProps<{
+export function LifecyclePipeline({ block, record, state, error, onAction, transitions, current }: BlockHostProps<{
   entity: string;
 }> & { transitions?: PipeTransition[]; current?: string }) {
-  // transitions/current ride on block.props when the host pre-resolves them
-  const extra = block.props as { transitions?: PipeTransition[]; current?: string };
   const st = resolveState(undefined, record ?? null, state, error);
   return (
     <BlockShell state={st} error={error}>
       {st === "ready" ? (
         <div className="blk-pipe">
-          {(extra.transitions ?? []).map((t) => (
+          {(transitions ?? []).map((t) => (
             <button key={t.id} disabled={!t.allowed}
-              className={t.id === extra.current ? "current" : ""}
+              className={t.id === current ? "current" : ""}
               onClick={() => onAction?.("transition", t.id)}>
               {t.label}
             </button>

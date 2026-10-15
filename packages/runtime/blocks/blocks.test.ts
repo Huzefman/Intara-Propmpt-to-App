@@ -18,22 +18,22 @@ const fixtures = JSON.parse(readFileSync(join(dir, "fixtures.json"), "utf8")).fi
   props: Record<string, unknown>; rows?: Array<Record<string, unknown>>; record?: Record<string, unknown> | null;
 }>;
 
-// Mirror of server/gates/g1_lint.py BLOCKS (stability + required props).
-const LINT_BLOCKS: Record<string, { stability: string; required_props: string[] }> = {
-  "data.table": { stability: "stable", required_props: ["entity"] },
-  "data.kanban": { stability: "stable", required_props: ["entity", "group_by"] },
-  "metric.stat": { stability: "stable", required_props: ["entity"] },
-  "filter.bar": { stability: "stable", required_props: ["entity"] },
-  "record.detail": { stability: "stable", required_props: ["entity"] },
-  "record.related_list": { stability: "stable", required_props: ["entity"] },
-  "lifecycle.pipeline": { stability: "stable", required_props: ["entity"] },
-  "metric.gauge": { stability: "experimental", required_props: ["entity"] },
-  "form.record": { stability: "stable", required_props: ["entity"] },
-  "chart.bar": { stability: "stable", required_props: ["entity"] },
-  "calendar.month": { stability: "stable", required_props: ["entity"] },
-  "activity.timeline": { stability: "stable", required_props: ["entity"] },
-  "file.list": { stability: "stable", required_props: ["entity"] },
-  "content.hero": { stability: "stable", required_props: [] },
+// Mirror of server/gates/g1_lint.py BLOCKS (required + optional props).
+const LINT_BLOCKS: Record<string, { stability: string; required: string[]; optional: string[] }> = {
+  "data.table": { stability: "stable", required: ["entity"], optional: ["columns", "row_link", "create"] },
+  "data.kanban": { stability: "stable", required: ["entity", "group_by"], optional: ["card", "drag_transitions"] },
+  "metric.stat": { stability: "stable", required: ["entity", "items"], optional: [] },
+  "filter.bar": { stability: "stable", required: ["entity"], optional: ["fields", "search"] },
+  "record.detail": { stability: "stable", required: ["entity"], optional: ["sections"] },
+  "record.related_list": { stability: "stable", required: ["entity", "via"], optional: ["columns", "row_link", "create"] },
+  "lifecycle.pipeline": { stability: "stable", required: ["entity"], optional: [] },
+  "metric.gauge": { stability: "experimental", required: ["entity"], optional: ["field", "max", "label"] },
+  "form.record": { stability: "stable", required: ["entity"], optional: ["fields"] },
+  "chart.bar": { stability: "stable", required: ["entity", "x"], optional: ["title", "y"] },
+  "calendar.month": { stability: "stable", required: ["entity", "date_field"], optional: ["title", "row_link"] },
+  "activity.timeline": { stability: "stable", required: ["entity", "date_field"], optional: ["title"] },
+  "file.list": { stability: "stable", required: ["entity"], optional: ["field"] },
+  "content.hero": { stability: "stable", required: [], optional: ["title", "subtitle", "cta"] },
 };
 
 test("registry covers all catalog types", () => {
@@ -51,12 +51,15 @@ test("every type has a component mapping (static check, tsx is browser-only)", (
   }
 });
 
-test("every block has a fixture satisfying required props", () => {
+test("every block has a fixture satisfying required props and known keys", () => {
   for (const [t, info] of Object.entries(LINT_BLOCKS)) {
     const fx = fixtures[t];
     assert.ok(fx, `fixture missing for ${t}`);
-    for (const req of info.required_props)
+    for (const req of info.required)
       assert.ok(req in fx.props, `${t} fixture missing prop ${req}`);
+    for (const key of Object.keys(fx.props))
+      assert.ok(info.required.includes(key) || info.optional.includes(key),
+        `${t} fixture uses unknown prop ${key}`);
   }
 });
 

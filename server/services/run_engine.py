@@ -446,7 +446,10 @@ class RunEngine:
         from gates.g1_lint import lint as g1
         from gates.g2_coverage import check as g2
         spec = assemble_spec(ctx.get("spec") or {})
-        problems = g0(spec) + [e["message"] for e in g1(spec)["errors"]]
+        # R44 (trace refs) is exempt pre-critic: the Critic fills trace next,
+        # and G2 gates coverage after. Everything else must hold at assembly.
+        problems = g0(spec) + [e["message"] for e in g1(spec)["errors"]
+                               if e["rule"] != "R44"]
         if problems:
             self.store.upsert_step(run_id, "s5", agent, "failed",
                                    fallback_reason="; ".join(problems)[:500])

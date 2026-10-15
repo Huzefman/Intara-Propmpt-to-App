@@ -17,6 +17,9 @@ import re
 TYPE_MAP = {"text": "text", "integer": "int", "timestamp": "datetime",
             "boolean": "bool"}
 
+# Storage-managed fields never belong in a spec (G1 R40).
+SKIP_FIELDS = {"id", "created_at", "updated_at"}
+
 
 def snake(name: str) -> str:
     s = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", str(name or ""))
@@ -35,7 +38,10 @@ def adapt_prd(prd: dict, prompt: str = "") -> dict:
         eid = snake(t.get("name"))
         fields = []
         for f in t.get("fields") or []:
-            fields.append({"id": snake(f.get("name")),
+            fid = snake(f.get("name"))
+            if fid in SKIP_FIELDS:
+                continue
+            fields.append({"id": fid,
                            "type": TYPE_MAP.get((f.get("type") or "").lower(), "text")})
         if not fields:
             fields.append({"id": "name", "type": "text"})
@@ -51,8 +57,15 @@ def adapt_prd(prd: dict, prompt: str = "") -> dict:
         ent = entities[i % len(entities)]["id"] if entities else None
         blocks = []
         if ent:
-            blocks.append({"id": f"b_{pid}", "type": "data.table",
-                           "props": {"entity": ent, "create": True}})
+            if ":id" in (pg.get("route") or ""):
+                # detail pages show one record (G1 R39/R46)
+                blocks.append({"id": f"b_{pid}", "type": "record.detail",
+                               "props": {"entity": ent,
+                                         "sections": [{"title": "Details",
+                                                       "fields": ["name"]}]}})
+            else:
+                blocks.append({"id": f"b_{pid}", "type": "data.table",
+                               "props": {"entity": ent, "create": True}})
             used.add(ent)
         spec_pages.append({"id": pid, "route": pg.get("route") or f"/{pid}",
                            "title": pg.get("name") or pid, "roles": ["owner"],
@@ -66,6 +79,35 @@ def adapt_prd(prd: dict, prompt: str = "") -> dict:
             spec_pages[0]["blocks"].append(
                 {"id": f"b_extra_{j}", "type": "data.table",
                  "props": {"entity": eid, "create": True}})
+
+    # detail pages need inbound row_links (R20); table blocks link to the
+    # detail page showing the same entity (R42). nav excludes :id pages (R39).
+    detail_of: dict = {}
+    for p in spec_pages:
+        if ":id" in (p.get("route") or ""):
+            for b in p.get("blocks") or []:
+                ent = (b.get("props") or {}).get("entity")
+                if ent:
+                    detail_of[ent] = p["id"]
+    for p in spec_pages:
+        if ":id" in (p.get("route") or ""):
+            continue
+        for b in p.get("blocks") or []:
+            if b.get("type") == "data.table":
+                ent = (b.get("props") or {}).get("entity")
+                if ent in detail_of:
+                    b["props"]["row_link"] = detail_of[ent]
+    linked_targets = set()
+    for p in spec_pages:
+        for b in p.get("blocks") or []:
+            rl = (b.get("props") or {}).get("row_link")
+            if isinstance(rl, str):
+                linked_targets.add(rl)
+    for eid, dpid in detail_of.items():
+        if dpid not in linked_targets and spec_pages:
+            spec_pages[0]["blocks"].append(
+                {"id": f"b_link_{eid}", "type": "data.table",
+                 "props": {"entity": eid, "create": True, "row_link": dpid}})
 
     # unique page ids (dup names → suffix)
     seen: dict = {}
@@ -97,7 +139,8 @@ def adapt_prd(prd: dict, prompt: str = "") -> dict:
                    "rules": [{"entity": "*", "role": "owner",
                               "ops": ["read", "create", "update", "delete"]}]},
         "ui": {"theme": {"archetype": "table-first"},
-               "nav": [{"page": p["id"], "label": p["title"]} for p in spec_pages],
+               "nav": [{"page": p["id"], "label": p["title"]} for p in spec_pages
+                       if ":id" not in (p.get("route") or "")],
                "pages": spec_pages},
         "automations": [],
         "seed": {},

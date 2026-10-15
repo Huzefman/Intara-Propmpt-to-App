@@ -1,0 +1,1521 @@
+{
+  "ui": {
+    "nav": [
+      {
+        "icon": "home",
+        "page": "dashboard",
+        "label": "Dashboard",
+        "roles": [
+          "admin",
+          "vet",
+          "pet_owner"
+        ]
+      },
+      {
+        "icon": "calendar",
+        "page": "schedule",
+        "label": "Schedule",
+        "roles": [
+          "admin",
+          "vet",
+          "pet_owner"
+        ]
+      },
+      {
+        "icon": "stethoscope",
+        "page": "visits",
+        "label": "Visits",
+        "roles": [
+          "admin",
+          "vet",
+          "pet_owner"
+        ]
+      },
+      {
+        "icon": "paw",
+        "page": "patients",
+        "label": "Patients",
+        "roles": [
+          "admin",
+          "vet",
+          "pet_owner"
+        ]
+      },
+      {
+        "icon": "users",
+        "page": "owners",
+        "label": "Owners",
+        "roles": [
+          "admin",
+          "vet"
+        ]
+      }
+    ],
+    "pages": [
+      {
+        "id": "dashboard",
+        "roles": [
+          "admin",
+          "vet",
+          "pet_owner"
+        ],
+        "route": "/",
+        "title": "Dashboard",
+        "blocks": [
+          {
+            "id": "visit_stats",
+            "type": "metric.stat",
+            "props": {
+              "entity": "visit",
+              "items": [
+                {
+                  "label": "Visits today",
+                  "agg": "count",
+                  "where": "visit_date >= today() and visit_date < tomorrow()"
+                },
+                {
+                  "label": "In progress",
+                  "agg": "count",
+                  "where": "status == 'in_progress'"
+                },
+                {
+                  "label": "Revenue this month",
+                  "agg": "sum",
+                  "field": "total",
+                  "where": "status == 'completed' and visit_date >= startOfMonth()"
+                }
+              ]
+            }
+          },
+          {
+            "id": "patient_stats",
+            "type": "metric.stat",
+            "props": {
+              "entity": "patient",
+              "items": [
+                {
+                  "label": "Patients",
+                  "agg": "count"
+                },
+                {
+                  "label": "Vaccinations due",
+                  "agg": "count",
+                  "where": "next_vaccination_due <= today()"
+                }
+              ]
+            }
+          },
+          {
+            "id": "visits_by_status",
+            "type": "chart.bar",
+            "props": {
+              "entity": "visit",
+              "title": "Visits by Status",
+              "x": "status",
+              "y": "count"
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "schedule",
+        "roles": [
+          "admin",
+          "vet",
+          "pet_owner"
+        ],
+        "route": "/schedule",
+        "title": "Schedule",
+        "blocks": [
+          {
+            "id": "visit_calendar",
+            "type": "calendar.month",
+            "props": {
+              "entity": "visit",
+              "date_field": "visit_date",
+              "row_link": "visit_detail"
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "owners",
+        "roles": [
+          "admin",
+          "vet"
+        ],
+        "route": "/owners",
+        "title": "Owners",
+        "blocks": [
+          {
+            "id": "owner_filter",
+            "type": "filter.bar",
+            "props": {
+              "entity": "owner",
+              "fields": [],
+              "search": [
+                "full_name",
+                "phone",
+                "email"
+              ]
+            }
+          },
+          {
+            "id": "owners_table",
+            "type": "data.table",
+            "props": {
+              "entity": "owner",
+              "columns": [
+                "full_name",
+                "phone",
+                "email"
+              ],
+              "row_link": "owner_detail",
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "owner_detail",
+        "roles": [
+          "admin",
+          "vet",
+          "pet_owner"
+        ],
+        "route": "/owners/:id",
+        "title": "Owner",
+        "blocks": [
+          {
+            "id": "owner_info",
+            "type": "record.detail",
+            "props": {
+              "entity": "owner",
+              "sections": [
+                {
+                  "title": "Contact",
+                  "fields": [
+                    "full_name",
+                    "phone",
+                    "email",
+                    "address"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "owner_pets",
+            "type": "record.related_list",
+            "props": {
+              "entity": "patient",
+              "via": "owner",
+              "columns": [
+                "name",
+                "species",
+                "breed",
+                "next_vaccination_due"
+              ],
+              "row_link": "patient_detail",
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "patients",
+        "roles": [
+          "admin",
+          "vet",
+          "pet_owner"
+        ],
+        "route": "/patients",
+        "title": "Patients",
+        "blocks": [
+          {
+            "id": "patient_filter",
+            "type": "filter.bar",
+            "props": {
+              "entity": "patient",
+              "fields": [
+                "species"
+              ],
+              "search": [
+                "name",
+                "breed",
+                "owner.full_name"
+              ]
+            }
+          },
+          {
+            "id": "patients_table",
+            "type": "data.table",
+            "props": {
+              "entity": "patient",
+              "columns": [
+                "name",
+                "species",
+                "breed",
+                "owner.full_name",
+                "weight_kg",
+                "next_vaccination_due"
+              ],
+              "row_link": "patient_detail",
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "patient_detail",
+        "roles": [
+          "admin",
+          "vet",
+          "pet_owner"
+        ],
+        "route": "/patients/:id",
+        "title": "Patient",
+        "blocks": [
+          {
+            "id": "patient_info",
+            "type": "record.detail",
+            "props": {
+              "entity": "patient",
+              "sections": [
+                {
+                  "title": "Profile",
+                  "fields": [
+                    "name",
+                    "species",
+                    "breed",
+                    "birth_date",
+                    "weight_kg"
+                  ]
+                },
+                {
+                  "title": "Care",
+                  "fields": [
+                    "owner",
+                    "microchip_id",
+                    "next_vaccination_due"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "patient_visits",
+            "type": "record.related_list",
+            "props": {
+              "entity": "visit",
+              "via": "patient",
+              "columns": [
+                "visit_date",
+                "reason",
+                "status",
+                "total"
+              ],
+              "row_link": "visit_detail",
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "visits",
+        "roles": [
+          "admin",
+          "vet",
+          "pet_owner"
+        ],
+        "route": "/visits",
+        "title": "Visits",
+        "blocks": [
+          {
+            "id": "visit_filter",
+            "type": "filter.bar",
+            "props": {
+              "entity": "visit",
+              "fields": [
+                "status"
+              ],
+              "search": [
+                "reason",
+                "patient.name"
+              ]
+            }
+          },
+          {
+            "id": "visits_table",
+            "type": "data.table",
+            "props": {
+              "entity": "visit",
+              "columns": [
+                "visit_date",
+                "patient.name",
+                "reason",
+                "status",
+                "total"
+              ],
+              "row_link": "visit_detail",
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "visit_detail",
+        "roles": [
+          "admin",
+          "vet",
+          "pet_owner"
+        ],
+        "route": "/visits/:id",
+        "title": "Visit",
+        "blocks": [
+          {
+            "id": "visit_lifecycle",
+            "type": "lifecycle.pipeline",
+            "props": {
+              "entity": "visit"
+            }
+          },
+          {
+            "id": "visit_info",
+            "type": "record.detail",
+            "props": {
+              "entity": "visit",
+              "sections": [
+                {
+                  "title": "Visit",
+                  "fields": [
+                    "visit_date",
+                    "patient",
+                    "reason",
+                    "status"
+                  ]
+                },
+                {
+                  "title": "Clinical notes",
+                  "fields": [
+                    "clinical_notes"
+                  ]
+                },
+                {
+                  "title": "Billing",
+                  "fields": [
+                    "consultation_fee",
+                    "total"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "visit_treatments",
+            "type": "record.related_list",
+            "props": {
+              "entity": "treatment",
+              "via": "visit",
+              "columns": [
+                "name",
+                "quantity",
+                "unit_price",
+                "line_total"
+              ],
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      }
+    ],
+    "theme": {
+      "fonts": "Inter",
+      "radius": "md",
+      "density": "comfortable",
+      "palette": "teal",
+      "archetype": "calendar-centric"
+    }
+  },
+  "app": {
+    "name": "PawCare",
+    "domain": "veterinary_clinic",
+    "locale": "en-IN",
+    "tagline": "Pets, owners and visits in one place",
+    "currency": "INR",
+    "timezone": "Asia/Kolkata"
+  },
+  "seed": {
+    "owner": [
+      {
+        "_key": "owner_1",
+        "full_name": "Hetal Shah",
+        "email": "hetal.shah@example.com",
+        "phone": "+91 98250 10101",
+        "address": "12 Rander Road, Surat, Gujarat 395005"
+      },
+      {
+        "_key": "owner_2",
+        "full_name": "Imran Qureshi",
+        "email": "imran.qureshi@example.com",
+        "phone": "+91 98250 20202",
+        "address": "45 Navrangpura, Ahmedabad, Gujarat 380009"
+      },
+      {
+        "_key": "owner_3",
+        "full_name": "Neha Desai",
+        "email": "neha.desai@example.com",
+        "phone": "+91 98250 30303",
+        "address": "7 Alkapuri, Vadodara, Gujarat 390007"
+      },
+      {
+        "_key": "owner_4",
+        "full_name": "Karan Mehta",
+        "email": "karan.mehta@example.com",
+        "phone": "+91 98250 40404",
+        "address": "88 Adajan, Surat, Gujarat 395009"
+      }
+    ],
+    "patient": [
+      {
+        "_key": "patient_1",
+        "name": "Bruno",
+        "species": "dog",
+        "breed": "Labrador Retriever",
+        "birth_date": "2019-04-12",
+        "owner": "@owner_1",
+        "weight_kg": 29.5,
+        "microchip_id": "985112001234501",
+        "next_vaccination_due": "2026-11-18"
+      },
+      {
+        "_key": "patient_2",
+        "name": "Misty",
+        "species": "cat",
+        "breed": "Persian",
+        "birth_date": "2020-08-03",
+        "owner": "@owner_1",
+        "weight_kg": 4.3,
+        "microchip_id": "985112001234502",
+        "next_vaccination_due": "2026-12-05"
+      },
+      {
+        "_key": "patient_3",
+        "name": "Rocky",
+        "species": "dog",
+        "breed": "German Shepherd",
+        "birth_date": "2021-01-20",
+        "owner": "@owner_2",
+        "weight_kg": 31.0,
+        "microchip_id": "985112001234503",
+        "next_vaccination_due": "2026-10-14"
+      },
+      {
+        "_key": "patient_4",
+        "name": "Coco",
+        "species": "dog",
+        "breed": "Indian Pariah",
+        "birth_date": "2023-06-11",
+        "owner": "@owner_3",
+        "weight_kg": 14.2,
+        "next_vaccination_due": "2027-01-15"
+      },
+      {
+        "_key": "patient_5",
+        "name": "Simba",
+        "species": "cat",
+        "breed": "Indian Shorthair",
+        "birth_date": "2025-11-02",
+        "owner": "@owner_4",
+        "weight_kg": 2.1,
+        "next_vaccination_due": "2026-10-20"
+      },
+      {
+        "_key": "patient_6",
+        "name": "Pepper",
+        "species": "dog",
+        "breed": "Beagle",
+        "birth_date": "2022-03-09",
+        "owner": "@owner_4",
+        "weight_kg": 11.8,
+        "microchip_id": "985112001234506",
+        "next_vaccination_due": "2026-11-30"
+      }
+    ],
+    "visit": [
+      {
+        "_key": "visit_1",
+        "visit_date": "2026-09-18T10:30:00+05:30",
+        "patient": "@patient_1",
+        "reason": "Annual wellness exam and vaccinations",
+        "clinical_notes": "Healthy overall. DHPP and rabies given. Weight stable at 29.5 kg. Dental scaling advised in 6 months.",
+        "consultation_fee": 500,
+        "status": "completed"
+      },
+      {
+        "_key": "visit_2",
+        "visit_date": "2026-09-25T17:00:00+05:30",
+        "patient": "@patient_2",
+        "reason": "Itching and hair loss",
+        "clinical_notes": "Suspected food allergy. Started antihistamine course and medicated shampoo. Review in 2 weeks.",
+        "consultation_fee": 500,
+        "status": "completed"
+      },
+      {
+        "_key": "visit_3",
+        "visit_date": "2026-10-06T11:15:00+05:30",
+        "patient": "@patient_3",
+        "reason": "Limping on right hind leg",
+        "clinical_notes": "X-ray shows no fracture. Soft tissue strain. Rest for 7 days and pain relief tablets.",
+        "consultation_fee": 600,
+        "status": "completed"
+      },
+      {
+        "_key": "visit_4",
+        "visit_date": "2026-10-10T16:30:00+05:30",
+        "patient": "@patient_6",
+        "reason": "Head shaking and ear odour",
+        "clinical_notes": "Bacterial ear infection. Ears cleaned, drops prescribed for 10 days.",
+        "consultation_fee": 500,
+        "status": "completed"
+      },
+      {
+        "_key": "visit_5",
+        "visit_date": "2026-10-12T12:00:00+05:30",
+        "patient": "@patient_1",
+        "reason": "Dental scaling consultation",
+        "consultation_fee": 500,
+        "status": "cancelled"
+      },
+      {
+        "_key": "visit_6",
+        "visit_date": "2026-10-15T10:30:00+05:30",
+        "patient": "@patient_4",
+        "reason": "Vomiting since last night",
+        "clinical_notes": "Dehydrated. IV fluids started and anti-emetic given. Observing for two hours.",
+        "consultation_fee": 500,
+        "status": "in_progress"
+      },
+      {
+        "_key": "visit_7",
+        "visit_date": "2026-10-15T16:00:00+05:30",
+        "patient": "@patient_5",
+        "reason": "Kitten vaccination, first dose",
+        "consultation_fee": 400,
+        "status": "scheduled"
+      },
+      {
+        "_key": "visit_8",
+        "visit_date": "2026-10-17T11:00:00+05:30",
+        "patient": "@patient_3",
+        "reason": "Follow-up and booster vaccination",
+        "consultation_fee": 500,
+        "status": "scheduled"
+      }
+    ],
+    "treatment": [
+      {
+        "_key": "tr_1",
+        "visit": "@visit_1",
+        "name": "DHPP vaccine",
+        "quantity": 1,
+        "unit_price": 650
+      },
+      {
+        "_key": "tr_2",
+        "visit": "@visit_1",
+        "name": "Rabies vaccine",
+        "quantity": 1,
+        "unit_price": 400
+      },
+      {
+        "_key": "tr_3",
+        "visit": "@visit_2",
+        "name": "Antihistamine course",
+        "quantity": 1,
+        "unit_price": 450
+      },
+      {
+        "_key": "tr_4",
+        "visit": "@visit_2",
+        "name": "Medicated shampoo",
+        "quantity": 1,
+        "unit_price": 350
+      },
+      {
+        "_key": "tr_5",
+        "visit": "@visit_3",
+        "name": "X-ray",
+        "quantity": 1,
+        "unit_price": 1200
+      },
+      {
+        "_key": "tr_6",
+        "visit": "@visit_3",
+        "name": "Pain relief tablets",
+        "quantity": 10,
+        "unit_price": 25
+      },
+      {
+        "_key": "tr_7",
+        "visit": "@visit_4",
+        "name": "Ear cleaning",
+        "quantity": 1,
+        "unit_price": 200
+      },
+      {
+        "_key": "tr_8",
+        "visit": "@visit_4",
+        "name": "Ear drops",
+        "quantity": 1,
+        "unit_price": 280
+      },
+      {
+        "_key": "tr_9",
+        "visit": "@visit_6",
+        "name": "IV fluids",
+        "quantity": 1,
+        "unit_price": 600
+      },
+      {
+        "_key": "tr_10",
+        "visit": "@visit_6",
+        "name": "Anti-emetic injection",
+        "quantity": 1,
+        "unit_price": 180
+      }
+    ]
+  },
+  "model": {
+    "enums": [
+      {
+        "id": "pet_species",
+        "values": [
+          {
+            "color": "#4A90E2",
+            "label": "Dog",
+            "value": "dog"
+          },
+          {
+            "color": "#F5A623",
+            "label": "Cat",
+            "value": "cat"
+          }
+        ]
+      },
+      {
+        "id": "visit_status",
+        "values": [
+          {
+            "color": "#9B59B6",
+            "label": "Scheduled",
+            "value": "scheduled"
+          },
+          {
+            "color": "#3498DB",
+            "label": "In Progress",
+            "value": "in_progress"
+          },
+          {
+            "color": "#2ECC71",
+            "label": "Completed",
+            "value": "completed"
+          },
+          {
+            "color": "#E74C3C",
+            "label": "Cancelled",
+            "value": "cancelled"
+          }
+        ]
+      }
+    ],
+    "entities": [
+      {
+        "id": "owner",
+        "icon": "user",
+        "label": "Owner",
+        "fields": [
+          {
+            "id": "full_name",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "email",
+            "enum": null,
+            "type": "email",
+            "index": null,
+            "target": null,
+            "unique": true,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "phone",
+            "enum": null,
+            "type": "phone",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "address",
+            "enum": null,
+            "type": "longtext",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          }
+        ],
+        "plural": "Owners",
+        "display": {
+          "title": "full_name",
+          "subtitle": "phone"
+        },
+        "lifecycle": null
+      },
+      {
+        "id": "patient",
+        "icon": "paw",
+        "label": "Patient",
+        "fields": [
+          {
+            "id": "name",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "species",
+            "enum": "pet_species",
+            "type": "enum",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "breed",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "birth_date",
+            "enum": null,
+            "type": "date",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "owner",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "owner",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "restrict",
+            "required": true,
+            "relation_name": "pets"
+          },
+          {
+            "id": "weight_kg",
+            "enum": null,
+            "type": "decimal",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "microchip_id",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": true,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "next_vaccination_due",
+            "enum": null,
+            "type": "date",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          }
+        ],
+        "plural": "Patients",
+        "display": {
+          "title": "name",
+          "subtitle": "species"
+        },
+        "lifecycle": null
+      },
+      {
+        "id": "visit",
+        "icon": "calendar",
+        "label": "Visit",
+        "fields": [
+          {
+            "id": "visit_date",
+            "enum": null,
+            "type": "datetime",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "patient",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "patient",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "restrict",
+            "required": true,
+            "relation_name": "visits"
+          },
+          {
+            "id": "reason",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "clinical_notes",
+            "enum": null,
+            "type": "longtext",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "consultation_fee",
+            "enum": null,
+            "type": "money",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": 500,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "total",
+            "enum": null,
+            "type": "money",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": {
+              "formula": "consultation_fee + sum(treatments.line_total)"
+            },
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "status",
+            "enum": "visit_status",
+            "type": "enum",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": "scheduled",
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          }
+        ],
+        "plural": "Visits",
+        "display": {
+          "title": "reason",
+          "subtitle": "visit_date"
+        },
+        "lifecycle": {
+          "field": "status",
+          "states": [
+            "scheduled",
+            "in_progress",
+            "completed",
+            "cancelled"
+          ],
+          "initial": "scheduled",
+          "transitions": [
+            {
+              "id": "start_visit",
+              "to": "in_progress",
+              "from": "scheduled",
+              "guard": null,
+              "label": "Start Visit",
+              "roles": [
+                "vet",
+                "admin"
+              ]
+            },
+            {
+              "id": "complete_visit",
+              "to": "completed",
+              "from": "in_progress",
+              "guard": "clinical_notes != null",
+              "label": "Complete Visit",
+              "roles": [
+                "vet",
+                "admin"
+              ]
+            },
+            {
+              "id": "cancel_visit",
+              "to": "cancelled",
+              "from": "scheduled",
+              "guard": null,
+              "label": "Cancel Visit",
+              "roles": [
+                "admin",
+                "pet_owner"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "treatment",
+        "icon": "pill",
+        "label": "Treatment",
+        "fields": [
+          {
+            "id": "visit",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "visit",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "cascade",
+            "required": true,
+            "relation_name": "treatments"
+          },
+          {
+            "id": "name",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "quantity",
+            "enum": null,
+            "type": "int",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": 1,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "unit_price",
+            "enum": null,
+            "type": "money",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "line_total",
+            "enum": null,
+            "type": "money",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": {
+              "formula": "quantity * unit_price"
+            },
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          }
+        ],
+        "plural": "Treatments",
+        "display": {
+          "title": "name",
+          "subtitle": "line_total"
+        },
+        "lifecycle": null
+      }
+    ]
+  },
+  "trace": [
+    {
+      "requirement": "R1",
+      "satisfied_by": [
+        "entity:owner",
+        "entity:patient",
+        "page:owners",
+        "page:patients",
+        "page:owner_detail",
+        "page:patient_detail"
+      ]
+    },
+    {
+      "requirement": "R2",
+      "satisfied_by": [
+        "entity:visit",
+        "page:visits",
+        "page:schedule",
+        "page:visit_detail"
+      ]
+    },
+    {
+      "requirement": "R3",
+      "satisfied_by": [
+        "lifecycle:visit",
+        "page:visit_detail"
+      ]
+    },
+    {
+      "requirement": "R4",
+      "satisfied_by": [
+        "entity:treatment",
+        "field:treatment.line_total",
+        "field:visit.total",
+        "page:visit_detail"
+      ]
+    },
+    {
+      "requirement": "R5",
+      "satisfied_by": [
+        "role:pet_owner",
+        "role:vet",
+        "role:admin"
+      ]
+    },
+    {
+      "requirement": "R6",
+      "satisfied_by": [
+        "automation:visit_booked_confirmation",
+        "automation:visit_reminder_daily",
+        "automation:visit_completed_summary"
+      ]
+    },
+    {
+      "requirement": "R7",
+      "satisfied_by": [
+        "page:dashboard",
+        "field:patient.next_vaccination_due",
+        "automation:vaccination_due_reminder"
+      ]
+    }
+  ],
+  "access": {
+    "roles": [
+      {
+        "id": "admin",
+        "label": "Clinic Admin"
+      },
+      {
+        "id": "vet",
+        "label": "Veterinarian"
+      },
+      {
+        "id": "pet_owner",
+        "label": "Pet Owner"
+      }
+    ],
+    "rules": [
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "admin",
+        "where": null,
+        "entity": "owner"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "admin",
+        "where": null,
+        "entity": "patient"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "admin",
+        "where": null,
+        "entity": "visit"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "admin",
+        "where": null,
+        "entity": "treatment"
+      },
+      {
+        "ops": [
+          "read"
+        ],
+        "role": "vet",
+        "where": null,
+        "entity": "owner"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update"
+        ],
+        "role": "vet",
+        "where": null,
+        "entity": "patient"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update"
+        ],
+        "role": "vet",
+        "where": null,
+        "entity": "visit"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "vet",
+        "where": null,
+        "entity": "treatment"
+      },
+      {
+        "ops": [
+          "read",
+          "update"
+        ],
+        "role": "pet_owner",
+        "where": "email == $user.email",
+        "entity": "owner"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update"
+        ],
+        "role": "pet_owner",
+        "where": "owner.email == $user.email",
+        "entity": "patient"
+      },
+      {
+        "ops": [
+          "read",
+          "create"
+        ],
+        "role": "pet_owner",
+        "where": "patient.owner.email == $user.email",
+        "entity": "visit"
+      },
+      {
+        "ops": [
+          "update"
+        ],
+        "role": "pet_owner",
+        "where": "patient.owner.email == $user.email and (status == 'scheduled' or status == 'cancelled')",
+        "entity": "visit"
+      },
+      {
+        "ops": [
+          "read"
+        ],
+        "role": "pet_owner",
+        "where": "visit.patient.owner.email == $user.email",
+        "entity": "treatment"
+      }
+    ]
+  },
+  "personas": [
+    {
+      "id": "clinic_admin",
+      "name": "Clinic admin",
+      "goals": [
+        "Keep owner and pet records accurate",
+        "Know today's schedule and monthly revenue"
+      ]
+    },
+    {
+      "id": "vet",
+      "name": "Veterinarian",
+      "goals": [
+        "See who is booked today",
+        "Record notes and treatments quickly"
+      ]
+    },
+    {
+      "id": "pet_owner",
+      "name": "Pet owner",
+      "goals": [
+        "Book and cancel visits",
+        "See my pets' visit history and bills"
+      ]
+    }
+  ],
+  "assumptions": [
+    "Single clinic location",
+    "Patients are cats and dogs only",
+    "Visits are not assigned to a specific veterinarian",
+    "Appointment-based visits only (no walk-ins)",
+    "One owner can have several pets",
+    "Treatments are free-text line items with a price; there is no medicine stock tracking",
+    "A visit shows its total, but there is no GST invoicing or online payment",
+    "Pet owners sign in with the same email address stored on their owner record",
+    "Currency is INR; Indian phone numbers and addresses",
+    "Single-tenant application"
+  ],
+  "automations": [
+    {
+      "id": "visit_booked_confirmation",
+      "steps": [
+        {
+          "when": null,
+          "action": "send_email",
+          "params": {
+            "to": "patient.owner.email",
+            "subject": "Visit booked for {patient.name}",
+            "body": "Hi {patient.owner.full_name}, {patient.name}'s visit is booked for {visit_date}. Reason: {reason}."
+          }
+        }
+      ],
+      "trigger": {
+        "type": "record.created",
+        "entity": "visit",
+        "schedule": null,
+        "transition": null
+      }
+    },
+    {
+      "id": "visit_completed_summary",
+      "steps": [
+        {
+          "when": null,
+          "action": "send_email",
+          "params": {
+            "to": "patient.owner.email",
+            "subject": "Visit summary for {patient.name}",
+            "body": "{patient.name}'s visit is complete. Total due: {total}.\nNotes from the vet: {clinical_notes}"
+          }
+        }
+      ],
+      "trigger": {
+        "type": "lifecycle.transition",
+        "entity": "visit",
+        "schedule": null,
+        "transition": "complete_visit"
+      }
+    },
+    {
+      "id": "visit_reminder_daily",
+      "steps": [
+        {
+          "when": "status == 'scheduled' and visit_date >= today() and visit_date < tomorrow()",
+          "action": "send_email",
+          "params": {
+            "to": "patient.owner.email",
+            "subject": "Reminder: {patient.name} is booked today",
+            "body": "Hi {patient.owner.full_name}, a reminder that {patient.name} is booked in today at {visit_date}."
+          }
+        }
+      ],
+      "trigger": {
+        "type": "schedule",
+        "entity": "visit",
+        "schedule": "0 8 * * *",
+        "transition": null
+      }
+    },
+    {
+      "id": "vaccination_due_reminder",
+      "steps": [
+        {
+          "when": "next_vaccination_due == today()",
+          "action": "send_email",
+          "params": {
+            "to": "owner.email",
+            "subject": "{name} is due for vaccination",
+            "body": "Hi {owner.full_name}, {name} is due for vaccination today. Please book a visit."
+          }
+        }
+      ],
+      "trigger": {
+        "type": "schedule",
+        "entity": "patient",
+        "schedule": "0 9 * * *",
+        "transition": null
+      }
+    }
+  ],
+  "integrations": [],
+  "requirements": [
+    {
+      "id": "R1",
+      "text": "Register pet owners and their pets (species, breed, birth date, weight, microchip) with contact details",
+      "priority": "must"
+    },
+    {
+      "id": "R2",
+      "text": "Book a visit for a pet with a reason, and see all visits on a calendar",
+      "priority": "must"
+    },
+    {
+      "id": "R3",
+      "text": "Move each visit through scheduled, in progress, completed or cancelled; a visit cannot be completed without clinical notes",
+      "priority": "must"
+    },
+    {
+      "id": "R4",
+      "text": "Record treatments given in a visit with quantity and price, and show the visit total automatically",
+      "priority": "must"
+    },
+    {
+      "id": "R5",
+      "text": "Pet owners see and manage only their own pets and visits; vets and admins see everything",
+      "priority": "must"
+    },
+    {
+      "id": "R6",
+      "text": "Email owners a booking confirmation, a same-day reminder and a completion summary with the total",
+      "priority": "should"
+    },
+    {
+      "id": "R7",
+      "text": "Show a dashboard with today's visits, visits in progress, monthly revenue and vaccinations due, plus a vaccination reminder",
+      "priority": "should"
+    }
+  ],
+  "spec_version": "1.0"
+}

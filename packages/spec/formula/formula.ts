@@ -245,6 +245,16 @@ function nowIso(ctx: EvalCtx): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
 }
+function dayShift(ctx: EvalCtx, days: number): string {
+  let iso = nowIso(ctx);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) iso += "T00:00:00Z";
+  else if (!/[Zz]|[+-]\d{2}:?\d{2}$/.test(iso)) iso += "Z"; // naive = UTC (machine TZ must not leak in)
+  const d = new Date(iso);
+  const t = Number.isNaN(d.getTime()) ? new Date(Date.UTC(1970, 0, 1)) : d;
+  const shifted = new Date(t.getTime() + days * 86400000);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${shifted.getUTCFullYear()}-${p(shifted.getUTCMonth() + 1)}-${p(shifted.getUTCDate())}`;
+}
 function startOfMonth(ctx: EvalCtx): string {
   const m = /^(\d{4}-\d{2})/.exec(nowIso(ctx));
   return m ? `${m[1]}-01` : nowIso(ctx);
@@ -327,6 +337,14 @@ function callFn(name: string, args: AstNode[], env: Record<string, Value>, ctx: 
     case "now": {
       if (vals.length) throw new FormulaError("now takes no arguments");
       return nowIso(ctx);
+    }
+    case "today": {
+      if (vals.length) throw new FormulaError("today takes no arguments");
+      return dayShift(ctx, 0);
+    }
+    case "tomorrow": {
+      if (vals.length) throw new FormulaError("tomorrow takes no arguments");
+      return dayShift(ctx, 1);
     }
     case "startOfMonth": {
       if (vals.length) throw new FormulaError("startOfMonth takes no arguments");

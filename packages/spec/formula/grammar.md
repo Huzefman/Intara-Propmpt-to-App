@@ -47,6 +47,7 @@ Reserved: `and or not true false null`.
 | `str(x)` | `null→""`, bools→`true/false` |
 | `int(x)` / `float(x)` | strict decimal conversion, else error |
 | `now()` / `startOfMonth()` | ISO timestamps; evaluator takes fixed `now` for tests |
+| `today()` / `tomorrow()` | YYYY-MM-DD of `now` (±1 day), for date comparisons |
 
 ## Nulls & errors
 

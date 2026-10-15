@@ -106,10 +106,12 @@
 
 ### Phase 5 — Gold specs + retrieval seed [x]
 *Goal: hand-authored truth to retrieve and eval against. (Guide M1.6, M7-start)*
-- [x] P5.1 Five gold specs (`packages/spec/exemplars/`: inventory, booking, CRM/leads, repair tracker, leave/HR — all G0/G1 clean) + `server/engine/prd_adapter.py` (legacy PRD→Spec, all 5 golden wishes adapt G0/G1-clean by construction: round-robin + fill-up coverage, snake ids)
-- [x] P5.2 `server/services/retrieval.py` (768-d cosine scan, tag filters, JSON index round-trip) + `scripts/build_retrieval_index.py` (`--fake` deterministic or live) + `scripts/seed_exemplars.py` (5 rows live in `exemplars` table). Deviation: vectors live in versioned `evals/retrieval_index.json` (committed, currently deterministic vectors), not Supabase — DB persistence when retrieval serves production traffic.
-- [x] P5.3 Held out Appendix-D #6–10 (invoicing, restaurant, gym, school, helpdesk): builder refuses them (fail-fast), search never returns them; **hit-rate top-1 5/5** on corpus domains recorded in test output.
-- **Accept:** ✅ gold specs pass G0/G1; ✅ retrieval hit-rate recorded
+- **Golds (8):** inventory, booking, CRM/leads, repair tracker, leave/HR (hand) + veterinary, education, social (pipeline + human review).
+- [x] P5.1 Five gold specs + `server/engine/prd_adapter.py` (legacy PRD→Spec; drops storage-managed id/created_at/updated_at per R40)
+- [x] P5.2 `server/services/retrieval.py` (768-d) + builder/seeder; 8 exemplar rows live; versioned index rebuilt.
+- [x] P5.3 Held-out #6–10 enforced; hit-rate recorded.
+- [x] P5.4 Human-review integration: prototype checker ported to G1 (R37–R47, W02–W04); block vocabulary adopted (chart title/x/y, calendar date_field, timeline date_field/title); `today()`/`tomorrow()` added to formula language (both impls, TZ-pinned); S2/S3/S4 prompt rules from review findings (→ v3 prompts).
+- **Accept:** ✅ 8 golds pass G0/G1 (+G3 on all 8 via node suite).
 - **Ops note:** `SUPABASE_KEY` is the anon key (demo-open writes rely on RLS policies); control-plane writes (exemplars) need `SUPABASE_SERVICE_KEY` — seeder uses it explicitly.
 
 ### Phase 6 — Runtime v1 [x]
@@ -236,6 +238,12 @@
 - **Budgets/diversity:** median 9 calls ✅, wall 267s, 12 combos ✅, overlap 0.028 ✅, heldout 3/5 ✅, coverage 1.0 (gym trace gap 0.0 noted).
 - **Next:** gold candidates from green specs (human review) → Phase 8.
 
+### Session 15 — 2026-10-15 — human gold review integrated [x]
+- **Done:** reviewed 3 improved specs (all G0/G1-clean first try — review quality high) + ported prototype checker (R37–R47, W02–W04; old golds get warnings only, zero new errors) + block vocabulary adoption (ChartBar title/x/y+count, CalendarMonth, ActivityTimeline; host data via component props, never spec props) + `today()`/`tomorrow()` in formula language (TZ-pinned, 131/131) + S2/S3/S4 review rules (→ v3 prompts) + adapter drops id/created_at/updated_at + promoted 3 golds (8/8 G0/G1, G3 green all 8) + seeded + index rebuilt. Python **189/189**, node **186/186**, both tscs, vite build, eval 5/5.
+- **Decisions confirmed:** `$user.email` mapping ✓ (engine already resolves `$user.*`); block prop table adopted as canonical (runtime aligned to it); seeds WILL go stale mid-Oct-2026 (no relative-date tokens — noted, not built); education/social formulas (count/avg exist — left for next review, specs untouched).
+- **Problems:** see §5 #31–32.
+- **Next:** Phase 8 scaffolding whenever ready.
+
 ---
 
 ## 5. Known problems / error register
@@ -287,7 +295,7 @@
 | Requirement coverage | n/a | — | ≥ 80 % (100 % musts) |
 | LLM calls per build (median) | _pending P0.2_ | — | ≤ 14 (≤ 6 strong) |
 | Time to live preview post-approval | _pending P0.2_ | — | ≤ 30 s |
-| Unit suite | 93/93 (2026-10-11) | 185/185 py + 169/169 node (2026-10-12) | green every session |
+| Unit suite | 93/93 (2026-10-11) | 189/189 py + 186/186 node (2026-10-15) | green every session |
 | Golden eval | 5/5 (2026-10-11) | 5/5 (2026-10-12) | 5/5 + new suites |
 
 **Baseline 2026-10-12, pre-Phase-1** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):

@@ -1,0 +1,2209 @@
+{
+  "ui": {
+    "nav": [
+      {
+        "icon": "layout-dashboard",
+        "page": "dashboard",
+        "label": "Dashboard",
+        "roles": [
+          "owner",
+          "admin",
+          "member"
+        ]
+      },
+      {
+        "icon": "book",
+        "page": "books",
+        "label": "Books",
+        "roles": [
+          "owner",
+          "admin",
+          "member"
+        ]
+      },
+      {
+        "icon": "calendar",
+        "page": "meetings",
+        "label": "Meetings",
+        "roles": [
+          "owner",
+          "admin",
+          "member"
+        ]
+      },
+      {
+        "icon": "users",
+        "page": "members",
+        "label": "Members",
+        "roles": [
+          "owner",
+          "admin"
+        ]
+      },
+      {
+        "icon": "settings",
+        "page": "club_settings",
+        "label": "Club Settings",
+        "roles": [
+          "owner",
+          "admin"
+        ]
+      }
+    ],
+    "pages": [
+      {
+        "id": "dashboard",
+        "roles": [
+          "owner",
+          "admin",
+          "member"
+        ],
+        "route": "/",
+        "title": "Dashboard",
+        "blocks": [
+          {
+            "id": "hero_welcome",
+            "type": "content.hero",
+            "props": {
+              "title": "Welcome back to the club",
+              "subtitle": "Pick the next read, plan the meeting and share your notes"
+            }
+          },
+          {
+            "id": "book_stats",
+            "type": "metric.stat",
+            "props": {
+              "entity": "book",
+              "items": [
+                {
+                  "label": "Books read",
+                  "agg": "count",
+                  "where": "status == 'archived'"
+                },
+                {
+                  "label": "Next read",
+                  "agg": "count",
+                  "where": "status == 'selected'"
+                },
+                {
+                  "label": "Proposed",
+                  "agg": "count",
+                  "where": "status == 'proposed'"
+                }
+              ]
+            }
+          },
+          {
+            "id": "meeting_stats",
+            "type": "metric.stat",
+            "props": {
+              "entity": "meeting",
+              "items": [
+                {
+                  "label": "Upcoming meetings",
+                  "agg": "count",
+                  "where": "status == 'scheduled' and start_time >= today()"
+                },
+                {
+                  "label": "Meetings held",
+                  "agg": "count",
+                  "where": "status == 'completed'"
+                }
+              ]
+            }
+          },
+          {
+            "id": "meeting_history",
+            "type": "activity.timeline",
+            "props": {
+              "entity": "meeting",
+              "date_field": "start_time",
+              "title": "Meeting history"
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "books",
+        "roles": [
+          "owner",
+          "admin",
+          "member"
+        ],
+        "route": "/books",
+        "title": "Books",
+        "blocks": [
+          {
+            "id": "book_filter",
+            "type": "filter.bar",
+            "props": {
+              "entity": "book",
+              "fields": [
+                "status",
+                "genre"
+              ],
+              "search": [
+                "title",
+                "author"
+              ]
+            }
+          },
+          {
+            "id": "book_board",
+            "type": "data.kanban",
+            "props": {
+              "entity": "book",
+              "group_by": "status",
+              "card": {
+                "title": "title",
+                "subtitle": "author",
+                "badges": [
+                  "genre"
+                ]
+              },
+              "drag_transitions": true
+            }
+          },
+          {
+            "id": "book_table",
+            "type": "data.table",
+            "props": {
+              "entity": "book",
+              "columns": [
+                "title",
+                "author",
+                "genre",
+                "page_count",
+                "status"
+              ],
+              "row_link": "book_detail",
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "book_detail",
+        "roles": [
+          "owner",
+          "admin",
+          "member"
+        ],
+        "route": "/books/:id",
+        "title": "Book",
+        "blocks": [
+          {
+            "id": "book_lifecycle",
+            "type": "lifecycle.pipeline",
+            "props": {
+              "entity": "book"
+            }
+          },
+          {
+            "id": "book_info",
+            "type": "record.detail",
+            "props": {
+              "entity": "book",
+              "sections": [
+                {
+                  "title": "About",
+                  "fields": [
+                    "title",
+                    "author",
+                    "genre",
+                    "description",
+                    "page_count",
+                    "published_date",
+                    "isbn13"
+                  ]
+                },
+                {
+                  "title": "In the club",
+                  "fields": [
+                    "status",
+                    "proposed_by",
+                    "selected_at"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "book_notes",
+            "type": "record.related_list",
+            "props": {
+              "entity": "note",
+              "via": "book",
+              "columns": [
+                "member.name",
+                "rating",
+                "content"
+              ],
+              "create": true
+            }
+          },
+          {
+            "id": "book_meetings",
+            "type": "record.related_list",
+            "props": {
+              "entity": "meeting",
+              "via": "book",
+              "columns": [
+                "title",
+                "start_time",
+                "status"
+              ],
+              "row_link": "meeting_detail"
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "meetings",
+        "roles": [
+          "owner",
+          "admin",
+          "member"
+        ],
+        "route": "/meetings",
+        "title": "Meetings",
+        "blocks": [
+          {
+            "id": "meeting_calendar",
+            "type": "calendar.month",
+            "props": {
+              "entity": "meeting",
+              "date_field": "start_time",
+              "row_link": "meeting_detail"
+            }
+          },
+          {
+            "id": "meeting_table",
+            "type": "data.table",
+            "props": {
+              "entity": "meeting",
+              "columns": [
+                "title",
+                "book.title",
+                "start_time",
+                "meeting_type",
+                "location",
+                "status"
+              ],
+              "row_link": "meeting_detail",
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "meeting_detail",
+        "roles": [
+          "owner",
+          "admin",
+          "member"
+        ],
+        "route": "/meetings/:id",
+        "title": "Meeting",
+        "blocks": [
+          {
+            "id": "meeting_lifecycle",
+            "type": "lifecycle.pipeline",
+            "props": {
+              "entity": "meeting"
+            }
+          },
+          {
+            "id": "meeting_info",
+            "type": "record.detail",
+            "props": {
+              "entity": "meeting",
+              "sections": [
+                {
+                  "title": "Meeting",
+                  "fields": [
+                    "title",
+                    "book",
+                    "meeting_type",
+                    "status",
+                    "description"
+                  ]
+                },
+                {
+                  "title": "When and where",
+                  "fields": [
+                    "start_time",
+                    "end_time",
+                    "location",
+                    "virtual_link"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "meeting_notes",
+            "type": "record.related_list",
+            "props": {
+              "entity": "note",
+              "via": "meeting",
+              "columns": [
+                "member.name",
+                "rating",
+                "content"
+              ],
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "members",
+        "roles": [
+          "owner",
+          "admin"
+        ],
+        "route": "/members",
+        "title": "Members",
+        "blocks": [
+          {
+            "id": "member_filter",
+            "type": "filter.bar",
+            "props": {
+              "entity": "member",
+              "fields": [
+                "role"
+              ],
+              "search": [
+                "name",
+                "email"
+              ]
+            }
+          },
+          {
+            "id": "member_table",
+            "type": "data.table",
+            "props": {
+              "entity": "member",
+              "columns": [
+                "name",
+                "email",
+                "role",
+                "joined_at",
+                "notification_email"
+              ],
+              "create": true
+            }
+          },
+          {
+            "id": "invitation_table",
+            "type": "data.table",
+            "props": {
+              "entity": "invitation",
+              "columns": [
+                "email",
+                "invited_by.name",
+                "status",
+                "expires_at"
+              ],
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "club_settings",
+        "roles": [
+          "owner",
+          "admin"
+        ],
+        "route": "/settings",
+        "title": "Club Settings",
+        "blocks": [
+          {
+            "id": "club_form",
+            "type": "form.record",
+            "props": {
+              "entity": "club"
+            }
+          }
+        ],
+        "layout": "grid"
+      }
+    ],
+    "theme": {
+      "fonts": "Inter",
+      "radius": "md",
+      "density": "comfortable",
+      "palette": "indigo",
+      "archetype": "catalog-detail"
+    }
+  },
+  "app": {
+    "name": "Page Turners",
+    "domain": "book_club",
+    "locale": "en-IN",
+    "tagline": "Pick the book, plan the meeting, share your notes",
+    "currency": "INR",
+    "timezone": "Asia/Kolkata"
+  },
+  "seed": {
+    "club": [
+      {
+        "_key": "club_1",
+        "name": "Bangalore Book Lovers",
+        "timezone": "Asia/Kolkata",
+        "description": "A friendly community of readers meeting monthly in Bangalore."
+      }
+    ],
+    "member": [
+      {
+        "_key": "m_priya",
+        "club": "@club_1",
+        "name": "Priya Sharma",
+        "email": "priya.sharma@example.com",
+        "role": "owner",
+        "joined_at": "2024-01-15",
+        "notification_email": true
+      },
+      {
+        "_key": "m_arjun",
+        "club": "@club_1",
+        "name": "Arjun Patel",
+        "email": "arjun.patel@example.com",
+        "role": "admin",
+        "joined_at": "2024-01-20",
+        "notification_email": true
+      },
+      {
+        "_key": "m_sneha",
+        "club": "@club_1",
+        "name": "Sneha Reddy",
+        "email": "sneha.reddy@example.com",
+        "role": "member",
+        "joined_at": "2024-02-01",
+        "notification_email": true
+      },
+      {
+        "_key": "m_vikram",
+        "club": "@club_1",
+        "name": "Vikram Iyer",
+        "email": "vikram.iyer@example.com",
+        "role": "member",
+        "joined_at": "2024-03-11",
+        "notification_email": false
+      },
+      {
+        "_key": "m_kavya",
+        "club": "@club_1",
+        "name": "Kavya Nair",
+        "email": "kavya.nair@example.com",
+        "role": "member",
+        "joined_at": "2024-03-16",
+        "notification_email": true
+      },
+      {
+        "_key": "m_rohit",
+        "club": "@club_1",
+        "name": "Rohit Kumar",
+        "email": "rohit.kumar@example.com",
+        "role": "member",
+        "joined_at": "2024-05-02",
+        "notification_email": true
+      },
+      {
+        "_key": "m_meera",
+        "club": "@club_1",
+        "name": "Meera Menon",
+        "email": "meera.menon@example.com",
+        "role": "member",
+        "joined_at": "2024-06-18",
+        "notification_email": true
+      },
+      {
+        "_key": "m_faiz",
+        "club": "@club_1",
+        "name": "Faiz Ahmed",
+        "email": "faiz.ahmed@example.com",
+        "role": "member",
+        "joined_at": "2025-01-09",
+        "notification_email": true
+      }
+    ],
+    "book": [
+      {
+        "_key": "b_tiger",
+        "club": "@club_1",
+        "title": "The White Tiger",
+        "author": "Aravind Adiga",
+        "isbn13": "9780143422344",
+        "genre": "fiction",
+        "status": "archived",
+        "page_count": 320,
+        "published_date": "2008-10-14",
+        "proposed_by": "@m_arjun",
+        "description": "A darkly funny novel about class and ambition in modern India.",
+        "selected_at": "2026-03-02T12:00:00+05:30"
+      },
+      {
+        "_key": "b_gods",
+        "club": "@club_1",
+        "title": "The God of Small Things",
+        "author": "Arundhati Roy",
+        "isbn13": "9780812979657",
+        "genre": "fiction",
+        "status": "archived",
+        "page_count": 336,
+        "published_date": "1997-04-04",
+        "proposed_by": "@m_sneha",
+        "description": "A family, a river and the choices that undo them in Kerala.",
+        "selected_at": "2026-05-04T12:00:00+05:30"
+      },
+      {
+        "_key": "b_sapiens",
+        "club": "@club_1",
+        "title": "Sapiens",
+        "author": "Yuval Noah Harari",
+        "isbn13": "9780099590088",
+        "genre": "non_fiction",
+        "status": "archived",
+        "page_count": 512,
+        "published_date": "2011-01-01",
+        "proposed_by": "@m_vikram",
+        "description": "A sweeping history of humankind.",
+        "selected_at": "2026-07-06T12:00:00+05:30"
+      },
+      {
+        "_key": "b_dragon",
+        "club": "@club_1",
+        "title": "The Girl with the Dragon Tattoo",
+        "author": "Stieg Larsson",
+        "isbn13": "9780143127553",
+        "genre": "mystery",
+        "status": "selected",
+        "page_count": 465,
+        "published_date": "2005-08-01",
+        "proposed_by": "@m_rohit",
+        "description": "A journalist and a hacker unpick a decades-old disappearance.",
+        "selected_at": "2026-10-05T12:00:00+05:30"
+      },
+      {
+        "_key": "b_midnight",
+        "club": "@club_1",
+        "title": "Midnight's Children",
+        "author": "Salman Rushdie",
+        "isbn13": "9780812976533",
+        "genre": "classics",
+        "status": "proposed",
+        "page_count": 536,
+        "published_date": "1981-09-01",
+        "proposed_by": "@m_kavya",
+        "description": "Magical realism tracing India's independence through one birth."
+      },
+      {
+        "_key": "b_educated",
+        "club": "@club_1",
+        "title": "Educated",
+        "author": "Tara Westover",
+        "isbn13": "9780399590504",
+        "genre": "biography",
+        "status": "proposed",
+        "page_count": 352,
+        "published_date": "2018-02-20",
+        "proposed_by": "@m_meera",
+        "description": "A memoir of growing up off-grid and finding school."
+      },
+      {
+        "_key": "b_dune",
+        "club": "@club_1",
+        "title": "Dune",
+        "author": "Frank Herbert",
+        "isbn13": "9780441172719",
+        "genre": "sci_fi",
+        "status": "proposed",
+        "page_count": 688,
+        "published_date": "1965-08-01",
+        "proposed_by": "@m_faiz",
+        "description": "Politics, ecology and prophecy on a desert planet."
+      },
+      {
+        "_key": "b_kite",
+        "club": "@club_1",
+        "title": "The Kite Runner",
+        "author": "Khaled Hosseini",
+        "isbn13": "9781594631931",
+        "genre": "fiction",
+        "status": "proposed",
+        "page_count": 371,
+        "published_date": "2003-05-29",
+        "proposed_by": "@m_priya",
+        "description": "Friendship, betrayal and redemption in Kabul and California."
+      }
+    ],
+    "meeting": [
+      {
+        "_key": "mt_1",
+        "club": "@club_1",
+        "book": "@b_tiger",
+        "title": "Discussion: The White Tiger",
+        "description": "Monthly discussion over coffee.",
+        "meeting_type": "hybrid",
+        "virtual_link": "https://meet.example.com/white-tiger",
+        "location": "Third Wave Coffee, Koramangala",
+        "start_time": "2026-03-28T18:30:00+05:30",
+        "end_time": "2026-03-28T20:00:00+05:30",
+        "status": "completed",
+        "created_by": "@m_priya"
+      },
+      {
+        "_key": "mt_2",
+        "club": "@club_1",
+        "book": "@b_gods",
+        "title": "Discussion: The God of Small Things",
+        "meeting_type": "in_person",
+        "location": "Cubbon Park reading lawn",
+        "start_time": "2026-05-30T17:00:00+05:30",
+        "end_time": "2026-05-30T18:30:00+05:30",
+        "status": "completed",
+        "created_by": "@m_priya"
+      },
+      {
+        "_key": "mt_3",
+        "club": "@club_1",
+        "book": "@b_sapiens",
+        "title": "Discussion: Sapiens",
+        "meeting_type": "virtual",
+        "virtual_link": "https://meet.example.com/sapiens",
+        "start_time": "2026-08-01T19:00:00+05:30",
+        "end_time": "2026-08-01T20:15:00+05:30",
+        "status": "completed",
+        "created_by": "@m_arjun"
+      },
+      {
+        "_key": "mt_4",
+        "club": "@club_1",
+        "book": "@b_dragon",
+        "title": "Mystery night: The Girl with the Dragon Tattoo",
+        "description": "Swedish snacks included.",
+        "meeting_type": "hybrid",
+        "virtual_link": "https://meet.example.com/dragon-tattoo",
+        "location": "Atta Galatta, Indiranagar",
+        "start_time": "2026-11-07T18:00:00+05:30",
+        "end_time": "2026-11-07T19:45:00+05:30",
+        "status": "scheduled",
+        "created_by": "@m_priya"
+      },
+      {
+        "_key": "mt_5",
+        "club": "@club_1",
+        "book": "@b_dragon",
+        "title": "Midpoint check-in",
+        "description": "Short chat on parts one and two.",
+        "meeting_type": "virtual",
+        "virtual_link": "https://meet.example.com/dragon-midpoint",
+        "start_time": "2026-10-24T20:00:00+05:30",
+        "end_time": "2026-10-24T20:45:00+05:30",
+        "status": "scheduled",
+        "created_by": "@m_arjun"
+      },
+      {
+        "_key": "mt_6",
+        "club": "@club_1",
+        "book": "@b_midnight",
+        "title": "Social: Midnight's Children picnic",
+        "meeting_type": "in_person",
+        "location": "Lalbagh Botanical Garden",
+        "start_time": "2026-09-12T16:30:00+05:30",
+        "end_time": "2026-09-12T18:00:00+05:30",
+        "status": "cancelled",
+        "created_by": "@m_arjun"
+      }
+    ],
+    "note": [
+      {
+        "_key": "n1",
+        "member": "@m_sneha",
+        "book": "@b_tiger",
+        "content": "Adiga's narrator is both charming and chilling. The rooster coop metaphor stayed with me.",
+        "meeting": "@mt_1",
+        "rating": 5
+      },
+      {
+        "_key": "n2",
+        "member": "@m_vikram",
+        "book": "@b_tiger",
+        "content": "The letter format is clever. I kept questioning how reliable Balram is.",
+        "meeting": "@mt_1",
+        "rating": 4
+      },
+      {
+        "_key": "n3",
+        "member": "@m_kavya",
+        "book": "@b_tiger",
+        "content": "Strong voice but the second half felt rushed to me.",
+        "rating": 3
+      },
+      {
+        "_key": "n4",
+        "member": "@m_arjun",
+        "book": "@b_gods",
+        "content": "The non-linear structure rewards a slow read. The river is a character.",
+        "meeting": "@mt_2",
+        "rating": 5
+      },
+      {
+        "_key": "n5",
+        "member": "@m_meera",
+        "book": "@b_gods",
+        "content": "Beautiful language. Estha and Rahel's silence hit hard.",
+        "meeting": "@mt_2",
+        "rating": 4
+      },
+      {
+        "_key": "n6",
+        "member": "@m_priya",
+        "book": "@b_sapiens",
+        "content": "The cognitive revolution chapter changed how I think about stories and money.",
+        "meeting": "@mt_3",
+        "rating": 4
+      },
+      {
+        "_key": "n7",
+        "member": "@m_rohit",
+        "book": "@b_sapiens",
+        "content": "Big claims, and I wanted more sources, but a great conversation starter.",
+        "meeting": "@mt_3",
+        "rating": 3
+      },
+      {
+        "_key": "n8",
+        "member": "@m_faiz",
+        "book": "@b_sapiens",
+        "content": "Finished in a week. The agricultural revolution as a trap is a fascinating idea.",
+        "rating": 5
+      },
+      {
+        "_key": "n9",
+        "member": "@m_rohit",
+        "book": "@b_dragon",
+        "content": "Halfway in and hooked. The Vanger family tree needs a diagram.",
+        "meeting": "@mt_5",
+        "rating": 4
+      },
+      {
+        "_key": "n10",
+        "member": "@m_priya",
+        "book": "@b_dragon",
+        "content": "Reading this for the second time and noticing far more clues."
+      }
+    ],
+    "invitation": [
+      {
+        "_key": "inv_1",
+        "club": "@club_1",
+        "email": "nikhil.rao@example.com",
+        "invited_by": "@m_priya",
+        "status": "accepted",
+        "expires_at": "2026-09-30T23:59:00+05:30"
+      },
+      {
+        "_key": "inv_2",
+        "club": "@club_1",
+        "email": "divya.menon@example.com",
+        "invited_by": "@m_arjun",
+        "status": "pending",
+        "expires_at": "2026-11-15T23:59:00+05:30"
+      },
+      {
+        "_key": "inv_3",
+        "club": "@club_1",
+        "email": "sana.sheikh@example.com",
+        "invited_by": "@m_priya",
+        "status": "pending",
+        "expires_at": "2026-11-20T23:59:00+05:30"
+      },
+      {
+        "_key": "inv_4",
+        "club": "@club_1",
+        "email": "tarun.bose@example.com",
+        "invited_by": "@m_arjun",
+        "status": "declined",
+        "expires_at": "2026-10-01T23:59:00+05:30"
+      }
+    ]
+  },
+  "model": {
+    "enums": [
+      {
+        "id": "member_role",
+        "values": [
+          {
+            "color": "#7E57C2",
+            "label": "Owner",
+            "value": "owner"
+          },
+          {
+            "color": "#5C6BC0",
+            "label": "Admin",
+            "value": "admin"
+          },
+          {
+            "color": "#90A4AE",
+            "label": "Member",
+            "value": "member"
+          }
+        ]
+      },
+      {
+        "id": "genre",
+        "values": [
+          {
+            "color": "#5C6BC0",
+            "label": "Fiction",
+            "value": "fiction"
+          },
+          {
+            "color": "#26A69A",
+            "label": "Non-fiction",
+            "value": "non_fiction"
+          },
+          {
+            "color": "#455A64",
+            "label": "Mystery",
+            "value": "mystery"
+          },
+          {
+            "color": "#29B6F6",
+            "label": "Sci-fi",
+            "value": "sci_fi"
+          },
+          {
+            "color": "#8D6E63",
+            "label": "Classics",
+            "value": "classics"
+          },
+          {
+            "color": "#FFA726",
+            "label": "Biography",
+            "value": "biography"
+          },
+          {
+            "color": "#95A5A6",
+            "label": "Other",
+            "value": "other"
+          }
+        ]
+      },
+      {
+        "id": "book_status",
+        "values": [
+          {
+            "color": "#F5A623",
+            "label": "Proposed",
+            "value": "proposed"
+          },
+          {
+            "color": "#2ECC71",
+            "label": "Selected",
+            "value": "selected"
+          },
+          {
+            "color": "#95A5A6",
+            "label": "Archived",
+            "value": "archived"
+          }
+        ]
+      },
+      {
+        "id": "meeting_type",
+        "values": [
+          {
+            "color": "#29B6F6",
+            "label": "Virtual",
+            "value": "virtual"
+          },
+          {
+            "color": "#66BB6A",
+            "label": "In person",
+            "value": "in_person"
+          },
+          {
+            "color": "#AB47BC",
+            "label": "Hybrid",
+            "value": "hybrid"
+          }
+        ]
+      },
+      {
+        "id": "meeting_status",
+        "values": [
+          {
+            "color": "#4A90E2",
+            "label": "Scheduled",
+            "value": "scheduled"
+          },
+          {
+            "color": "#2ECC71",
+            "label": "Completed",
+            "value": "completed"
+          },
+          {
+            "color": "#E74C3C",
+            "label": "Cancelled",
+            "value": "cancelled"
+          }
+        ]
+      },
+      {
+        "id": "invitation_status",
+        "values": [
+          {
+            "color": "#F5A623",
+            "label": "Pending",
+            "value": "pending"
+          },
+          {
+            "color": "#2ECC71",
+            "label": "Accepted",
+            "value": "accepted"
+          },
+          {
+            "color": "#E74C3C",
+            "label": "Declined",
+            "value": "declined"
+          }
+        ]
+      }
+    ],
+    "entities": [
+      {
+        "id": "club",
+        "icon": "users",
+        "label": "Club",
+        "fields": [
+          {
+            "id": "name",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": true,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "description",
+            "enum": null,
+            "type": "longtext",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "timezone",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": "Asia/Kolkata",
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          }
+        ],
+        "plural": "Clubs",
+        "display": {
+          "title": "name",
+          "subtitle": "timezone"
+        },
+        "lifecycle": null
+      },
+      {
+        "id": "member",
+        "icon": "user",
+        "label": "Member",
+        "fields": [
+          {
+            "id": "club",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "club",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "cascade",
+            "required": true,
+            "relation_name": "members"
+          },
+          {
+            "id": "name",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "email",
+            "enum": null,
+            "type": "email",
+            "index": null,
+            "target": null,
+            "unique": true,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "role",
+            "enum": "member_role",
+            "type": "enum",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": "member",
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "joined_at",
+            "enum": null,
+            "type": "date",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "avatar",
+            "enum": null,
+            "type": "image",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "notification_email",
+            "enum": null,
+            "type": "bool",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": true,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          }
+        ],
+        "plural": "Members",
+        "display": {
+          "title": "name",
+          "subtitle": "email"
+        },
+        "lifecycle": null
+      },
+      {
+        "id": "book",
+        "icon": "book",
+        "label": "Book",
+        "fields": [
+          {
+            "id": "club",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "club",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "cascade",
+            "required": true,
+            "relation_name": "books"
+          },
+          {
+            "id": "isbn13",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": true,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "title",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "author",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "genre",
+            "enum": "genre",
+            "type": "enum",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": "fiction",
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "cover_image",
+            "enum": null,
+            "type": "image",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "description",
+            "enum": null,
+            "type": "longtext",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "published_date",
+            "enum": null,
+            "type": "date",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "page_count",
+            "enum": null,
+            "type": "int",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "status",
+            "enum": "book_status",
+            "type": "enum",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": "proposed",
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "proposed_by",
+            "enum": null,
+            "type": "ref",
+            "index": null,
+            "target": "member",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "restrict",
+            "required": null,
+            "relation_name": "proposed_books"
+          },
+          {
+            "id": "selected_at",
+            "enum": null,
+            "type": "datetime",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          }
+        ],
+        "plural": "Books",
+        "display": {
+          "title": "title",
+          "subtitle": "author"
+        },
+        "lifecycle": {
+          "field": "status",
+          "states": [
+            "proposed",
+            "selected",
+            "archived"
+          ],
+          "initial": "proposed",
+          "transitions": [
+            {
+              "id": "select_book",
+              "to": "selected",
+              "from": "proposed",
+              "guard": null,
+              "label": "Select Book",
+              "roles": [
+                "owner",
+                "admin"
+              ]
+            },
+            {
+              "id": "archive_book",
+              "to": "archived",
+              "from": "selected",
+              "guard": null,
+              "label": "Archive Book",
+              "roles": [
+                "owner",
+                "admin"
+              ]
+            },
+            {
+              "id": "archive_proposed",
+              "to": "archived",
+              "from": "proposed",
+              "guard": null,
+              "label": "Archive Proposed",
+              "roles": [
+                "owner",
+                "admin"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "meeting",
+        "icon": "calendar",
+        "label": "Meeting",
+        "fields": [
+          {
+            "id": "club",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "club",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "cascade",
+            "required": true,
+            "relation_name": "meetings"
+          },
+          {
+            "id": "book",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "book",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "restrict",
+            "required": true,
+            "relation_name": "meetings"
+          },
+          {
+            "id": "title",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "description",
+            "enum": null,
+            "type": "longtext",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "meeting_type",
+            "enum": "meeting_type",
+            "type": "enum",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": "hybrid",
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "virtual_link",
+            "enum": null,
+            "type": "url",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "location",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "start_time",
+            "enum": null,
+            "type": "datetime",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "end_time",
+            "enum": null,
+            "type": "datetime",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "status",
+            "enum": "meeting_status",
+            "type": "enum",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": "scheduled",
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "created_by",
+            "enum": null,
+            "type": "ref",
+            "index": null,
+            "target": "member",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "restrict",
+            "required": null,
+            "relation_name": "created_meetings"
+          }
+        ],
+        "plural": "Meetings",
+        "display": {
+          "title": "title",
+          "subtitle": "start_time"
+        },
+        "lifecycle": {
+          "field": "status",
+          "states": [
+            "scheduled",
+            "completed",
+            "cancelled"
+          ],
+          "initial": "scheduled",
+          "transitions": [
+            {
+              "id": "complete_meeting",
+              "to": "completed",
+              "from": "scheduled",
+              "guard": null,
+              "label": "Mark Completed",
+              "roles": [
+                "owner",
+                "admin"
+              ]
+            },
+            {
+              "id": "cancel_meeting",
+              "to": "cancelled",
+              "from": "scheduled",
+              "guard": null,
+              "label": "Cancel Meeting",
+              "roles": [
+                "owner",
+                "admin"
+              ]
+            },
+            {
+              "id": "reschedule_meeting",
+              "to": "scheduled",
+              "from": "cancelled",
+              "guard": null,
+              "label": "Reschedule",
+              "roles": [
+                "owner",
+                "admin"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "note",
+        "icon": "file-text",
+        "label": "Note",
+        "fields": [
+          {
+            "id": "member",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "member",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "cascade",
+            "required": true,
+            "relation_name": "notes"
+          },
+          {
+            "id": "book",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "book",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "cascade",
+            "required": true,
+            "relation_name": "notes"
+          },
+          {
+            "id": "meeting",
+            "enum": null,
+            "type": "ref",
+            "index": null,
+            "target": "meeting",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "set_null",
+            "required": null,
+            "relation_name": "notes"
+          },
+          {
+            "id": "rating",
+            "enum": null,
+            "type": "rating",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "content",
+            "enum": null,
+            "type": "longtext",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          }
+        ],
+        "plural": "Notes",
+        "display": {
+          "title": "content",
+          "subtitle": "member.name"
+        },
+        "lifecycle": null
+      },
+      {
+        "id": "invitation",
+        "icon": "mail",
+        "label": "Invitation",
+        "fields": [
+          {
+            "id": "club",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "club",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "cascade",
+            "required": true,
+            "relation_name": "invitations"
+          },
+          {
+            "id": "email",
+            "enum": null,
+            "type": "email",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "invited_by",
+            "enum": null,
+            "type": "ref",
+            "index": null,
+            "target": "member",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "restrict",
+            "required": true,
+            "relation_name": "sent_invitations"
+          },
+          {
+            "id": "status",
+            "enum": "invitation_status",
+            "type": "enum",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": "pending",
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "expires_at",
+            "enum": null,
+            "type": "datetime",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          }
+        ],
+        "plural": "Invitations",
+        "display": {
+          "title": "email",
+          "subtitle": "status"
+        },
+        "lifecycle": {
+          "field": "status",
+          "states": [
+            "pending",
+            "accepted",
+            "declined"
+          ],
+          "initial": "pending",
+          "transitions": [
+            {
+              "id": "accept_invitation",
+              "to": "accepted",
+              "from": "pending",
+              "guard": null,
+              "label": "Accept",
+              "roles": []
+            },
+            {
+              "id": "decline_invitation",
+              "to": "declined",
+              "from": "pending",
+              "guard": null,
+              "label": "Decline",
+              "roles": []
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "trace": [
+    {
+      "requirement": "R1",
+      "satisfied_by": [
+        "entity:book",
+        "lifecycle:book",
+        "page:books",
+        "page:book_detail"
+      ]
+    },
+    {
+      "requirement": "R2",
+      "satisfied_by": [
+        "automation:set_selected_date",
+        "automation:notify_book_selection",
+        "field:book.selected_at"
+      ]
+    },
+    {
+      "requirement": "R3",
+      "satisfied_by": [
+        "entity:meeting",
+        "lifecycle:meeting",
+        "page:meetings",
+        "page:meeting_detail"
+      ]
+    },
+    {
+      "requirement": "R4",
+      "satisfied_by": [
+        "entity:note",
+        "field:note.rating",
+        "page:book_detail",
+        "page:meeting_detail"
+      ]
+    },
+    {
+      "requirement": "R5",
+      "satisfied_by": [
+        "entity:invitation",
+        "lifecycle:invitation",
+        "page:members",
+        "automation:invitation_email",
+        "automation:welcome_email_on_join"
+      ]
+    },
+    {
+      "requirement": "R6",
+      "satisfied_by": [
+        "entity:member",
+        "role:owner",
+        "role:admin",
+        "role:member"
+      ]
+    },
+    {
+      "requirement": "R7",
+      "satisfied_by": [
+        "automation:meeting_day_reminder"
+      ]
+    },
+    {
+      "requirement": "R8",
+      "satisfied_by": [
+        "page:dashboard",
+        "entity:club",
+        "page:club_settings"
+      ]
+    }
+  ],
+  "access": {
+    "roles": [
+      {
+        "id": "owner",
+        "label": "Club Owner"
+      },
+      {
+        "id": "admin",
+        "label": "Administrator"
+      },
+      {
+        "id": "member",
+        "label": "Member"
+      }
+    ],
+    "rules": [
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "owner",
+        "where": null,
+        "entity": "club"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "owner",
+        "where": null,
+        "entity": "member"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "owner",
+        "where": null,
+        "entity": "book"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "owner",
+        "where": null,
+        "entity": "meeting"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "owner",
+        "where": null,
+        "entity": "note"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "owner",
+        "where": null,
+        "entity": "invitation"
+      },
+      {
+        "ops": [
+          "read",
+          "update"
+        ],
+        "role": "admin",
+        "where": null,
+        "entity": "club"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "admin",
+        "where": null,
+        "entity": "member"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "admin",
+        "where": null,
+        "entity": "book"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "admin",
+        "where": null,
+        "entity": "meeting"
+      },
+      {
+        "ops": [
+          "read",
+          "delete"
+        ],
+        "role": "admin",
+        "where": null,
+        "entity": "note"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "admin",
+        "where": null,
+        "entity": "invitation"
+      },
+      {
+        "ops": [
+          "read"
+        ],
+        "role": "member",
+        "where": null,
+        "entity": "club"
+      },
+      {
+        "ops": [
+          "read"
+        ],
+        "role": "member",
+        "where": null,
+        "entity": "member"
+      },
+      {
+        "ops": [
+          "update"
+        ],
+        "role": "member",
+        "where": "email == $user.email",
+        "entity": "member"
+      },
+      {
+        "ops": [
+          "read"
+        ],
+        "role": "member",
+        "where": null,
+        "entity": "book"
+      },
+      {
+        "ops": [
+          "create"
+        ],
+        "role": "member",
+        "where": "status == 'proposed'",
+        "entity": "book"
+      },
+      {
+        "ops": [
+          "read"
+        ],
+        "role": "member",
+        "where": null,
+        "entity": "meeting"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "member",
+        "where": "member.email == $user.email",
+        "entity": "note"
+      },
+      {
+        "ops": [
+          "read"
+        ],
+        "role": "member",
+        "where": "email == $user.email",
+        "entity": "invitation"
+      },
+      {
+        "ops": [
+          "update"
+        ],
+        "role": "member",
+        "where": "email == $user.email and status == 'pending'",
+        "entity": "invitation"
+      }
+    ]
+  },
+  "personas": [
+    {
+      "id": "club_owner",
+      "name": "Club owner",
+      "goals": [
+        "Keep the club running and growing",
+        "Decide who can manage content"
+      ]
+    },
+    {
+      "id": "club_admin",
+      "name": "Club admin",
+      "goals": [
+        "Pick the next book",
+        "Schedule meetings and invite readers"
+      ]
+    },
+    {
+      "id": "reader",
+      "name": "Reader",
+      "goals": [
+        "Propose books I want to read",
+        "Keep my own notes and ratings"
+      ]
+    }
+  ],
+  "assumptions": [
+    "One club per installation; every record still carries a club link so several clubs could be supported later",
+    "Private, invite-only membership",
+    "Owners and admins select books; members can only propose them",
+    "Hybrid meetings supported (virtual link and in-person location on the same meeting)",
+    "Notes are private to the member who wrote them; admins can read and remove them",
+    "Members sign in with the same email address stored on their member record",
+    "Invitees accept or decline through their own email-matched access",
+    "Email and in-app notifications only; no push or SMS",
+    "English only; times shown in the club's timezone (Asia/Kolkata)",
+    "No payments and no external calendar sync in v1",
+    "Books identified by ISBN-13 when known"
+  ],
+  "automations": [
+    {
+      "id": "notify_book_selection",
+      "steps": [
+        {
+          "when": null,
+          "action": "notify",
+          "params": {
+            "recipients": "club.members",
+            "message": "{title} by {author} is our next read!"
+          }
+        }
+      ],
+      "trigger": {
+        "type": "lifecycle.transition",
+        "entity": "book",
+        "schedule": null,
+        "transition": "select_book"
+      }
+    },
+    {
+      "id": "set_selected_date",
+      "steps": [
+        {
+          "when": null,
+          "action": "set_field",
+          "params": {
+            "field": "selected_at",
+            "value": "now()"
+          }
+        }
+      ],
+      "trigger": {
+        "type": "lifecycle.transition",
+        "entity": "book",
+        "schedule": null,
+        "transition": "select_book"
+      }
+    },
+    {
+      "id": "welcome_email_on_join",
+      "steps": [
+        {
+          "when": null,
+          "action": "send_email",
+          "params": {
+            "to": "email",
+            "subject": "Welcome to {club.name}",
+            "body": "Hi {name}, we are glad to have you in {club.name}. Check the Books page for our next read."
+          }
+        }
+      ],
+      "trigger": {
+        "type": "record.created",
+        "entity": "member",
+        "schedule": null,
+        "transition": null
+      }
+    },
+    {
+      "id": "invitation_email",
+      "steps": [
+        {
+          "when": null,
+          "action": "send_email",
+          "params": {
+            "to": "email",
+            "subject": "You are invited to join {club.name}",
+            "body": "{invited_by.name} has invited you to join {club.name}. Reply to this email or sign in to accept."
+          }
+        }
+      ],
+      "trigger": {
+        "type": "record.created",
+        "entity": "invitation",
+        "schedule": null,
+        "transition": null
+      }
+    },
+    {
+      "id": "meeting_day_reminder",
+      "steps": [
+        {
+          "when": "status == 'scheduled' and start_time >= today() and start_time < tomorrow()",
+          "action": "notify",
+          "params": {
+            "recipients": "club.members",
+            "message": "Today: {title} at {location}"
+          }
+        }
+      ],
+      "trigger": {
+        "type": "schedule",
+        "entity": "meeting",
+        "schedule": "0 9 * * *",
+        "transition": null
+      }
+    }
+  ],
+  "integrations": [],
+  "requirements": [
+    {
+      "id": "R1",
+      "text": "Members can propose books; owners and admins select the next read and archive finished ones",
+      "priority": "must"
+    },
+    {
+      "id": "R2",
+      "text": "Selecting a book records the date and notifies every member",
+      "priority": "must"
+    },
+    {
+      "id": "R3",
+      "text": "Schedule meetings (virtual, in person or hybrid) linked to a book and view them on a calendar",
+      "priority": "must"
+    },
+    {
+      "id": "R4",
+      "text": "Members keep their own notes and 1 to 5 star ratings per book and meeting",
+      "priority": "must"
+    },
+    {
+      "id": "R5",
+      "text": "Invite people by email; invitees can accept or decline, and new members get a welcome email",
+      "priority": "must"
+    },
+    {
+      "id": "R6",
+      "text": "Owners can manage everything; admins manage content and members; members read content and edit only their own notes and profile",
+      "priority": "must"
+    },
+    {
+      "id": "R7",
+      "text": "Remind members on the day of a meeting",
+      "priority": "should"
+    },
+    {
+      "id": "R8",
+      "text": "Show a dashboard with books read, next read, proposed books, upcoming meetings and meeting history",
+      "priority": "should"
+    }
+  ],
+  "spec_version": "1.0"
+}

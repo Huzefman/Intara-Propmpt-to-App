@@ -6,11 +6,11 @@
   "metric.gauge": {"props": {"entity": "item", "field": "qty", "max": 100, "label": "Stock"}, "rows": [{"id": "i1", "qty": 24}]},
   "record.detail": {"props": {"entity": "job", "sections": [{"title": "Main", "fields": ["device", "status"]}]}, "record": {"id": "j1", "device": "Phone", "status": "ready"}},
   "record.related_list": {"props": {"entity": "part", "via": "job", "columns": ["name", "qty"]}, "rows": [{"id": "p1", "name": "SSD", "qty": 1}]},
-  "lifecycle.pipeline": {"props": {"entity": "job", "transitions": [{"id": "finish", "label": "Finish", "allowed": true}], "current": "finish"}, "record": {"status": "diagnosing"}},
+  "lifecycle.pipeline": {"props": {"entity": "job"}, "record": {"status": "diagnosing"}},
   "form.record": {"props": {"entity": "job", "fields": [{"id": "device", "label": "Device", "type": "text", "required": true}, {"id": "status", "label": "Status", "type": "text"}]}, "record": {"device": "Phone"}},
-  "chart.bar": {"props": {"entity": "item", "label_field": "name", "value_field": "qty"}, "rows": [{"id": "i1", "name": "Mug", "qty": 24}]},
-  "calendar.month": {"props": {"entity": "slot", "date_field": "start_time", "title_field": "name"}, "rows": [{"id": "s1", "name": "Cut", "start_time": "2026-05-01T10:00:00"}]},
-  "activity.timeline": {"props": {"entity": "activity", "text_field": "note", "done_field": "done"}, "rows": [{"id": "a1", "note": "Called", "done": true}]},
+  "chart.bar": {"props": {"entity": "item", "title": "Stock by location", "x": "location", "y": "count"}, "rows": [{"id": "i1", "location": "A", "qty": 24}, {"id": "i2", "location": "A", "qty": 3}]},
+  "calendar.month": {"props": {"entity": "slot", "date_field": "start_time", "title": "name", "row_link": "detail"}, "rows": [{"id": "s1", "name": "Cut", "start_time": "2026-05-01T10:00:00"}]},
+  "activity.timeline": {"props": {"entity": "activity", "date_field": "done_at", "title": "note"}, "rows": [{"id": "a1", "note": "Called", "done_at": "2026-05-01"}]},
   "file.list": {"props": {"entity": "doc", "field": "file"}, "rows": [{"id": "d1", "file": "/f/receipt.pdf"}, {"id": "d2"}]},
   "content.hero": {"props": {"title": "Welcome", "subtitle": "Hello", "cta": "Start"}}
 }}

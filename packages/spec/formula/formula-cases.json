@@ -117,6 +117,10 @@
   {"id": "guide-filter", "formula": "status != 'delivered' and total > 1000", "record": {"status": "ready", "total": 3000}, "expect": true},
   {"id": "guide-som", "formula": "received_at >= startOfMonth()", "record": {"received_at": "2026-05-10"}, "now": "2026-05-20T00:00:00", "expect": true},
   {"id": "guide-som-neg", "formula": "received_at >= startOfMonth()", "record": {"received_at": "2026-04-28"}, "now": "2026-05-20T00:00:00", "expect": false},
+  {"id": "date-today", "formula": "today()", "now": "2026-05-20T00:00:00", "expect": "2026-05-20"},
+  {"id": "date-tomorrow", "formula": "tomorrow()", "now": "2026-05-20T00:00:00", "expect": "2026-05-21"},
+  {"id": "date-today-tz", "formula": "today()", "now": "2026-05-20T10:00:00+05:30", "expect": "2026-05-20"},
+  {"id": "date-filter-today", "formula": "start_at >= today() and start_at < tomorrow()", "record": {"start_at": "2026-05-20"}, "now": "2026-05-20T00:00:00", "expect": true},
 
   {"id": "syn-empty", "formula": "", "expect_error": "syntax"},
   {"id": "syn-spaces", "formula": "   ", "expect_error": "syntax"},

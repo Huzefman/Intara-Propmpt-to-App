@@ -5,26 +5,30 @@ import { displayPath, resolveState } from "./types.ts";
 import type { BlockHostProps, Rec } from "./types.ts";
 
 export function ChartBar({ block, rows, state, error }: BlockHostProps<{
-  entity: string; label_field?: string; value_field?: string;
+  entity: string; title?: string; x: string; y?: string;
 }>) {
   const st = resolveState(rows, undefined, state, error);
-  const lf = block.props.label_field ?? "name";
-  const vf = block.props.value_field ?? "value";
-  const max = Math.max(1, ...(rows ?? []).map((r) => typeof r[vf] === "number" ? (r[vf] as number) : 0));
+  const lf = block.props.x;
+  const ymode = block.props.y ?? "count";
+  const groups = new Map<string, number>();
+  for (const r of rows ?? []) {
+    const label = displayPath(r, lf);
+    const v = ymode === "count" ? 1
+      : typeof r[ymode] === "number" ? (r[ymode] as number) : 0;
+    groups.set(label, (groups.get(label) ?? 0) + v);
+  }
+  const max = Math.max(1, ...groups.values());
   return (
-    <BlockShell state={st} error={error}>
+    <BlockShell title={block.props.title} state={st} error={error}>
       {st === "ready" ? (
         <div className="blk-chart">
-          {(rows ?? []).map((r, i) => {
-            const v = typeof r[vf] === "number" ? (r[vf] as number) : 0;
-            return (
-              <div key={String(r["id"] ?? i)} className="blk-row">
-                <span>{displayPath(r, lf)}</span>
-                <div className="blk-bar"><div style={{ width: `${Math.round((v / max) * 100)}%` }} /></div>
-                <em>{v}</em>
-              </div>
-            );
-          })}
+          {[...groups.entries()].map(([label, v], i) => (
+            <div key={`${label}-${i}`} className="blk-row">
+              <span>{label}</span>
+              <div className="blk-bar"><div style={{ width: `${Math.round((v / max) * 100)}%` }} /></div>
+              <em>{v}</em>
+            </div>
+          ))}
         </div>
       ) : undefined}
     </BlockShell>
@@ -32,11 +36,11 @@ export function ChartBar({ block, rows, state, error }: BlockHostProps<{
 }
 
 export function CalendarMonth({ block, rows, state, error, onAction }: BlockHostProps<{
-  entity: string; date_field?: string; title_field?: string;
+  entity: string; date_field: string; title?: string; row_link?: string;
 }>) {
   const st = resolveState(rows, undefined, state, error);
-  const df = block.props.date_field ?? "date";
-  const tf = block.props.title_field ?? "name";
+  const df = block.props.date_field;
+  const tf = block.props.title ?? "name";
   const days = new Map<string, Rec[]>();
   for (const r of rows ?? []) {
     const day = String(r[df] ?? "").slice(0, 10);
@@ -65,18 +69,18 @@ export function CalendarMonth({ block, rows, state, error, onAction }: BlockHost
 }
 
 export function ActivityTimeline({ block, rows, state, error }: BlockHostProps<{
-  entity: string; text_field?: string; done_field?: string;
+  entity: string; date_field: string; title?: string;
 }>) {
   const st = resolveState(rows, undefined, state, error);
-  const tf = block.props.text_field ?? "note";
-  const df = block.props.done_field ?? "done";
+  const tf = block.props.title ?? "note";
   return (
     <BlockShell state={st} error={error}>
       {st === "ready" ? (
         <ol className="blk-timeline">
           {(rows ?? []).map((r, i) => (
-            <li key={String(r["id"] ?? i)} className={r[df] ? "done" : ""}>
-              {displayPath(r, tf)}
+            <li key={String(r["id"] ?? i)}>
+              <span className="blk-date">{displayPath(r, block.props.date_field)}</span>
+              {" "}{displayPath(r, tf)}
             </li>
           ))}
         </ol>

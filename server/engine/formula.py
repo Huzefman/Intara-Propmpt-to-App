@@ -257,6 +257,18 @@ def _now_iso(ctx: dict) -> str:
         return "1970-01-01T00:00:00"
 
 
+def _day_shift(ctx: dict, days: int) -> str:
+    """YYYY-MM-DD of ctx.now shifted by days (deterministic under fixed now)."""
+    now = _now_iso(ctx)
+    try:
+        base = datetime.datetime.fromisoformat(now.replace("Z", "+00:00"))
+    except Exception:
+        base = datetime.datetime(1970, 1, 1)
+    if base.tzinfo is not None:
+        base = base.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    return (base + datetime.timedelta(days=days)).strftime("%Y-%m-%d")
+
+
 def _start_of_month(ctx: dict) -> str:
     now = _now_iso(ctx)
     m = re.match(r"(\d{4}-\d{2})", now)
@@ -405,6 +417,14 @@ def _call(name: str, args: list, ctx: dict, lazy):
         if vals:
             raise FormulaError("now takes no arguments")
         return _now_iso(ctx)
+    if name == "today":
+        if vals:
+            raise FormulaError("today takes no arguments")
+        return _day_shift(ctx, 0)
+    if name == "tomorrow":
+        if vals:
+            raise FormulaError("tomorrow takes no arguments")
+        return _day_shift(ctx, 1)
     if name == "startOfMonth":
         if vals:
             raise FormulaError("startOfMonth takes no arguments")

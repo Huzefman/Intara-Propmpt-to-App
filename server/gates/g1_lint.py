@@ -20,23 +20,52 @@ from typing import Any
 ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 TEMPLATE_VAR_RE = re.compile(r"\{([^{}]+)\}")
 
-# Minimal catalog slice the linter enforces. Full catalog lives in
-# server/components/ (Track B); spec blocks reference this stable set.
+# Block catalog: required + optional props per type (guide vocabulary, as
+# normalised by human review). Unknown prop keys are R37; missing required
+# is R31. Stability experimental warns (W01), planned is an error (R30).
 BLOCKS: dict = {
-    "data.table": {"stability": "stable", "required_props": ["entity"]},
-    "data.kanban": {"stability": "stable", "required_props": ["entity", "group_by"]},
-    "metric.stat": {"stability": "stable", "required_props": ["entity"]},
-    "filter.bar": {"stability": "stable", "required_props": ["entity"]},
-    "record.detail": {"stability": "stable", "required_props": ["entity"]},
-    "record.related_list": {"stability": "stable", "required_props": ["entity"]},
-    "lifecycle.pipeline": {"stability": "stable", "required_props": ["entity"]},
-    "metric.gauge": {"stability": "experimental", "required_props": ["entity"]},
-    "form.record": {"stability": "stable", "required_props": ["entity"]},
-    "chart.bar": {"stability": "stable", "required_props": ["entity"]},
-    "calendar.month": {"stability": "stable", "required_props": ["entity"]},
-    "activity.timeline": {"stability": "stable", "required_props": ["entity"]},
-    "file.list": {"stability": "stable", "required_props": ["entity"]},
-    "content.hero": {"stability": "stable", "required_props": []},
+    "data.table": {"stability": "stable",
+                   "required_props": ["entity"],
+                   "optional_props": ["columns", "row_link", "create"]},
+    "data.kanban": {"stability": "stable",
+                    "required_props": ["entity", "group_by"],
+                    "optional_props": ["card", "drag_transitions"]},
+    "metric.stat": {"stability": "stable",
+                    "required_props": ["entity", "items"],
+                    "optional_props": []},
+    "filter.bar": {"stability": "stable",
+                   "required_props": ["entity"],
+                   "optional_props": ["fields", "search"]},
+    "record.detail": {"stability": "stable",
+                      "required_props": ["entity"],
+                      "optional_props": ["sections"]},
+    "record.related_list": {"stability": "stable",
+                            "required_props": ["entity", "via"],
+                            "optional_props": ["columns", "row_link", "create"]},
+    "lifecycle.pipeline": {"stability": "stable",
+                           "required_props": ["entity"],
+                           "optional_props": []},
+    "metric.gauge": {"stability": "experimental",
+                     "required_props": ["entity"],
+                     "optional_props": ["field", "max", "label"]},
+    "form.record": {"stability": "stable",
+                    "required_props": ["entity"],
+                    "optional_props": ["fields"]},
+    "chart.bar": {"stability": "stable",
+                  "required_props": ["entity", "x"],
+                  "optional_props": ["title", "y"]},
+    "calendar.month": {"stability": "stable",
+                       "required_props": ["entity", "date_field"],
+                       "optional_props": ["title", "row_link"]},
+    "activity.timeline": {"stability": "stable",
+                          "required_props": ["entity", "date_field"],
+                          "optional_props": ["title"]},
+    "file.list": {"stability": "stable",
+                  "required_props": ["entity"],
+                  "optional_props": ["field"]},
+    "content.hero": {"stability": "stable",
+                     "required_props": [],
+                     "optional_props": ["title", "subtitle", "cta"]},
 }
 
 AUTO_ACTIONS = {"set_field", "create_record", "send_email", "notify", "webhook", "export_csv"}
@@ -45,6 +74,60 @@ AUTO_TRIGGERS = {"record.created", "record.updated", "lifecycle.transition", "sc
 
 def _finding(rule: str, message: str, path: str) -> dict:
     return {"rule": rule, "message": message, "path": path}
+
+
+_WHERE_KW = {"and", "or", "not", "true", "false", "null", "in"}
+
+
+def _where_idents(expr: str) -> list:
+    """Bare identifiers from a where/when-style expression (not full formulas:
+    anything function-like or $user-bound is skipped)."""
+    import re
+    if not isinstance(expr, str):
+        return []
+    scrubbed = re.sub(r"'[^']*'|\"[^\"]*\"", " ", expr)
+    out = []
+    for m in re.finditer(r"[$A-Za-z_][\w$]*(?:\.[A-Za-z_]\w*)*", scrubbed):
+        tok = m.group(0)
+        if tok.lower() in _WHERE_KW:
+            continue
+        if scrubbed[m.end():].lstrip().startswith("("):
+            continue  # function call (today(), sum(), ...)
+        if tok.startswith("$user"):
+            continue  # only allowed context variable
+        out.append(tok)
+    return out
+
+
+def _resolve_dotted(fields_of: dict, accessors: dict, accessor_target: dict,
+                    eid: str, dotted: str, errors: list, path: str, rule: str) -> None:
+    """Resolve 'a.b.c' from entity eid: fields, ref traversal, relation lists."""
+    segs = dotted.split(".")
+    cur = eid
+    for i, seg in enumerate(segs):
+        flds = fields_of.get(cur, {})
+        if seg in flds:
+            f = flds[seg]
+            if f.get("type") in ("ref", "multi_ref"):
+                if i < len(segs) - 1:
+                    if not f.get("target") or f["target"] not in fields_of:
+                        errors.append(_finding(rule, f"cannot traverse {dotted!r} via {seg!r}", path))
+                        return
+                    cur = f["target"]
+            elif i < len(segs) - 1:
+                errors.append(_finding(rule, f"cannot traverse {dotted!r} via non-ref {seg!r}", path))
+                return
+        elif seg in accessors.get(cur, set()):
+            tgt = accessor_target.get((cur, seg))
+            if i < len(segs) - 1:
+                if not tgt or tgt not in fields_of:
+                    errors.append(_finding(rule, f"cannot traverse {dotted!r} via {seg!r}", path))
+                    return
+                cur = tgt
+            # relation list as a terminal is fine (aggregates iterate it)
+        else:
+            errors.append(_finding(rule, f"unknown field {dotted!r}", path))
+            return
 
 
 def _formula_names(formula: str) -> set:
@@ -238,8 +321,9 @@ def lint(spec: dict) -> dict:
             if s not in seen:
                 errors.append(_finding("R18", f"lifecycle state {s!r} unreachable from initial", base))
 
-    # R11/R29/R30/R31 blocks + R12 page roles + collect entity usage
+    # R11/R29/R30/R31/R37 blocks + R12 page roles + collect entity usage
     used_entities: set = set()
+    block_refs: list = []  # (pid, page_roles, btype, props, bp) for R38/R42
     for pid, p in pages.items():
         for r in p.get("roles") or []:
             if r not in roles:
@@ -262,21 +346,37 @@ def lint(spec: dict) -> dict:
             for req in info["required_props"]:
                 if req not in props:
                     errors.append(_finding("R31", f"block {btype!r} missing required prop {req!r}", bp))
+            allowed = set(info["required_props"]) | set(info.get("optional_props", []))
+            for key in props:
+                if key not in allowed:
+                    errors.append(_finding("R37", f"block {btype!r} unexpected prop {key!r}", bp))
             ent = props.get("entity")
             if ent is not None:
                 if ent not in entities:
                     errors.append(_finding("R11", f"block entity {ent!r} does not exist", bp))
                 else:
                     used_entities.add(ent)
+            block_refs.append((pid, p.get("roles") or [], btype, props, bp))
 
-    # R13 nav targets
+    # R13 nav targets (+ nav never targets :id routes, nav roles ⊆ page roles)
     nav_pages = set()
+    nav_roles: set = set()
     for n in ui.get("nav") or []:
         if isinstance(n, dict):
             if n.get("page") not in pages:
                 errors.append(_finding("R13", f"nav page {n.get('page')!r} does not exist", "ui.nav"))
             else:
                 nav_pages.add(n["page"])
+                pg = pages[n["page"]]
+                if isinstance(pg.get("route"), str) and ":id" in pg["route"]:
+                    errors.append(_finding("R39", f"nav must not target detail page {n.get('page')!r}", "ui.nav"))
+                for r in n.get("roles") or []:
+                    nav_roles.add(r)
+                    if r not in (pg.get("roles") or []):
+                        errors.append(_finding("R39", f"nav role {r!r} not allowed on page {n.get('page')!r}", "ui.nav"))
+    for r in roles:
+        if r not in nav_roles:
+            warnings.append(_finding("W02", f"role {r!r} has no nav item", f"access.roles.{r}"))
 
     # R20 page reachability (nav or row_link from another page)
     linked = set()
@@ -461,5 +561,186 @@ def lint(spec: dict) -> dict:
             errors.append(_finding("R36", f"rule role {rule.get('role')!r} does not exist", rp))
         if rule.get("entity") != "*" and rule.get("entity") not in entities:
             errors.append(_finding("R36", f"rule entity {rule.get('entity')!r} does not exist", rp))
+        if isinstance(rule.get("where"), str) and rule["where"].strip():
+            tgt = rule.get("entity")
+            if tgt in entities:
+                for tok in _where_idents(rule["where"]):
+                    _resolve_dotted(fields_of, accessors, accessor_target,
+                                    tgt, tok, errors, rp + ".where", "R41")
+
+    # R38: every (page role × block entity) pair needs a read rule.
+    readable: set = set()
+    for rule in access.get("rules") or []:
+        if not isinstance(rule, dict) or "read" not in (rule.get("ops") or []):
+            continue
+        if rule.get("entity") == "*":
+            for rid in roles:
+                if rid == rule.get("role"):
+                    readable.update((rid, e) for e in entities)
+        elif rule.get("entity") in entities:
+            readable.add((rule.get("role"), rule.get("entity")))
+    for pid, page_roles, btype, props, bp in block_refs:
+        ent = (props or {}).get("entity")
+        if not ent or ent not in entities:
+            continue
+        effective = page_roles or sorted(roles)
+        for r in effective:
+            if r not in roles:
+                continue
+            if (r, ent) not in readable:
+                errors.append(_finding(
+                    "R38", f"page role {r!r} shows {ent!r} without a read rule", bp))
+
+    # R42: block/page coherence (pipeline/detail, row_link, related via).
+    for pid, _pr, btype, props, bp in block_refs:
+        props = props or {}
+        if btype == "lifecycle.pipeline":
+            has_detail = any(True for (_p2, _r2, t2, _ps2, _b2) in block_refs
+                             if _p2 == pid and t2 == "record.detail")
+            if not has_detail:
+                errors.append(_finding("R42", "lifecycle.pipeline needs a record.detail on the page", bp))
+        if btype == "record.related_list":
+            via = props.get("via")
+            ent = props.get("entity")
+            if isinstance(via, str) and isinstance(ent, str) and ent in entities:
+                fdef = fields_of.get(ent, {}).get(via)
+                if not fdef or fdef.get("type") not in ("ref", "multi_ref"):
+                    errors.append(_finding("R42", f"via {via!r} is not a ref on {ent!r}", bp))
+        rl = props.get("row_link")
+        if isinstance(rl, str) and rl in pages:
+            tgt = pages[rl]
+            tent = next(( (tb.get("props") or {}).get("entity")
+                          for tb in (tgt.get("blocks") or [])
+                          if isinstance(tb, dict) and tb.get("type") == "record.detail"), None)
+            ent = props.get("entity")
+            if tent != ent:
+                errors.append(_finding(
+                    "R42", f"row_link {rl!r} shows {tent!r}, rows are {ent!r}", bp))
+
+    # R40: no system/filler ids, refs named after their target.
+    for eid, e in entities.items():
+        for fid, f in fields_of[eid].items():
+            if fid in ("id", "created_at", "updated_at"):
+                errors.append(_finding("R40", f"system field {fid!r} (storage-managed)", f"model.entities.{eid}.fields.{fid}"))
+            if f.get("type") in ("ref", "multi_ref") and fid.endswith("_id"):
+                errors.append(_finding("R40", f"ref {fid!r} must be named after its target", f"model.entities.{eid}.fields.{fid}"))
+
+    # Lifecycle: enum default == initial (R-new, stricter than R15 membership).
+    for eid, e in entities.items():
+        lc = e.get("lifecycle")
+        if not lc:
+            continue
+        fld = fields_of[eid].get(lc.get("field")) or {}
+        if fld.get("type") == "enum" and fld.get("default") is not None \
+                and fld.get("default") != lc.get("initial"):
+            errors.append(_finding("R43", f"enum default {fld.get('default')!r} != lifecycle initial", f"model.entities.{eid}.lifecycle"))
+
+    # Trace: bidirectional presence + kind resolution (R44; G2 covers coverage).
+    req_ids = {r.get("id") for r in spec.get("requirements") or [] if isinstance(r, dict)}
+    trace = spec.get("trace") or []
+    seen_reqs: set = set()
+    for t in trace:
+        if not isinstance(t, dict):
+            continue
+        rid = t.get("requirement")
+        if rid not in req_ids:
+            errors.append(_finding("R44", f"trace of unknown requirement {rid!r}", "trace"))
+            continue
+        seen_reqs.add(rid)
+        for ref in t.get("satisfied_by") or []:
+            kind, _, rest = str(ref).partition(":")
+            ok_ref = False
+            if kind == "entity":
+                ok_ref = rest in entities
+            elif kind == "page":
+                ok_ref = rest in pages
+            elif kind == "automation":
+                ok_ref = any(a.get("id") == rest for a in spec.get("automations") or [] if isinstance(a, dict))
+            elif kind == "role":
+                ok_ref = rest in roles
+            elif kind == "lifecycle":
+                ok_ref = rest in entities and bool(entities[rest].get("lifecycle"))
+            elif kind == "field":
+                e_, _, f_ = rest.partition(".")
+                ok_ref = e_ in entities and f_ in fields_of.get(e_, {})
+            if not ok_ref:
+                errors.append(_finding("R44", f"trace {rid}: unresolved {ref!r}", "trace"))
+        if not t.get("satisfied_by"):
+            errors.append(_finding("R44", f"trace {rid}: empty", "trace"))
+    for rid in req_ids:
+        if rid not in seen_reqs:
+            errors.append(_finding("R44", f"requirement {rid!r} missing from trace", "trace"))
+
+    # Dup routes (R45); param routes need a record.detail (R46).
+    seen_routes: set = set()
+    for pid, p in pages.items():
+        route = p.get("route") or ""
+        if route in seen_routes:
+            errors.append(_finding("R45", f"duplicate route {route!r}", f"ui.pages.{pid}"))
+        seen_routes.add(route)
+        if ":id" in route and not any(
+                isinstance(b, dict) and b.get("type") == "record.detail"
+                for b in (p.get("blocks") or [])):
+            errors.append(_finding("R46", f"param route without record.detail", f"ui.pages.{pid}"))
+
+    # Seed strictness beyond R34/R35: required fields, enum values, no
+    # computed seeds, date/datetime shape, unique dupes. Missing _key warns.
+    seed = spec.get("seed") or {}
+    if isinstance(seed, dict):
+        for ent, rows in seed.items():
+            if ent not in entities or not isinstance(rows, list):
+                continue
+            for r in rows:
+                if not isinstance(r, dict):
+                    continue
+                if not isinstance(r.get("_key"), str):
+                    warnings.append(_finding("W03", f"seed {ent} row without _key", f"seed.{ent}"))
+                for fid, f in fields_of[ent].items():
+                    if f.get("required") and not f.get("computed") \
+                            and f.get("default") is None and r.get(fid) is None:
+                        errors.append(_finding("R47", f"seed {ent}: missing required {fid!r}", f"seed.{ent}"))
+                    val = r.get(fid)
+                    if f.get("computed") and fid in r:
+                        errors.append(_finding("R47", f"seed {ent}: computed field {fid!r} must not be seeded", f"seed.{ent}"))
+                    if f.get("type") == "enum" and isinstance(val, str):
+                        enum_vals = [v.get("value") for v in (enums.get(f.get("enum")) or {}).get("values", [])]
+                        if f.get("enum") in enums and val not in enum_vals:
+                            errors.append(_finding("R47", f"seed {ent}: bad enum {val!r}", f"seed.{ent}"))
+                    if f.get("type") == "date" and isinstance(val, str):
+                        import datetime as _dt
+                        try:
+                            _dt.datetime.strptime(val, "%Y-%m-%d")
+                        except Exception:
+                            errors.append(_finding("R47", f"seed {ent}: bad date {val!r}", f"seed.{ent}"))
+                    if f.get("type") == "datetime" and isinstance(val, str):
+                        import datetime as _dt
+                        try:
+                            _dt.datetime.fromisoformat(val.replace("Z", "+00:00"))
+                        except Exception:
+                            errors.append(_finding("R47", f"seed {ent}: bad datetime {val!r}", f"seed.{ent}"))
+
+    # Automation template identifiers (R41): {vars} in params + when already
+    # covered by R25; here templates + to/recipients/field shorthand.
+    import re as _re
+    for a in spec.get("automations") or []:
+        if not isinstance(a, dict):
+            continue
+        trig_ent = (a.get("trigger") or {}).get("entity")
+        for s in a.get("steps") or []:
+            if not isinstance(s, dict):
+                continue
+            for k, v in (s.get("params") or {}).items():
+                if not isinstance(v, str):
+                    continue
+                for tmpl in _re.findall(r"\{([^{}]+)\}", v):
+                    if trig_ent in entities:
+                        _resolve_dotted(fields_of, accessors, accessor_target,
+                                        trig_ent, tmpl.strip(), errors,
+                                        f"automations.{a.get('id')}.{k}", "R41")
+                if k in ("to", "recipients") and "{" not in v and trig_ent in entities:
+                    if "." in v:
+                        _resolve_dotted(fields_of, accessors, accessor_target,
+                                        trig_ent, v, errors,
+                                        f"automations.{a.get('id')}.{k}", "R41")
 
     return {"errors": errors, "warnings": warnings}

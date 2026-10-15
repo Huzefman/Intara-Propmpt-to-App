@@ -81,7 +81,7 @@ export async function runG3(spec: AppSpec, name: string): Promise<G3Result> {
     const probe: Record<string, unknown> = { id: `g3-${e.id}` };
     for (const f of e.fields) {
       if (f.computed || probe[f.id] !== undefined) continue;
-      probe[f.id] = f.type === "int" || f.type === "decimal" || f.type === "money" ? 1
+      probe[f.id] = f.type === "int" || f.type === "decimal" || f.type === "money" || f.type === "rating" ? 1
         : f.type === "bool" ? true
         : f.type === "enum" ? ((spec.model.enums ?? []).find((x) => x.id === f.enum)?.values[0]?.value ?? "x")
         : f.type.startsWith("multi") ? []

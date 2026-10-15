@@ -27,6 +27,12 @@ def _load(name):
         return json.load(f)
 
 
+def _golds():
+    import glob as _glob
+    return sorted(os.path.basename(p)
+                  for p in _glob.glob(os.path.join(SPEC, "exemplars", "*.json")))
+
+
 def _base():
     with open(os.path.join(FIX, "base.json")) as f:
         return json.load(f)
@@ -35,8 +41,10 @@ def _base():
 def test_g0_golds_and_base_pass():
     from gates.g0_validate import validate
     assert validate(_base()) == []
-    assert validate(_load("repair-tracker.json")) == []
-    assert validate(_load("inventory.json")) == []
+    golds = _golds()
+    assert len(golds) >= 8, f"want 8 golds, have {golds}"
+    for name in golds:
+        assert validate(_load(name)) == [], name
 
 
 def test_g0_rejects_bad_shape():
@@ -57,7 +65,7 @@ def test_g0_rejects_bad_shape():
 def test_g1_golds_and_base_clean():
     from gates.g1_lint import lint
     assert lint(_base())["errors"] == []
-    for name in ("repair-tracker.json", "inventory.json"):
+    for name in _golds():
         res = lint(_load(name))
         assert res["errors"] == [], f"{name}: {res['errors'][:3]}"
 
