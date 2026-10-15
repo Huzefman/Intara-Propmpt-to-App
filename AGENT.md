@@ -253,6 +253,11 @@
 - **Automations in preview:** RuntimePreview fires record.created/lifecycle.transition automations on user actions, shows notify/deferred effects, refreshes on mutations. Studio tsc + vite build green.
 - **Next:** Phase 8 slice 2 (lifecycle UI/kanban wires, CSV UI, roles editor…) — ask user for priority.
 
+### Session 17 — 2026-10-15 — Phase 8 slice 2 (boards + CSV) [x]
+- **Done:** shared `blocks/csv.ts` (deduped from executor) + 4 tests; kanban drag-to-transition (HTML5 DnD, `move` action, host resolves transition, notice when none); table Export/Import CSV; RuntimePreview fires automations + handles move/export/import with notices. Supabase contract proven **live 6/6** (scratch app, zero residue). Node **194/194 (1 skip)**, 90.8% lines; both tscs + vite build; python **190/190**, eval 5/5.
+- **Problems:** (a) shared-table cross-subtest pollution → per-subtest hard-clean hook in contract; (b) live network tests must be INTARA_LIVE opt-in, never ambient-env (a leaked shell export + transient fetch failure flaked the gate suite) · see §5 #33–34.
+- **Next:** slice 3 candidates — roles editor, file/image Storage (+buckets), single-user auth, email verify, print/PDF, 2 more golds.
+
 ---
 
 ## 5. Known problems / error register
@@ -284,12 +289,15 @@
 23. 2026-10-12 · v2 router created the run row AND engine.run created a second one — client polled an empty shell (running, no steps) while the shadow run did the work · `run_id` passthrough (exactly one row per run) · **FIXED, proven (steps under polled id)**
 24. 2026-10-12 · `_gate_s4` referenced undefined `fields_of` (NameError swallowed into gate-error noise) — set_field automation errors only surfaced at S5 · gate now takes entity_fields; unit-pinned · **FIXED**
 25. 2026-10-13 · core20 dry-run failed S5 on orphan detail pages (R20) — S3 gate lacked reachability (only G1 had it) · R20-equivalent added to `_gate_s3` (nav or row_link) + unit test · **FIXED (unproven live — full run exercises it)**
-26. 2026-10-13 · core20 full run: role mismatch ALSO fires R12-direction (S3 pages use roles S4 never declares — education/automotive/school) · fix queued: S4 gate role-set EQUALITY both directions · **OPEN**
-27. 2026-10-13 · core20: raising steps leave `running` rows (restaurant s5, gym s4) — only the return-failure path flips rows · wrap step execution to mark failed on raise · **OPEN**
-28. 2026-10-13 · core20: 6 harness timeouts from 30s api() timeout during backend stalls (recovered alone) · bump to 120s for rerun · **OPEN**
+26. 2026-10-13 · core20 full run: role mismatch ALSO fires R12-direction (S3 pages use roles S4 never declares — education/automotive/school) · S4 gate role-set EQUALITY both directions · **FIXED (rerun 4/20 → 13/20)**
+27. 2026-10-13 · core20: raising steps leave `running` rows (restaurant s5, gym s4) — only the return-failure path flips rows · `_run_simple/_run_s5/_run_iterate` bodies mark failed on raise · **FIXED (failed rows observed live)**
+28. 2026-10-13 · core20: 6 harness timeouts from 30s api() timeout during backend stalls (recovered alone) · bumped to 120s · still 1 timeout in rerun-2 — backend can stall >2min under load · **WATCH**
 29. 2026-10-14 · Formula `&&`/`||` parsed in Python but TS tokenizer rejected them (op allowlist missed the new tokens — 5 conformance failures) · allowlist extended; parity rule: tokenizer changes always need both impls + cases · **FIXED (127/127)**
 30. 2026-10-14 · G3 flagged valid guarded transitions (probe record lacks guard fields) — harness bug, not spec bug · guarded transitions now assert guard-consulted-only · **FIXED**
-30. 2026-10-14 · G3 flagged valid guarded transitions (probe record lacks guard fields) — harness bug, not spec bug · guarded transitions now assert guard-consulted-only · **FIXED**
+31. 2026-10-15 · `today()` naive-ISO parsed as machine-local (IST) in TS → off-by-one vs Python · naive timestamps anchored to UTC in dayShift; cross-TZ test added · **FIXED**
+32. 2026-10-15 · Strict block vocabulary (R37) broke host-injected props (`transitions`/`current` merged into pipeline block props by RuntimePreview) · host runtime data travels via component props, spec props stay pure · **FIXED**
+33. 2026-10-15 · Supabase contract subtests shared one table across fresh adapters (entity names collide) · per-subtest hard-clean hook in shared contract (memory/dexie unaffected) · **FIXED (18/18 all adapters)**
+34. 2026-10-15 · Live-network test keyed on ambient env: a leaked shell export + transient fetch failure flaked the gate suite · live tests are INTARA_LIVE=1 opt-in, never ambient · **FIXED**
 ---
 
 ## 6. Metrics dashboard
@@ -304,7 +312,7 @@
 | Requirement coverage | n/a | — | ≥ 80 % (100 % musts) |
 | LLM calls per build (median) | _pending P0.2_ | — | ≤ 14 (≤ 6 strong) |
 | Time to live preview post-approval | _pending P0.2_ | — | ≤ 30 s |
-| Unit suite | 93/93 (2026-10-11) | 190/190 py + 190/190 node (2026-10-15) | green every session |
+| Unit suite | 93/93 (2026-10-11) | 190/190 py + 194/194 node (2026-10-15) | green every session |
 | Golden eval | 5/5 (2026-10-11) | 5/5 (2026-10-12) | 5/5 + new suites |
 
 **Baseline 2026-10-12, pre-Phase-1** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):
