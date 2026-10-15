@@ -13,6 +13,9 @@ import { BLOCK_COMPONENTS } from '../../../packages/runtime/blocks/components.ts
 import { resolveSeed } from '../../../packages/runtime/testing/g3.ts'
 import { allowedTransitions, applyTransition } from '../../../packages/runtime/engine/lifecycle.ts'
 import { runAutomations } from '../../../packages/runtime/automation/executor.ts'
+import { parseCsv, toCsv } from '../../../packages/runtime/blocks/csv.ts'
+import { uploadBlob, UPLOAD_BUCKET } from '../../../packages/runtime/storage/uploads.ts';
+import { isSupabaseDemo, supabase } from '../supabase';
 
 type Rows = Record<string, Array<Record<string, unknown>>>;
 
@@ -84,11 +87,65 @@ export function RuntimePreview({ spec }: { spec: AppSpec }) {
     } else if (action === 'open') {
       const rec = (rows[entity] ?? []).find((r) => String(r['id']) === String(payload)) ?? null;
       setSelected(rec);
+    } else if (action === 'move' && payload && typeof payload === 'object') {
+      // kanban drag: resolve the lifecycle transition into the target column
+      const { id, to } = payload as { id?: unknown; to?: unknown };
+      const rec = (rows[entity] ?? []).find((r) => String(r['id']) === String(id));
+      if (rec && typeof to === 'string') {
+        const t = allowedTransitions(spec, entity, rec, { role: session.current })
+          .find((x) => x.to === to);
+        if (t) {
+          const next = applyTransition(spec, entity, rec, t.id, { role: session.current });
+          await adapter.put(entity, next);
+          setSelected(next);
+          await refresh();
+          await fireAutomations('lifecycle.transition', entity, next, { transition: t.id });
+        } else {
+          setNotices((prev) => [`No transition into '${to}' from here.`].concat(prev).slice(0, 5));
+        }
+      }
+    } else if (action === 'export') {
+      const csv = toCsv(rows[entity] ?? []);
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${entity}.csv`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    } else if (action === 'import' && payload && typeof payload === 'object') {
+      const text = (payload as { text?: unknown }).text;
+      if (typeof text === 'string') {
+        const parsed = parseCsv(text);
+        for (const r of parsed) await adapter.put(entity, r);
+        await refresh();
+        setNotices((prev) => [`Imported ${parsed.length} rows into ${entity}.`].concat(prev).slice(0, 5));
+      }
+    } else if (action === 'upload' && payload && typeof payload === 'object') {
+      const { file, filename, field } = payload as { file?: unknown; filename?: unknown; field?: unknown };
+      if (file instanceof Blob && typeof filename === 'string') {
+        if (isSupabaseDemo) {
+          setNotices((prev) => ['Uploads need Supabase (connect in trial settings).'].concat(prev).slice(0, 5));
+        } else {
+          const url = await uploadBlob(supabase as never, entity, filename, file);
+          await adapter.put(entity, { [typeof field === 'string' ? field : 'file']: url });
+          await refresh();
+          setNotices((prev) => [`Uploaded to ${UPLOAD_BUCKET}.`].concat(prev).slice(0, 5));
+        }
+      }
     }
   }
 
   return (
-    <AppShell
+    <>
+      <style>{`@media print {
+        .intara-nav, .blk-actions, .blk-printbar, button, input, select { display: none !important; }
+        .intara-shell, .intara-main, .blk { background: #fff !important; color: #000 !important; }
+        .blk-card, .blk-day { break-inside: avoid; }
+      }`}</style>
+      <div className="blk-printbar" style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+        <button className="btn-ghost btn-sm" onClick={() => window.print()}>🖨 Print / PDF</button>
+      </div>
+      <AppShell
       spec={spec}
       session={session}
       activePage={page.id}
@@ -131,5 +188,6 @@ export function RuntimePreview({ spec }: { spec: AppSpec }) {
         );
       })}
     </AppShell>
+    </>
   );
 }

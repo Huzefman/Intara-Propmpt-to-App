@@ -1,0 +1,649 @@
+{
+ "ui": {
+  "nav": [
+   {
+    "icon": null,
+    "page": "dashboard",
+    "label": "Dashboard",
+    "roles": [
+     "owner"
+    ]
+   },
+   {
+    "icon": "folder",
+    "page": "project_list",
+    "label": "Projects",
+    "roles": [
+     "owner"
+    ]
+   },
+   {
+    "icon": "folder",
+    "page": "project_detail",
+    "label": "Project Details",
+    "roles": [
+     "owner"
+    ]
+   },
+   {
+    "icon": "check-square",
+    "page": "task_list",
+    "label": "Tasks",
+    "roles": [
+     "owner"
+    ]
+   },
+   {
+    "icon": "check-square",
+    "page": "task_detail",
+    "label": "Task Details",
+    "roles": [
+     "owner"
+    ]
+   }
+  ],
+  "pages": [
+   {
+    "id": "dashboard",
+    "roles": [
+     "owner"
+    ],
+    "route": "/",
+    "title": "Dashboard",
+    "blocks": [
+     {
+      "id": "task_status_chart",
+      "type": "chart.bar",
+      "props": {
+       "entity": "task",
+       "metric": "count",
+       "groupBy": "status"
+      }
+     },
+     {
+      "id": "task_timeline",
+      "type": "activity.timeline",
+      "props": {
+       "field": "due_date",
+       "entity": "task"
+      }
+     }
+    ],
+    "layout": null
+   },
+   {
+    "id": "project_list",
+    "roles": [
+     "owner"
+    ],
+    "route": "/projects",
+    "title": "Projects",
+    "blocks": [
+     {
+      "id": "project_filter",
+      "type": "filter.bar",
+      "props": {
+       "entity": "project",
+       "fields": [
+        "name"
+       ]
+      }
+     },
+     {
+      "id": "project_table",
+      "type": "data.table",
+      "props": {
+       "entity": "project",
+       "columns": [
+        "name",
+        "description",
+        "color"
+       ]
+      }
+     },
+     {
+      "id": "project_form",
+      "type": "form.record",
+      "props": {
+       "entity": "project"
+      }
+     }
+    ],
+    "layout": null
+   },
+   {
+    "id": "project_detail",
+    "roles": [
+     "owner"
+    ],
+    "route": "/projects/:id",
+    "title": "Project Details",
+    "blocks": [
+     {
+      "id": "project_hero",
+      "type": "content.hero",
+      "props": {
+       "entity": "project",
+       "titleField": "name",
+       "subtitleField": "description"
+      }
+     },
+     {
+      "id": "project_detail",
+      "type": "record.detail",
+      "props": {
+       "entity": "project"
+      }
+     },
+     {
+      "id": "task_related",
+      "type": "record.related_list",
+      "props": {
+       "entity": "task",
+       "relation": "tasks"
+      }
+     },
+     {
+      "id": "task_filter",
+      "type": "filter.bar",
+      "props": {
+       "entity": "task",
+       "fields": [
+        "status",
+        "due_date"
+       ]
+      }
+     },
+     {
+      "id": "task_table",
+      "type": "data.table",
+      "props": {
+       "entity": "task",
+       "columns": [
+        "title",
+        "due_date",
+        "status"
+       ]
+      }
+     },
+     {
+      "id": "task_form",
+      "type": "form.record",
+      "props": {
+       "entity": "task"
+      }
+     },
+     {
+      "id": "task_lifecycle",
+      "type": "lifecycle.pipeline",
+      "props": {
+       "field": "status",
+       "entity": "task"
+      }
+     }
+    ],
+    "layout": null
+   },
+   {
+    "id": "task_list",
+    "roles": [
+     "owner"
+    ],
+    "route": "/tasks",
+    "title": "Tasks",
+    "blocks": [
+     {
+      "id": "task_filter",
+      "type": "filter.bar",
+      "props": {
+       "entity": "task",
+       "fields": [
+        "status",
+        "due_date"
+       ]
+      }
+     },
+     {
+      "id": "task_table",
+      "type": "data.table",
+      "props": {
+       "entity": "task",
+       "columns": [
+        "title",
+        "due_date",
+        "status"
+       ]
+      }
+     },
+     {
+      "id": "task_form",
+      "type": "form.record",
+      "props": {
+       "entity": "task"
+      }
+     },
+     {
+      "id": "task_lifecycle",
+      "type": "lifecycle.pipeline",
+      "props": {
+       "field": "status",
+       "entity": "task"
+      }
+     },
+     {
+      "id": "task_status_chart",
+      "type": "chart.bar",
+      "props": {
+       "entity": "task",
+       "metric": "count",
+       "groupBy": "status"
+      }
+     },
+     {
+      "id": "task_timeline",
+      "type": "activity.timeline",
+      "props": {
+       "field": "due_date",
+       "entity": "task"
+      }
+     }
+    ],
+    "layout": null
+   },
+   {
+    "id": "task_detail",
+    "roles": [
+     "owner"
+    ],
+    "route": "/tasks/:id",
+    "title": "Task Details",
+    "blocks": [
+     {
+      "id": "task_detail",
+      "type": "record.detail",
+      "props": {
+       "entity": "task"
+      }
+     },
+     {
+      "id": "task_lifecycle",
+      "type": "lifecycle.pipeline",
+      "props": {
+       "field": "status",
+       "entity": "task"
+      }
+     },
+     {
+      "id": "task_status_chart",
+      "type": "chart.bar",
+      "props": {
+       "entity": "task",
+       "metric": "count",
+       "groupBy": "status"
+      }
+     }
+    ],
+    "layout": null
+   }
+  ],
+  "theme": null
+ },
+ "app": {
+  "name": "A",
+  "domain": "",
+  "locale": "en",
+  "tagline": "",
+  "currency": "USD",
+  "timezone": "UTC"
+ },
+ "seed": {
+  "task": [
+   {
+    "_key": "task_1",
+    "title": "Create wireframes",
+    "status": "todo",
+    "project": "@project_1",
+    "due_date": "2024-11-01",
+    "description": "Design wireframes for homepage"
+   },
+   {
+    "_key": "task_2",
+    "title": "Develop landing page",
+    "status": "in_progress",
+    "project": "@project_1",
+    "due_date": "2024-11-15",
+    "description": "Implement landing page with React"
+   },
+   {
+    "_key": "task_3",
+    "title": "Set up CI/CD",
+    "status": "done",
+    "project": "@project_2",
+    "due_date": "2024-10-20",
+    "description": "Configure GitHub Actions"
+   },
+   {
+    "_key": "task_4",
+    "title": "Create ad creatives",
+    "status": "todo",
+    "project": "@project_3",
+    "due_date": "2024-12-05",
+    "description": "Design banner ads"
+   },
+   {
+    "_key": "task_5",
+    "title": "Analyze metrics",
+    "status": "in_progress",
+    "project": "@project_3",
+    "due_date": "2025-01-10",
+    "description": "Review campaign performance"
+   }
+  ],
+  "project": [
+   {
+    "_key": "project_1",
+    "name": "Website Redesign",
+    "color": "#FF5733",
+    "description": "Redesign the corporate website"
+   },
+   {
+    "_key": "project_2",
+    "name": "Mobile App Launch",
+    "color": "#33C1FF",
+    "description": "Launch the new mobile app"
+   },
+   {
+    "_key": "project_3",
+    "name": "Marketing Campaign",
+    "color": "#28A745",
+    "description": "Q4 marketing campaign"
+   }
+  ]
+ },
+ "model": {
+  "enums": [
+   {
+    "id": "task_status",
+    "values": [
+     {
+      "color": "#6B7280",
+      "label": "To Do",
+      "value": "todo"
+     },
+     {
+      "color": "#3B82F6",
+      "label": "In Progress",
+      "value": "in_progress"
+     },
+     {
+      "color": "#10B981",
+      "label": "Done",
+      "value": "done"
+     }
+    ]
+   }
+  ],
+  "entities": [
+   {
+    "id": "project",
+    "icon": "folder",
+    "label": "Project",
+    "fields": [
+     {
+      "id": "name",
+      "enum": null,
+      "type": "text",
+      "index": true,
+      "target": null,
+      "unique": true,
+      "default": null,
+      "computed": null,
+      "onDelete": null,
+      "required": true,
+      "relation_name": null
+     },
+     {
+      "id": "description",
+      "enum": null,
+      "type": "longtext",
+      "index": null,
+      "target": null,
+      "unique": null,
+      "default": null,
+      "computed": null,
+      "onDelete": null,
+      "required": false,
+      "relation_name": null
+     },
+     {
+      "id": "color",
+      "enum": null,
+      "type": "color",
+      "index": null,
+      "target": null,
+      "unique": null,
+      "default": "#3B82F6",
+      "computed": null,
+      "onDelete": null,
+      "required": false,
+      "relation_name": null
+     }
+    ],
+    "plural": "Projects",
+    "display": {
+     "title": "name",
+     "subtitle": "description"
+    },
+    "lifecycle": null
+   },
+   {
+    "id": "task",
+    "icon": "check-square",
+    "label": "Task",
+    "fields": [
+     {
+      "id": "project",
+      "enum": null,
+      "type": "ref",
+      "index": true,
+      "target": "project",
+      "unique": null,
+      "default": null,
+      "computed": null,
+      "onDelete": "cascade",
+      "required": true,
+      "relation_name": "tasks"
+     },
+     {
+      "id": "title",
+      "enum": null,
+      "type": "text",
+      "index": null,
+      "target": null,
+      "unique": null,
+      "default": null,
+      "computed": null,
+      "onDelete": null,
+      "required": true,
+      "relation_name": null
+     },
+     {
+      "id": "description",
+      "enum": null,
+      "type": "longtext",
+      "index": null,
+      "target": null,
+      "unique": null,
+      "default": null,
+      "computed": null,
+      "onDelete": null,
+      "required": false,
+      "relation_name": null
+     },
+     {
+      "id": "due_date",
+      "enum": null,
+      "type": "date",
+      "index": null,
+      "target": null,
+      "unique": null,
+      "default": null,
+      "computed": null,
+      "onDelete": null,
+      "required": false,
+      "relation_name": null
+     },
+     {
+      "id": "status",
+      "enum": "task_status",
+      "type": "enum",
+      "index": null,
+      "target": null,
+      "unique": null,
+      "default": "todo",
+      "computed": null,
+      "onDelete": null,
+      "required": true,
+      "relation_name": null
+     }
+    ],
+    "plural": "Tasks",
+    "display": {
+     "title": "title",
+     "subtitle": "due_date • status"
+    },
+    "lifecycle": {
+     "field": "status",
+     "states": [
+      "todo",
+      "in_progress",
+      "done"
+     ],
+     "initial": "todo",
+     "transitions": [
+      {
+       "id": "start",
+       "to": "in_progress",
+       "from": "todo",
+       "guard": null,
+       "label": "Start",
+       "roles": []
+      },
+      {
+       "id": "complete",
+       "to": "done",
+       "from": "in_progress",
+       "guard": null,
+       "label": "Complete",
+       "roles": []
+      },
+      {
+       "id": "reopen",
+       "to": "todo",
+       "from": "in_progress",
+       "guard": null,
+       "label": "Reopen",
+       "roles": []
+      },
+      {
+       "id": "reopen_done",
+       "to": "in_progress",
+       "from": "done",
+       "guard": null,
+       "label": "Reopen",
+       "roles": []
+      }
+     ]
+    }
+   }
+  ]
+ },
+ "trace": [
+  {
+   "requirement": "R1",
+   "satisfied_by": [
+    "entity:project",
+    "entity:task",
+    "page:project_list",
+    "page:project_detail",
+    "page:task_list",
+    "page:task_detail",
+    "automation:notify_task_created"
+   ]
+  }
+ ],
+ "access": {
+  "roles": [
+   {
+    "id": "owner",
+    "label": "Owner"
+   }
+  ],
+  "rules": [
+   {
+    "ops": [
+     "read",
+     "create",
+     "update",
+     "delete"
+    ],
+    "role": "owner",
+    "where": null,
+    "entity": "project"
+   },
+   {
+    "ops": [
+     "read",
+     "create",
+     "update",
+     "delete"
+    ],
+    "role": "owner",
+    "where": null,
+    "entity": "task"
+   }
+  ]
+ },
+ "personas": [],
+ "assumptions": [
+  "Single user",
+  "Flat task list per project (no subtasks/dependencies)",
+  "No notifications; due dates shown in UI only",
+  "Projects have name, description, color",
+  "Tasks have title, description, due date, status (todo/in-progress/done)",
+  "Data stored locally (IndexedDB) with optional cloud sync later",
+  "Currency not applicable",
+  "No billing/subscription",
+  "Web app only (responsive), no native mobile",
+  "English only, no i18n"
+ ],
+ "automations": [
+  {
+   "id": "notify_task_created",
+   "steps": [
+    {
+     "when": null,
+     "action": "webhook",
+     "params": {
+      "url": "https://example.com/webhook"
+     }
+    }
+   ],
+   "trigger": {
+    "type": "record.created",
+    "entity": "task",
+    "schedule": null,
+    "transition": null
+   }
+  }
+ ],
+ "integrations": [],
+ "requirements": [
+  {
+   "id": "R1",
+   "text": "A task tracker with projects, tasks and due dates",
+   "priority": "must"
+  }
+ ],
+ "spec_version": "1.0"
+}

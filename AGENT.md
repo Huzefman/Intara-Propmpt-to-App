@@ -135,7 +135,7 @@
 - **Accept (MVP demo):** core20 ≥85% — ✅ **MET 17/20 (85%) on rerun 2026-10-15** (`core20-20261015-111406.json`); median 9 calls ✅; median wall 267s (near 3-min target, quota-throttled); coverage 1.0 (gym trace gap noted); diversity 12 combos ✅ overlap 0.028 ✅; heldout 3/5 green (invoicing/gym/helpdesk); type-a-wish→working-app demoable via Studio Blueprint/App tabs on passed wishes.
 - **Live findings:** (a) S3/S4 role mismatch failed 2 runs fail-closed → fixed, re-validating; (b) router double-created run rows (client polled an empty shell) → `run_id` passthrough fixed, proven by steps appearing under the polled id; (c) Gemini free-tier 5 RPM exhausted mid-probe — chain carried on groq as designed.
 
-### Phase 8 — Capability depth [ ] *(slice 1 done: Supabase adapter + automations executor)*
+### Phase 8 — Capability depth [ ] *(slices 1–3 done: adapter, automations, boards/CSV, storage, print)*
 *Goal: Track A covers real SMB work. (Guide M4)*
 - [x] P8.1 `supabase/migrations/007_data_plane.sql` (apps + records, ADR-2 A, RLS service-key-only) + `packages/runtime/adapters/supabase.ts` (same contract; live test skipped without env, scratch-app isolated) — **needs dashboard apply to prove live**
 - [x] P8.2 `packages/runtime/automation/executor.ts` (trigger match + set_field/create_record/notify/export_csv; email/webhook deferred explicitly) + 3 tests incl. gold-automation replay
@@ -257,6 +257,10 @@
 - **Done:** shared `blocks/csv.ts` (deduped from executor) + 4 tests; kanban drag-to-transition (HTML5 DnD, `move` action, host resolves transition, notice when none); table Export/Import CSV; RuntimePreview fires automations + handles move/export/import with notices. Supabase contract proven **live 6/6** (scratch app, zero residue). Node **194/194 (1 skip)**, 90.8% lines; both tscs + vite build; python **190/190**, eval 5/5.
 - **Problems:** (a) shared-table cross-subtest pollution → per-subtest hard-clean hook in contract; (b) live network tests must be INTARA_LIVE opt-in, never ambient-env (a leaked shell export + transient fetch failure flaked the gate suite) · see §5 #33–34.
 - **Next:** slice 3 candidates — roles editor, file/image Storage (+buckets), single-user auth, email verify, print/PDF, 2 more golds.
+
+### Session 18 — 2026-10-15 — Phase 8 slice 3 (storage + print + gold staging) [x]
+- **Done:** `008_storage_uploads.sql` (bucket + demo-open policies; needs dashboard apply) + `storage/uploads.ts` (uuid-prefixed sanitized paths, 3 tests) + FileList `upload` prop (opt-in, G1-registered) + RuntimePreview upload → storage → row + demo-mode guard + print toolbar/stylesheet. Staged `productivity` + `gardening` candidates in `packages/spec/review/` for human review. Node **197/197 (1 skip)**, 90.7% lines; both tscs + vite build; python **190/190**, eval 5/5.
+- **Next:** user applies 008 → live upload proof → slice 4 (roles editor, auth decision, email key, remaining golds).
 
 ---
 

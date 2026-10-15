@@ -89,26 +89,40 @@ export function ActivityTimeline({ block, rows, state, error }: BlockHostProps<{
   );
 }
 
-export function FileList({ block, rows, state, error }: BlockHostProps<{
-  entity: string; field?: string;
+export function FileList({ block, rows, state, error, onAction }: BlockHostProps<{
+  entity: string; field?: string; upload?: boolean;
 }>) {
   const st = resolveState(rows, undefined, state, error);
   const field = block.props.field ?? "file";
+  const fileRef = React.useRef<HTMLInputElement>(null);
   return (
     <BlockShell state={st} error={error}>
       {st === "ready" ? (
-        <ul className="blk-files">
-          {(rows ?? []).map((r, i) => {
-            const href = r[field];
-            return (
-              <li key={String(r["id"] ?? i)}>
-                {typeof href === "string" && href
-                  ? <a href={href}>{href.split("/").pop()}</a>
-                  : <span className="blk-nofile">no file</span>}
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          <ul className="blk-files">
+            {(rows ?? []).map((r, i) => {
+              const href = r[field];
+              return (
+                <li key={String(r["id"] ?? i)}>
+                  {typeof href === "string" && href
+                    ? <a href={href}>{href.split("/").pop()}</a>
+                    : <span className="blk-nofile">no file</span>}
+                </li>
+              );
+            })}
+          </ul>
+          {block.props.upload ? (
+            <>
+              <button onClick={() => fileRef.current?.click()}>Upload</button>
+              <input ref={fileRef} type="file" hidden
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onAction?.("upload", { file: f, filename: f.name, field });
+                  e.target.value = "";
+                }} />
+            </>
+          ) : undefined}
+        </>
       ) : undefined}
     </BlockShell>
   );

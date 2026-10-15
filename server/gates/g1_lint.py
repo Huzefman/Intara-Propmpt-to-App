@@ -62,7 +62,7 @@ BLOCKS: dict = {
                           "optional_props": ["title"]},
     "file.list": {"stability": "stable",
                   "required_props": ["entity"],
-                  "optional_props": ["field"]},
+                  "optional_props": ["field", "upload"]},
     "content.hero": {"stability": "stable",
                      "required_props": [],
                      "optional_props": ["title", "subtitle", "cta"]},
