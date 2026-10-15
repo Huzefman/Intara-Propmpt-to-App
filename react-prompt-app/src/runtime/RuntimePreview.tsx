@@ -15,8 +15,10 @@ import { allowedTransitions, applyTransition } from '../../../packages/runtime/e
 import { runAutomations } from '../../../packages/runtime/automation/executor.ts'
 import { parseCsv, toCsv } from '../../../packages/runtime/blocks/csv.ts'
 import { uploadBlob, UPLOAD_BUCKET } from '../../../packages/runtime/storage/uploads.ts';
+import { enrollPin, isEnrolled, verifyPin } from '../../../packages/runtime/auth/pin.ts';
 import { isSupabaseDemo, supabase } from '../supabase';
 const RolesMatrix = lazy(() => import('./RolesMatrix').then(m => ({ default: m.RolesMatrix })));
+const PinGate = lazy(() => import('../../../packages/runtime/shell/PinGate.tsx').then(m => ({ default: m.PinGate })));
 
 type Rows = Record<string, Array<Record<string, unknown>>>;
 
@@ -28,6 +30,9 @@ export function RuntimePreview({ spec }: { spec: AppSpec }) {
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
   const [ready, setReady] = useState(false);
   const [notices, setNotices] = useState<string[]>([]);
+  const [pinView, setPinView] = useState<null | 'setup' | 'lock'>(null);
+  const [unlocked, setUnlocked] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,6 +50,9 @@ export function RuntimePreview({ spec }: { spec: AppSpec }) {
         setRows(all);
         setSelected(null);
         if (!spec.ui.pages.some((p) => p.id === activePage)) setActivePage(spec.ui.pages[0]?.id ?? '');
+        try {
+          if (await isEnrolled(adapter)) setPinView((v) => v ?? 'lock');
+        } catch { /* auth store unavailable: stay open */ }
         setReady(true);
       }
     })().catch((e) => console.error('runtime preview failed', e));
@@ -60,6 +68,22 @@ export function RuntimePreview({ spec }: { spec: AppSpec }) {
 
   const page = spec.ui.pages.find((p) => p.id === activePage) ?? spec.ui.pages[0];
   if (!ready || !page) return <div className="glass" style={{ padding: 28, textAlign: 'center' }}>Loading app…</div>;
+  if (pinView === 'lock' && !unlocked) {
+    return (
+      <Suspense fallback={null}>
+        <PinGate mode="lock" error={pinError} onSubmit={async (pin) => {
+          try {
+            if (!(await verifyPin(adapter, pin))) { setPinError('Wrong PIN — try again.'); return; }
+            setPinError(null);
+            setUnlocked(true);
+            setPinView(null);
+          } catch (e: any) {
+            setPinError(e?.message || 'PIN failed.');
+          }
+        }} />
+      </Suspense>
+    );
+  }
 
   async function fireAutomations(type: 'record.created' | 'lifecycle.transition', entity: string, record: Record<string, unknown>, extra?: { transition?: string }) {
     try {
@@ -145,10 +169,30 @@ export function RuntimePreview({ spec }: { spec: AppSpec }) {
       }`}</style>
       <div className="blk-printbar" style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
         <button className="btn-ghost btn-sm" onClick={() => window.print()}>🖨 Print / PDF</button>
+        {unlocked
+          ? <button className="btn-ghost btn-sm" onClick={() => { setUnlocked(false); setPinView('lock'); }}>🔒 Lock</button>
+          : <button className="btn-ghost btn-sm" onClick={() => { setPinError(null); setPinView('setup'); }}>🔑 Set PIN</button>}
       </div>
+      {pinView === 'setup' && (
+        <Suspense fallback={null}>
+          <PinGate mode="setup" error={pinError} onSubmit={async (pin) => {
+            try {
+              await enrollPin(adapter, pin);
+              setNotices((prev) => ['PIN set on this device.'].concat(prev).slice(0, 5));
+              setPinError(null);
+              setUnlocked(true);
+              setPinView(null);
+            } catch (e: any) {
+              setPinError(e?.message || 'PIN failed.');
+            }
+          }} />
+        </Suspense>
+      )}
+      {(!pinView || unlocked) && (
       <Suspense fallback={null}>
         <RolesMatrix spec={spec} current={session.current} />
       </Suspense>
+      )}
       <AppShell
       spec={spec}
       session={session}

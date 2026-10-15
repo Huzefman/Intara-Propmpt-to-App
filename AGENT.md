@@ -266,6 +266,11 @@
 - **Done:** 008 applied by user → proved live with anon key (bucket public, upload OK, public read bytes back, cleaned up, zero residue). `RolesMatrix.tsx` (role × entity ops via engine.can, current role highlighted) in preview behind Suspense; node smoke renders 4 rows. Python **190/190**, studio tsc + build green.
 - **Next:** slice 4 remaining — roles *editor* (spec mutation = chat-patch, needs design), single-user auth (needs auth-model decision), email provider (needs key), 2 more golds (productivity/gardening in review with user).
 
+### Session 20 — 2026-10-15 — PIN lock auth [x]
+- **Done:** per user decision (PIN, no Resend; email integrates later via existing deferred effects). `auth/pin.ts` (PBKDF2-SHA256 100k, salt, constant-time compare, `_auth` store entity) + 2 tests; `PinGate.tsx` (setup/lock, digit-only, clears state); RuntimePreview wiring (auto-gate when enrolled, toolbar Set-PIN/Lock, notices). Email-later confirmed zero-rework (payloads already flow through deferred effects).
+- **Verify:** node **199/199 (1 skip)**, 91.0% lines; both tscs + vite build; python **190/190**, eval 5/5.
+- **Next:** 2 golds in review with user; roles editor design; print views already shipped.
+
 ---
 
 ## 5. Known problems / error register
@@ -320,7 +325,7 @@
 | Requirement coverage | n/a | — | ≥ 80 % (100 % musts) |
 | LLM calls per build (median) | _pending P0.2_ | — | ≤ 14 (≤ 6 strong) |
 | Time to live preview post-approval | _pending P0.2_ | — | ≤ 30 s |
-| Unit suite | 93/93 (2026-10-11) | 190/190 py + 194/194 node (2026-10-15) | green every session |
+| Unit suite | 93/93 (2026-10-11) | 190/190 py + 199/199 node (2026-10-15) | green every session |
 | Golden eval | 5/5 (2026-10-11) | 5/5 (2026-10-12) | 5/5 + new suites |
 
 **Baseline 2026-10-12, pre-Phase-1** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):
