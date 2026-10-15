@@ -8,8 +8,10 @@ import type { TestContext } from "node:test";
 import { VersionConflict } from "./types.ts";
 import type { StorageAdapter } from "./types.ts";
 
-export async function runContract(t: TestContext, make: () => StorageAdapter): Promise<void> {
+export async function runContract(t: TestContext, make: () => StorageAdapter, clean?: () => Promise<void>): Promise<void> {
+  const fresh = async () => { if (clean) await clean(); };
   await t.test("put/get round-trip with auto id", async () => {
+    await fresh();
     const db = make();
     const saved = await db.put("item", { name: "mug", qty: 2 });
     assert.ok(saved["id"]);
@@ -18,6 +20,7 @@ export async function runContract(t: TestContext, make: () => StorageAdapter): P
   });
 
   await t.test("put overwrites by id, versions bump", async () => {
+    await fresh();
     const db = make();
     await db.put("item", { id: "a", n: 1 });
     await db.put("item", { id: "a", n: 2 }, 1);
@@ -26,6 +29,7 @@ export async function runContract(t: TestContext, make: () => StorageAdapter): P
   });
 
   await t.test("list filter/sort/search/paginate", async () => {
+    await fresh();
     const db = make();
     await db.put("item", { id: "1", name: "mug", qty: 24, price: 12 });
     await db.put("item", { id: "2", name: "plate", qty: 3, price: 18 });
@@ -52,6 +56,7 @@ export async function runContract(t: TestContext, make: () => StorageAdapter): P
   });
 
   await t.test("remove soft-deletes", async () => {
+    await fresh();
     const db = make();
     await db.put("item", { id: "a", n: 1 });
     await db.remove("item", "a");
@@ -61,6 +66,7 @@ export async function runContract(t: TestContext, make: () => StorageAdapter): P
   });
 
   await t.test("transaction commits and rolls back", async () => {
+    await fresh();
     const db = make();
     await db.transaction(async (tx) => {
       await tx.put("item", { id: "a", n: 1 });

@@ -247,9 +247,11 @@
 - **Next:** Phase 8 scaffolding whenever ready.
 
 ### Session 16 — 2026-10-15 — Phase 8 slice 1 (adapter + automations) [x]
-- **Done:** 007 migration file (+additive test), Supabase adapter (contract suite green-skip without env; scratch-app isolation), automations executor + 3 tests, pytest wrapper globs updated. Node **190/190 (1 skip)**, tsc clean, python **190/190**, eval 5/5.
+- **Done:** 007 migration file (+additive test), Supabase adapter (contract suite green-skip without env, scratch-app isolation), automations executor + 3 tests, pytest wrapper globs updated. Node **190/190 (1 skip)**, tsc clean, python **190/190**, eval 5/5.
 - **Problems:** g4.ts `spec.ui.nav` possibly-undefined (pre-existing, hidden) — fixed with `?? []`.
-- **Next:** user applies 007 → live supabase-suite proof → Phase 8 slice 2 (lifecycle UI/kanban wires, CSV, roles editor…).
+- **Live proof (after 007 applied):** all 3 adapters green on the SAME contract — memory 12/12, dexie 12/12, **supabase 6/6 live** (scratch app created + cascade-deleted, zero residue). Found + fixed: shared-table cross-test pollution → per-subtest hard-clean hook in contract.
+- **Automations in preview:** RuntimePreview fires record.created/lifecycle.transition automations on user actions, shows notify/deferred effects, refreshes on mutations. Studio tsc + vite build green.
+- **Next:** Phase 8 slice 2 (lifecycle UI/kanban wires, CSV UI, roles editor…) — ask user for priority.
 
 ---
 

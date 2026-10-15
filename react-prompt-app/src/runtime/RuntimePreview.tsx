@@ -12,6 +12,7 @@ import { RoleSession } from '../../../packages/runtime/shell/roles.ts'
 import { BLOCK_COMPONENTS } from '../../../packages/runtime/blocks/components.ts'
 import { resolveSeed } from '../../../packages/runtime/testing/g3.ts'
 import { allowedTransitions, applyTransition } from '../../../packages/runtime/engine/lifecycle.ts'
+import { runAutomations } from '../../../packages/runtime/automation/executor.ts'
 
 type Rows = Record<string, Array<Record<string, unknown>>>;
 
@@ -22,6 +23,7 @@ export function RuntimePreview({ spec }: { spec: AppSpec }) {
   const [rows, setRows] = useState<Rows>({});
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
   const [ready, setReady] = useState(false);
+  const [notices, setNotices] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,6 +57,17 @@ export function RuntimePreview({ spec }: { spec: AppSpec }) {
   const page = spec.ui.pages.find((p) => p.id === activePage) ?? spec.ui.pages[0];
   if (!ready || !page) return <div className="glass" style={{ padding: 28, textAlign: 'center' }}>Loading app…</div>;
 
+  async function fireAutomations(type: 'record.created' | 'lifecycle.transition', entity: string, record: Record<string, unknown>, extra?: { transition?: string }) {
+    try {
+      const fx = await runAutomations(spec, adapter, { type, entity, record, ...extra });
+      const msgs = fx.filter((e) => e.kind === 'notify' || e.kind === 'deferred').map((e) => e.detail);
+      if (msgs.length) setNotices((prev) => [...msgs, ...prev].slice(0, 5));
+      if (fx.some((e) => e.kind === 'set_field' || e.kind === 'create_record')) await refresh();
+    } catch (e) {
+      console.error('automation failed', e);
+    }
+  }
+
   async function onAction(blockType: string, props: Record<string, unknown>, action: string, payload?: unknown) {
     const entity = props['entity'] as string | undefined;
     if (!entity) return;
@@ -63,9 +76,11 @@ export function RuntimePreview({ spec }: { spec: AppSpec }) {
       await adapter.put(entity, next);
       setSelected(next);
       await refresh();
+      await fireAutomations('lifecycle.transition', entity, next, { transition: payload });
     } else if (action === 'submit' && payload && typeof payload === 'object') {
-      await adapter.put(entity, payload as Record<string, unknown>);
+      const saved = await adapter.put(entity, payload as Record<string, unknown>);
       await refresh();
+      await fireAutomations('record.created', entity, saved);
     } else if (action === 'open') {
       const rec = (rows[entity] ?? []).find((r) => String(r['id']) === String(payload)) ?? null;
       setSelected(rec);
@@ -80,6 +95,11 @@ export function RuntimePreview({ spec }: { spec: AppSpec }) {
       onNavigate={(id) => { setActivePage(id); setSelected(null); }}
       onRole={(role) => { const next = new RoleSession(spec, role); next.switch(role); setSession(next); }}
     >
+      {notices.length > 0 && (
+        <div className="blk" role="status" style={{ marginBottom: 8 }}>
+          {notices.map((n, i) => <div key={i} style={{ fontSize: 12 }}>🔔 {n}</div>)}
+        </div>
+      )}
       {(page.blocks ?? []).map((b) => {
         const C = BLOCK_COMPONENTS[b.type];
         if (!C) return <div key={b.id} className="glass" style={{ padding: 12 }}>Unknown block {b.type}</div>;

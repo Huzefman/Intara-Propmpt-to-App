@@ -16,8 +16,12 @@ test("supabase adapter contract (live, skipped without env)", async (t) => {
   const app = await admin.from("apps").insert({}).select("id").single();
   if (app.error) throw new Error(`scratch app: ${app.error.message}`);
   const appId = app.data.id as string;
+  const clean = async () => {
+    // hard-delete all rows (contract subtests share entity names)
+    await admin.from("records").delete().eq("app_id", appId);
+  };
   try {
-    await runContract(t, () => new SupabaseAdapter({ ...cfg, appId }));
+    await runContract(t, () => new SupabaseAdapter({ ...cfg, appId }), clean);
   } finally {
     await admin.from("apps").delete().eq("id", appId);
   }
