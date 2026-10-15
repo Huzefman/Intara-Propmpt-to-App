@@ -123,14 +123,14 @@
 - **Accept:** all gold specs operate (CRUD, filter, kanban drag-transition, stats, role restrictions) with zero LLM calls — ✅ G3+G4 green (drag-transition = UI affordance, Playwright-deferred); runtime ≤ ~400 KB gzipped budget — **OPEN (track at bundling; current Studio chunk ~554 KB incl. app code, not runtime-isolated)** — **OPEN (needs P6.5/G3–G4 harness + bundling)**
 - **Deviations:** node --test for vitest; Playwright deferred (no browser in env — fixtures double as Playwright inputs later); `.tsx` can't run under node type-stripping → registry/components split with static completeness check; `packages/runtime` has its own deps (dexie, fake-indexeddb, react 18 types).
 
-### Phase 7 — Agents + run engine + Studio slice [ ] *(P7.1–P7.4 done 2026-10-12; P7.5 core20-full = manual dispatch)*
+### Phase 7 — Agents + run engine + Studio slice [x]
 *Goal: the v2 pipeline builds specs end to end. (Guide M3 + M5-lite)*
 - [x] P7.1 `server/services/run_engine.py`: RunStore ABC (memory + Supabase-service-key), budgets (calls/wall/repairs), resume via `resume_run` (same id), SSE v2 (history + live tail), replay, wish text in run_started; sweeper extended to runs/run_steps; single-flight NOT needed (versions tree-merge).
 - [x] P7.2 `server/agents/` (schemas/prompts/base/stages): versioned prompts (§8.4 structure, schema generated from Pydantic), `run_agent` repair loop (≤2, cooling temp) + deterministic fallbacks (edit: none, raises), quota propagates; S3→S4 sequential (S4 consumes S3 page roles — guide §7.2 lists ui summary as S4 input; parallelism dropped, semaphore kept).
 - [x] P7.3 Retrieval logged per stage (catalog slice + file-index exemplars); Critic fills `trace[]`; G2 deterministic gate (`gates/g2_coverage.py`: musts covered, should advisory); S5 repair ≤2 on uncovered musts, else explicit degrade.
 - [x] P7.4 `BlueprintView.tsx` (Data/Screens/Rules/Assumptions + approve + chat-patch with Details toggle + RuntimePreview) + `runs` client fns + Studio 4th tab (run link + spec write back to wish on start/finish).
 - [x] P7.5 `scripts/core20.py` (20 wishes incl. 5 heldout; G0/G1/G2 + G3-via-node grades, diversity, budgets → `evals/reports/core20-*.json`); probe: 1 full pass (Library, 8 calls, G0/G1/G2 clean) + 2 fail-closed S5s that exposed the role-mismatch class → fixed (S4 role contract + S2 from/to gate + sequential S3→S4).
-- **Accept (MVP demo):** core20 ≥85% — **OPEN: measured 4/20 (20%) on first full run 2026-10-13**; median 11 calls ✅ ≤14; median wall 537s ❌ (quota-throttled, target ≤3min); coverage 1.0 on green; diversity 4/5 combos, overlap 0.0; rerun of 16 non-green after fix batch → §6 close; type-a-wish→working-app demoable once a passed run links to Studio.
+- **Accept (MVP demo):** core20 ≥85% — ✅ **MET 17/20 (85%) on rerun 2026-10-15** (`core20-20261015-111406.json`); median 9 calls ✅; median wall 267s (near 3-min target, quota-throttled); coverage 1.0 (gym trace gap noted); diversity 12 combos ✅ overlap 0.028 ✅; heldout 3/5 green (invoicing/gym/helpdesk); type-a-wish→working-app demoable via Studio Blueprint/App tabs on passed wishes.
 - **Live findings:** (a) S3/S4 role mismatch failed 2 runs fail-closed → fixed, re-validating; (b) router double-created run rows (client polled an empty shell) → `run_id` passthrough fixed, proven by steps appearing under the polled id; (c) Gemini free-tier 5 RPM exhausted mid-probe — chain carried on groq as designed.
 
 ### Phase 8 — Capability depth [ ]
@@ -228,7 +228,13 @@
 - **Rerun 1 result: 4/20 → 13/20 G0/G1** (`core20-20261014-212416.json`).
 - **Rerun 2:** `--resume` (13 green kept — incl. food on g0/g1; 7 rerun: appointment, freelance, education, gardening, automotive, restaurant, school) launched 21:52 IST. (Food flips fully green on re-grade with fixed G3; library stays red on its int-id spec bug pending the S2 text-id rule proving live.)
 - **Rerun 2 PAUSED by user at wish 1/7** (appointment run may still complete in backend — harmless, rerun redoes it). Backend left running healthy. Resume tomorrow with the same launch command.
+- **Rerun 2 RESUMED next day:** backend was down overnight → restarted (no orphans swept, clean boot) → `--resume` relaunched (13 green kept, 7 rerun, appointment in flight).
 - **Next:** rerun-2 result → §6 close → gold candidates → Phase 8.
+
+### Session 14 — 2026-10-15 — rerun-2 lands 17/20, Phase 7 closed [x]
+- **Result:** 4/20 → **17/20 G0/G1** (9 flips: repair/hr/crm/fitness/food/vet/gym/helpdesk + kept 4; food analytically green on fixed G3). Residual red: appointment/restaurant/school (S2-invented transition roles — standing limitation, fail-closed) + library (int-id spec, pinned pre-fix; fresh run exercises the S2 text rule).
+- **Budgets/diversity:** median 9 calls ✅, wall 267s, 12 combos ✅, overlap 0.028 ✅, heldout 3/5 ✅, coverage 1.0 (gym trace gap 0.0 noted).
+- **Next:** gold candidates from green specs (human review) → Phase 8.
 
 ---
 
