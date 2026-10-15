@@ -262,6 +262,10 @@
 - **Done:** `008_storage_uploads.sql` (bucket + demo-open policies; needs dashboard apply) + `storage/uploads.ts` (uuid-prefixed sanitized paths, 3 tests) + FileList `upload` prop (opt-in, G1-registered) + RuntimePreview upload → storage → row + demo-mode guard + print toolbar/stylesheet. Staged `productivity` + `gardening` candidates in `packages/spec/review/` for human review. Node **197/197 (1 skip)**, 90.7% lines; both tscs + vite build; python **190/190**, eval 5/5.
 - **Next:** user applies 008 → live upload proof → slice 4 (roles editor, auth decision, email key, remaining golds).
 
+### Session 19 — 2026-10-15 — upload proven live + roles matrix [x]
+- **Done:** 008 applied by user → proved live with anon key (bucket public, upload OK, public read bytes back, cleaned up, zero residue). `RolesMatrix.tsx` (role × entity ops via engine.can, current role highlighted) in preview behind Suspense; node smoke renders 4 rows. Python **190/190**, studio tsc + build green.
+- **Next:** slice 4 remaining — roles *editor* (spec mutation = chat-patch, needs design), single-user auth (needs auth-model decision), email provider (needs key), 2 more golds (productivity/gardening in review with user).
+
 ---
 
 ## 5. Known problems / error register

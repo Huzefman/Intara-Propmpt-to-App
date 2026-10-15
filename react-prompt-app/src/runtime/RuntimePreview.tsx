@@ -4,7 +4,7 @@
  * no sandbox. Shown in Studio when the wish carries `artifacts.spec_v1`
  * (v2 pipeline output); Sandpack stays for legacy wishes.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import type { AppSpec } from '../../../packages/spec/app-spec.ts'
 import { DexieAdapter } from '../../../packages/runtime/adapters/dexie.ts'
 import { AppShell } from '../../../packages/runtime/shell/shell.tsx'
@@ -16,6 +16,7 @@ import { runAutomations } from '../../../packages/runtime/automation/executor.ts
 import { parseCsv, toCsv } from '../../../packages/runtime/blocks/csv.ts'
 import { uploadBlob, UPLOAD_BUCKET } from '../../../packages/runtime/storage/uploads.ts';
 import { isSupabaseDemo, supabase } from '../supabase';
+const RolesMatrix = lazy(() => import('./RolesMatrix').then(m => ({ default: m.RolesMatrix })));
 
 type Rows = Record<string, Array<Record<string, unknown>>>;
 
@@ -145,6 +146,9 @@ export function RuntimePreview({ spec }: { spec: AppSpec }) {
       <div className="blk-printbar" style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
         <button className="btn-ghost btn-sm" onClick={() => window.print()}>🖨 Print / PDF</button>
       </div>
+      <Suspense fallback={null}>
+        <RolesMatrix spec={spec} current={session.current} />
+      </Suspense>
       <AppShell
       spec={spec}
       session={session}
