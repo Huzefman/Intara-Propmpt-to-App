@@ -5,6 +5,7 @@
  * as pending effects — explicit, never silent.
  */
 import { evaluate } from "../../spec/formula/formula.ts";
+import { toCsv } from "../blocks/csv.ts";
 import type { AppSpec, Automation } from "../../spec/app-spec.ts";
 import type { Rec, StorageAdapter } from "../adapters/types.ts";
 
@@ -40,16 +41,6 @@ function whenPasses(when: string | undefined, record: Rec): boolean {
   } catch {
     return false; // unparsable guard fails closed (step skipped)
   }
-}
-
-function toCsv(rows: Rec[]): string {
-  if (!rows.length) return "";
-  const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))].filter((c) => c !== "id");
-  const esc = (v: unknown) => {
-    const s = v === null || v === undefined ? "" : String(v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  return ["id," + cols.join(","), ...rows.map((r) => [r["id"], ...cols.map((c) => esc(r[c]))].join(","))].join("\n");
 }
 
 export async function runAutomations(
