@@ -5,11 +5,12 @@
   "type": "module",
   "description": "Intara runtime v1: spec-driven data engine, adapters, shell, blocks (Phase 6)",
   "scripts": {
-    "test": "node --test '../spec/formula/formula.test.ts' 'engine/**/*.test.ts' 'adapters/**/*.test.ts' 'shell/*.test.ts' 'blocks/*.test.ts' 'testing/**/*.test.ts'",
-    "test:coverage": "node --test --experimental-test-coverage '../spec/formula/formula.test.ts' 'engine/**/*.test.ts' 'adapters/**/*.test.ts' 'shell/*.test.ts' 'blocks/*.test.ts' 'testing/**/*.test.ts'",
+    "test": "node --test '../spec/formula/formula.test.ts' 'engine/**/*.test.ts' 'adapters/**/*.test.ts' 'shell/*.test.ts' 'blocks/*.test.ts' 'testing/**/*.test.ts' 'automation/**/*.test.ts'",
+    "test:coverage": "node --test --experimental-test-coverage '../spec/formula/formula.test.ts' 'engine/**/*.test.ts' 'adapters/**/*.test.ts' 'shell/*.test.ts' 'blocks/*.test.ts' 'testing/**/*.test.ts' 'automation/**/*.test.ts'",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.3",
     "dexie": "^4.4.6",
     "fake-indexeddb": "^6.2.5",
     "react": "^18.3.1",

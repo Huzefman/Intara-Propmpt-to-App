@@ -21,9 +21,10 @@ def test_node_runtime_suite_green():
         pytest.skip("node not installed")
     r = subprocess.run(
         [node, "--test",
-         "../spec/formula/formula.test.ts",
-         "engine/**/*.test.ts", "adapters/**/*.test.ts",
-         "shell/*.test.ts", "blocks/*.test.ts", "testing/**/*.test.ts"],
+        "../spec/formula/formula.test.ts",
+        "engine/**/*.test.ts", "adapters/**/*.test.ts",
+        "shell/*.test.ts", "blocks/*.test.ts", "testing/**/*.test.ts",
+        "automation/**/*.test.ts"],
         cwd=RUNTIME, capture_output=True, text=True, timeout=300)
     assert r.returncode == 0, f"runtime suite failed:\n{r.stdout[-3000:]}\n{r.stderr[-500:]}"
     assert "fail 0" in r.stdout, r.stdout[-500:]

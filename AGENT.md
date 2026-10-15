@@ -135,10 +135,12 @@
 - **Accept (MVP demo):** core20 ≥85% — ✅ **MET 17/20 (85%) on rerun 2026-10-15** (`core20-20261015-111406.json`); median 9 calls ✅; median wall 267s (near 3-min target, quota-throttled); coverage 1.0 (gym trace gap noted); diversity 12 combos ✅ overlap 0.028 ✅; heldout 3/5 green (invoicing/gym/helpdesk); type-a-wish→working-app demoable via Studio Blueprint/App tabs on passed wishes.
 - **Live findings:** (a) S3/S4 role mismatch failed 2 runs fail-closed → fixed, re-validating; (b) router double-created run rows (client polled an empty shell) → `run_id` passthrough fixed, proven by steps appearing under the polled id; (c) Gemini free-tier 5 RPM exhausted mid-probe — chain carried on groq as designed.
 
-### Phase 8 — Capability depth [ ]
+### Phase 8 — Capability depth [ ] *(slice 1 done: Supabase adapter + automations executor)*
 *Goal: Track A covers real SMB work. (Guide M4)*
-- Lifecycle UI + transition buttons, client-side automations executor, more computed blocks, roles editor, `file`/`image` fields (Storage), CSV import/export UI, `chart.*`, `data.calendar`, Supabase adapter + single-user auth, email provider (verify limits), print/PDF views; every block `stable` only with fixtures+tests
-- **Accept:** 10 gold specs pass G3/G4; adapter suite green on supabase
+- [x] P8.1 `supabase/migrations/007_data_plane.sql` (apps + records, ADR-2 A, RLS service-key-only) + `packages/runtime/adapters/supabase.ts` (same contract; live test skipped without env, scratch-app isolated) — **needs dashboard apply to prove live**
+- [x] P8.2 `packages/runtime/automation/executor.ts` (trigger match + set_field/create_record/notify/export_csv; email/webhook deferred explicitly) + 3 tests incl. gold-automation replay
+- [ ] Lifecycle UI + transition buttons, more computed blocks, roles editor, `file`/`image` fields (Storage), CSV import/export UI, `chart.*`, `data.calendar`, single-user auth, email provider (verify limits), print/PDF views; every block `stable` only with fixtures+tests
+- **Accept:** 10 gold specs pass G3/G4; adapter suite green on supabase — **OPEN (8 golds; supabase suite needs 007 applied)**
 
 ### Phase 9 — Studio v2 + learning loop [ ]
 *Goal: non-technical users succeed unaided. (Guide M5 + M7)*
@@ -244,6 +246,11 @@
 - **Problems:** see §5 #31–32.
 - **Next:** Phase 8 scaffolding whenever ready.
 
+### Session 16 — 2026-10-15 — Phase 8 slice 1 (adapter + automations) [x]
+- **Done:** 007 migration file (+additive test), Supabase adapter (contract suite green-skip without env; scratch-app isolation), automations executor + 3 tests, pytest wrapper globs updated. Node **190/190 (1 skip)**, tsc clean, python **190/190**, eval 5/5.
+- **Problems:** g4.ts `spec.ui.nav` possibly-undefined (pre-existing, hidden) — fixed with `?? []`.
+- **Next:** user applies 007 → live supabase-suite proof → Phase 8 slice 2 (lifecycle UI/kanban wires, CSV, roles editor…).
+
 ---
 
 ## 5. Known problems / error register
@@ -295,7 +302,7 @@
 | Requirement coverage | n/a | — | ≥ 80 % (100 % musts) |
 | LLM calls per build (median) | _pending P0.2_ | — | ≤ 14 (≤ 6 strong) |
 | Time to live preview post-approval | _pending P0.2_ | — | ≤ 30 s |
-| Unit suite | 93/93 (2026-10-11) | 189/189 py + 186/186 node (2026-10-15) | green every session |
+| Unit suite | 93/93 (2026-10-11) | 190/190 py + 190/190 node (2026-10-15) | green every session |
 | Golden eval | 5/5 (2026-10-11) | 5/5 (2026-10-12) | 5/5 + new suites |
 
 **Baseline 2026-10-12, pre-Phase-1** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):

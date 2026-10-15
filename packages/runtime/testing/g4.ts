@@ -64,7 +64,7 @@ export async function smokeShell(spec: AppSpec, name: string): Promise<G4Result>
     checks++;
     if (!html.includes(spec.app.name))
       failures.push({ check: `shell:${name}`, message: "app name missing" });
-    for (const item of spec.ui.nav.slice(0, 3)) {
+    for (const item of (spec.ui.nav ?? []).slice(0, 3)) {
       checks++;
       if (!html.includes(item.label))
         failures.push({ check: `shell:${name}`, message: `nav label ${item.label} missing` });

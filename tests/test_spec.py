@@ -95,6 +95,16 @@ def test_gen_types_drift_check_green():
     assert r.returncode == 0, f"drift:\n{r.stdout}\n{r.stderr}"
 
 
+def test_migration_007_additive_only():
+    sql = open(os.path.join(ROOT, "supabase", "migrations", "007_data_plane.sql")).read().lower()
+    assert "create table if not exists apps" in sql
+    assert "create table if not exists records" in sql
+    for banned in ("alter table wishes", "alter table wish_steps", "drop table",
+                   "delete from", "alter table projects", "alter table runs",
+                   "alter table exemplars"):
+        assert banned not in sql, f"migration must not contain: {banned}"
+
+
 def test_migration_006_additive_only():
     sql = open(os.path.join(ROOT, "supabase", "migrations", "006_v2_control_plane.sql")).read().lower()
     for table in ("projects", "project_versions", "runs", "run_steps",
