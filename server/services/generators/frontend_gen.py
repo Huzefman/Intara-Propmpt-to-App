@@ -1,7 +1,42 @@
 """
 FrontendGen v2 — distinct functional pages with LLM-first + template fallback
 """
+import re as _re
+
 from utils.json_parse import parse_json as _parse_json, is_quota_error
+
+
+def page_ident(name: str) -> str:
+    """Page/component identifier safe for filenames, imports and JSX.
+
+    'Daily Attendance' -> 'DailyAttendance'. Display labels and routes keep
+    the raw name; only code positions use this (R: spaced identifiers crash
+    bundlers — the exact HR-tool preview outage).
+    """
+    parts = _re.split(r"[^0-9A-Za-z]+", str(name or ""))
+    ident = "".join(p[:1].upper() + p[1:] for p in parts if p)
+    if ident and ident[0].isdigit():
+        ident = "Page" + ident
+    return ident or "Page"
+
+
+def normalize_frag(frag: dict) -> dict:
+    """Rewrite an LLM (or template) frag's page paths to slugged identifiers
+    plus its default-export name, so mixed trees always bundle."""
+    for f in (frag.get("files") or []):
+        path = f.get("path") or ""
+        m = _re.match(r"^(src/pages/)(.+)\.tsx$", path)
+        if not m:
+            continue
+        slug = page_ident(m.group(2))
+        if slug == m.group(2):
+            continue
+        f["path"] = f"{m.group(1)}{slug}.tsx"
+        content = f.get("content") or ""
+        content = _re.sub(r"export\s+default\s+function\s+[A-Za-z][\w ]*\b",
+                          f"export default function {slug}", content, count=1)
+        f["content"] = content
+    return frag
 
 
 CSV_LIB_TS = """export function toCsv(rows: any[]): string {
@@ -434,11 +469,11 @@ def _game_template_files(page: dict, app_name: str) -> list[dict]:
     name = page.get("name", "Game")
     out = [{"path": "src/game/logic.ts", "content": GAME_LOGIC_TS}]
     if feature == "scores" or "score" in name.lower():
-        out.append({"path": f"src/pages/{name}.tsx",
-                    "content": GAME_SCORES_PAGE.replace("__PAGE__", name)})
+        out.append({"path": f"src/pages/{page_ident(name)}.tsx",
+                    "content": GAME_SCORES_PAGE.replace("__PAGE__", page_ident(name))})
     else:
-        out.append({"path": f"src/pages/{name}.tsx",
-                    "content": GAME_BOARD_PAGE.replace("__PAGE__", name).replace("__APP__", app_name)})
+        out.append({"path": f"src/pages/{page_ident(name)}.tsx",
+                    "content": GAME_BOARD_PAGE.replace("__PAGE__", page_ident(name)).replace("__APP__", app_name)})
     return out
 
 
@@ -809,7 +844,7 @@ __CSV_BUTTON__
         else:
             page_content = page_content.replace("__UPLOAD_IMPORT__", "").replace(
                 "__UPLOAD_STATE__", "").replace("__UPLOAD_SECTION__", "")
-        files.append({"path": f"src/pages/{p['name']}.tsx", "content": page_content})
+        files.append({"path": f"src/pages/{page_ident(p['name'])}.tsx", "content": page_content})
 
     # components for each table - more functional
     for t in tables[:3]:
@@ -831,8 +866,8 @@ __CSV_BUTTON__
 """ })
 
     # App.tsx starter — premium minimal with nav, Sandpack safe
-    routes_str = "\n".join(f'        <Route path="{p["route"]}" element={{<{p["name"]} />}} />' for p in pages[:4])
-    imports_str = ", ".join(p["name"] for p in pages[:4])
+    routes_str = "\n".join(f'        <Route path="{p["route"]}" element={{<{page_ident(p["name"])} />}} />' for p in pages[:4])
+    imports_str = ", ".join(page_ident(p["name"]) for p in pages[:4])
     nav_links = "\n".join(f'          <Link to="{p["route"]}" style={{{{ padding:"8px 14px", borderRadius:999, textDecoration:"none", fontSize:12, fontWeight:500, color:"var(--intara-muted)", border:"1px solid transparent" }}}}>{p["name"]}</Link>' for p in pages[:4])
     files.append({"path": "src/App.tsx", "content": f"""import {{ BrowserRouter, Routes, Route, Link }} from 'react-router-dom'
 import {{ useEffect }} from 'react'
@@ -862,7 +897,7 @@ export default function App() {{
 }}
 """ })
     # src/pages/index.ts barrel
-    files.append({"path": "src/pages/index.ts", "content": "\n".join([f"export {{ default as {p['name']} }} from './{p['name']}'" for p in pages[:4]])})
+    files.append({"path": "src/pages/index.ts", "content": "\n".join([f"export {{ default as {page_ident(p['name'])} }} from './{page_ident(p['name'])}'" for p in pages[:4]])})
 
     if _csv_emitted:
         files.append({"path": "src/lib/csv.ts", "content": CSV_LIB_TS})
@@ -879,6 +914,9 @@ export default function App() {{
         files.append({"path": "src/lib/upload.ts",
                       "content": UPLOAD_LIB_TS.replace("__BUCKET__", _upload_bucket_name(prd))})
 
+    # Normalize every returned page (template or LLM): spaced identifiers
+    # crash bundlers, so slug paths + default-export names uniformly.
+    files = [normalize_frag({"files": [f]})["files"][0] if f.get("path", "").startswith("src/pages/") else f for f in files]
     # ensure at least 3 files
     n_pages = len([p for p in pages[:6]])
     if _fallbacks:

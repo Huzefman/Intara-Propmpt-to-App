@@ -174,3 +174,55 @@ def test_frag_fallback_helper():
     assert _frag_fallback({}) is None
     assert _frag_fallback(None) is None
     assert _frag_fallback("nope") is None
+
+
+def test_page_ident_slugifies():
+    import sys
+    sys.path.insert(0, "server")
+    from services.generators.frontend_gen import page_ident, normalize_frag
+    assert page_ident("Daily Attendance") == "DailyAttendance"
+    assert page_ident("leave_requests") == "LeaveRequests"
+    assert page_ident("9 lives") == "Page9Lives"
+    assert page_ident("") == "Page"
+    assert page_ident("Settings") == "Settings"
+
+
+def test_normalize_frag_fixes_spaced_llm_output():
+    import sys
+    sys.path.insert(0, "server")
+    from services.generators.frontend_gen import normalize_frag
+    frag = {"files": [{"path": "src/pages/Daily Attendance.tsx",
+                       "content": "export default function Daily Attendance() { return 1 }"}]}
+    out = normalize_frag(frag)
+    assert out["files"][0]["path"] == "src/pages/DailyAttendance.tsx"
+    assert "export default function DailyAttendance" in out["files"][0]["content"]
+    # already-clean frags pass through untouched
+    clean = {"files": [{"path": "src/pages/Home.tsx", "content": "export default function Home() { return 1 }"}]}
+    assert normalize_frag(clean)["files"][0]["path"] == "src/pages/Home.tsx"
+
+
+def test_template_tree_has_no_spaced_identifiers():
+    import sys, re
+    sys.path.insert(0, "server")
+    from services.generators.frontend_gen import generate_frontend
+    prd = {"appName": "T", "tables": [{"name": "t", "fields": [{"name": "n", "type": "text"}]}],
+           "pages": [{"name": "Daily Attendance", "route": "/", "table": "t", "components": []},
+                     {"name": "Leave Requests", "route": "/leaves", "table": "t", "components": []}],
+           "apis": []}
+    import os
+    os.environ["INTARA_TEMPLATE_ONLY"] = "1"
+    try:
+        out = generate_frontend(prd)
+    finally:
+        os.environ.pop("INTARA_TEMPLATE_ONLY", None)
+    paths = [f["path"] for f in out["files"]]
+    assert "src/pages/DailyAttendance.tsx" in paths
+    assert "src/pages/LeaveRequests.tsx" in paths
+    assert not any(" " in p for p in paths if p.startswith("src/pages/")), paths
+    by_path = {f["path"]: f["content"] for f in out["files"]}
+    barrel = by_path.get("src/pages/index.ts", "")
+    assert "DailyAttendance" in barrel and "Daily Attendance\"" not in barrel
+    for content in by_path.values():
+        for m in re.finditer(r"import\s*\{([^}]*)\}", content):
+            for name in m.group(1).split(","):
+                assert " " not in name.strip(), name

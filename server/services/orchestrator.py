@@ -615,8 +615,9 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
         # Re-generate final App.tsx that includes all pages with nav (deterministic, not LLM)
         pages = build_plan.get("pages", [])
         if pages:
-            imports_str = ", ".join(p["name"] for p in pages[:6])
-            routes_str = "\n".join(f'        <Route path="{p["route"]}" element={{<{p["name"]} />}} />' for p in pages[:6])
+            from services.generators.frontend_gen import page_ident as _slug
+            imports_str = ", ".join(_slug(p["name"]) for p in pages[:6])
+            routes_str = "\n".join(f'        <Route path="{p["route"]}" element={{<{_slug(p["name"])} />}} />' for p in pages[:6])
             nav_links = "\n".join(f'          <Link to="{p["route"]}" style={{{{ padding:"8px 14px", borderRadius:999, textDecoration:"none", fontSize:12, fontWeight:500, color:"var(--intara-muted)", border:"1px solid transparent" }}}}>{p["name"]}</Link>' for p in pages[:6])
             app_name = build_plan.get("appName","IntaraApp")
             final_app = f"""import {{ BrowserRouter, Routes, Route, Link }} from 'react-router-dom'
@@ -650,7 +651,7 @@ export default function App() {{
             fe_files.append({"path": "src/App.tsx", "content": final_app})
             # ensure barrel
             fe_files = [f for f in fe_files if f["path"] != "src/pages/index.ts"]
-            fe_files.append({"path": "src/pages/index.ts", "content": "\n".join([f"export {{ default as {p['name']} }} from './{p['name']}'" for p in pages[:6]])})
+            fe_files.append({"path": "src/pages/index.ts", "content": "\n".join([f"export {{ default as {_slug(p['name'])} }} from './{_slug(p['name'])}'" for p in pages[:6]])})
 
         # Backend files: fresh scaffold + full backend regen (single canonical modules).
         # be_openapi is rebuilt from the regen so resumed (skipped) steps can't leave it partial.
