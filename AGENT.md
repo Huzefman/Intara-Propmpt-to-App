@@ -318,8 +318,8 @@
 *Append-only. Format: date · symptom · root cause (if known) · status. Never delete entries — strike through when fixed with the fix noted.*
 
 1. 2026-10-11 · `OPENROUTER_MODEL=openrouter/free` looks like a placeholder, not a real model id · unverified · **OPEN** (Phase 0 task P0.3)
-2. 2026-10-11 · `wish_steps.output` stores file paths, content lives only in build-process memory; restarts force regeneration · by design, fix = Phase 3 (P3.1 durable artifacts) · **OPEN**
-3. 2026-10-11 · Orphaned `running` rows after kills need manual retry; no startup sweeper · fix = Phase 3 (P3.3) · **OPEN**
+2. 2026-10-11 · `wish_steps.output` stored file paths, content lived only in build-process memory · **RESOLVED by Phase 3** (content-addressed `artifact_contents` + resume-from-store; hollow rows only pre-exist it)
+3. 2026-10-11 · Orphaned `running` rows after kills needed manual retry · **RESOLVED by Phase 3** (boot sweeper requeues + flips; v2 runs covered too)
 4. 2026-10-11 · Historical: reloader fork trees + `multiprocessing.spawn_main` orphans inherit the listen socket and steal connections (silent hangs) · mitigated by single-process-no-reload discipline (§8 ops) · **MITIGATED, watch**
 5. 2026-10-11 · Historical: `/tmp` backend log lost to OS purge · mitigated by repo-local log file · **MITIGATED**
 6. 2026-10-11 · `RATE` (10/day) limiter defined but wired to no endpoint; enforced caps are CHAT_RATE 20/day (chat+iterate) + provider quotas · decide in re-architect whether to keep/replace · **OPEN**
