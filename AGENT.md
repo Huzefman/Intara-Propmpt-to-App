@@ -305,6 +305,12 @@
 - **Systemic:** `page_ident()` + `normalize_frag()` in frontend_gen (template sites + end-of-pipeline normalization for LLM frags) + orchestrator final App/barrel slugged (labels/routes stay raw). 3 regression tests. Suite **200/200**, eval 5/5, backend restarted.
 - **Rule:** display names never enter code positions — filenames, imports, JSX, barrel all slugified at a single choke point.
 
+### Session 27 — 2026-10-16 — template floor raise (generic → human) [x]
+- **Trigger:** user feedback — fallback-built apps look/feel dumb ("Demo name 1", "Sample 2", Jan-2026 dates).
+- **Done:** `_seed_value` domain-aware (person pools, task/product/job/leave titles, INR phone/city/reasons, recent Oct-2026 dates, money/qty bands; unknown tables keep old generic floor) + `export default function` slugified in both page templates (missed in session 26 — same spaced-name class) + seed realism test. Committed.
+- **Live note:** HR retry of backend-users STILL fell back (all-provider 429/timeout wave incl. new groq 400). Quota hostile tonight — stop retrying till fresh quota; seed/slug fixes load on next restart.
+- **Verify:** template gates 16/16 (this area); full suite + restart deferred to after the running build lands.
+
 ---
 
 ## 5. Known problems / error register
