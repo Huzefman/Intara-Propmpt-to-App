@@ -293,7 +293,7 @@
 ### Session 24 — 2026-10-16 — Phase 9 slice 2 (gallery + dev toggle + feedback) [x]
 - **Done:** exemplars list/get + eventlog JSON + feedback post/export(CSV) endpoints (fake-supa tests; KeyError→404 fix); `/templates` Gallery page (live preview + build-similar → run view) + header link + `/runs/:id` route; Blueprint plain/developer toggle (spec JSON + event log) + feedback widget (rating/comment, version-linked). Backend restarted; gallery endpoint live-verified with real data.
 - **Verify:** python **197/197**, eval 5/5; node **207/207**; both tscs + vite build.
-- **Next:** user applies 009 (summaries degrade gracefully till then) → 3-human UAT → Phase 10/11 decision.
+- **009 applied by user 2026-10-16** — verified live (probe insert/read/delete, zero residue). Summaries now persist.
 
 ---
 
