@@ -6,21 +6,79 @@ Generates src/mock/* for Sandpack trial (no server, no Supabase)
 def _field_to_dexie_type(ft):
     return {"text": "string", "integer": "number", "timestamp": "string", "boolean": "boolean"}.get(ft, "string")
 
-def _seed_value(field, idx):
+def _seed_value(field, idx, table=""):
     name = field["name"]
     ft = field["type"]
+    tnames = (table or "").lower()
     if ft == "text":
-        if "email" in name: return f"demo{idx}@intara.test"
-        if "title" in name or "name" in name: return f"Demo {name} {idx}"
-        if "status" in name: return "active"
+        if "email" in name:
+            who = _pick_person(idx)
+            return f"{who.lower().replace(' ', '.')}{idx}@intara.test"
+        if "phone" in name:
+            return f"+91 98250 1000{idx}"
+        if any(k in name for k in ("title", "name", "subject")):
+            titled = _pick_title(tnames, idx)
+            if titled:
+                return titled
+            return f"Demo {name} {idx}"
+        if "status" in name:
+            return ["active", "pending", "done"][idx % 3]
+        if "description" in name or "notes" in name or "reason" in name:
+            return _pick_note(tnames, idx)
+        if "address" in name or "city" in name:
+            return ["Jaipur", "Pune", "Indore"][idx % 3]
         return f"Sample {idx}"
     if ft == "integer":
+        if any(k in name for k in ("qty", "count", "stock", "hours", "days", "age")):
+            return [3, 12, 7][idx % 3]
+        if "price" in name or "cost" in name or "total" in name or "amount" in name:
+            return [499, 1299, 2499][idx % 3]
         return idx * 10
     if ft == "boolean":
         return idx % 2 == 0
     if ft == "timestamp":
-        return "2026-01-01T00:00:00.000Z"
+        # recent deterministic dates (mid-Oct 2026) so "today" views are non-empty
+        return f"2026-10-{10 + (idx % 6):02d}T09:00:00.000Z"
     return f"val{idx}"
+
+
+def _pick_person(idx):
+    return ["Aarav Mehta", "Priya Nair", "Rohan Patel", "Anita Shah", "Imran Khan"][idx % 5]
+
+
+def _pick_title(tnames, idx):
+    pools = {
+        "task": ["Prepare monthly report", "Fix login bug", "Review pull requests", "Plan sprint retro"],
+        "project": ["Website revamp", "Mobile app", "API migration"],
+        "product": ["Clay mug", "Dinner plate", "Serving bowl"],
+        "employee": ["Aarav Mehta", "Priya Nair", "Rohan Patel"],
+        "user": ["Aarav Mehta", "Priya Nair", "Rohan Patel"],
+        "customer": ["Acme Traders", "Sharma General Store", "Novelty Corner"],
+        "job": ["Screen replacement", "Battery service", "Full diagnostic"],
+        "leave": ["Diwali break", "Family function", "Medical appointment"],
+        "booking": ["Haircut", "Spa session", "Consultation"],
+        "appointment": ["Haircut", "Spa session", "Consultation"],
+        "order": ["Order #1042", "Order #1043", "Order #1044"],
+        "invoice": ["INV-2026-101", "INV-2026-102", "INV-2026-103"],
+        "event": ["Team offsite", "Product launch", "Training day"],
+        "meeting": ["Sprint planning", "Design review", "Retro"],
+    }
+    for key, pool in pools.items():
+        if key in tnames:
+            return pool[idx % len(pool)]
+    return ""
+
+
+def _pick_note(tnames, idx):
+    notes = {
+        "leave": ["Family function at hometown", "Fever, resting at home", "Wedding in the family"],
+        "task": ["Blocked on API keys", "Needs design review first", "Carried from last sprint"],
+        "job": ["Cracked screen, needs parts", "Battery drains overnight", "Customer waiting on estimate"],
+    }
+    for key, pool in notes.items():
+        if key in tnames:
+            return pool[idx % len(pool)]
+    return f"Note {idx}"
 
 def generate_mock(prd: dict):
     # Canonical contract: string UUID ids everywhere (SQLite TEXT PK agrees).
@@ -68,7 +126,7 @@ export const db = new PreviewDB()
                 if fk_target:
                     obj_fields.append(f'"{f["name"]}": "{fk_target}-{(i % 3) + 1}"')
                 else:
-                    val = _seed_value(f, i)
+                    val = _seed_value(f, i, t["name"])
                     if isinstance(val, str):
                         obj_fields.append(f'"{f["name"]}": "{val}"')
                     elif isinstance(val, bool):

@@ -634,7 +634,7 @@ def generate_frontend(prd: dict):
 import {{ useParams, Link }} from 'react-router-dom'
 __UPLOAD_IMPORT__import {{ {fns['get']}, {fns['patch']}, {fns['delete']}, {fns['list']} }} from '../api'
 
-export default function {p["name"]}() {{
+export default function {page_ident(p["name"])}() {{
   const {{ id }} = useParams()
   const [item, setItem] = useState<any>(null)
   const [form, setForm] = useState<any>({{}})
@@ -744,7 +744,7 @@ __UPLOAD_SECTION__
 import {{ Link }} from 'react-router-dom'
 __CSV_IMPORT__import {{ {fns['list']}, {fns['create']}, {fns['patch']} }} from '../api'
 
-export default function {p["name"]}() {{
+export default function {page_ident(p["name"])}() {{
   const [items, setItems] = useState<any[]>([])
   const [form, setForm] = useState<any>({{}})
   const [q, setQ] = useState("")

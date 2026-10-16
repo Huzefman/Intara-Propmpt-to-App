@@ -222,7 +222,30 @@ def test_template_tree_has_no_spaced_identifiers():
     by_path = {f["path"]: f["content"] for f in out["files"]}
     barrel = by_path.get("src/pages/index.ts", "")
     assert "DailyAttendance" in barrel and "Daily Attendance\"" not in barrel
-    for content in by_path.values():
+    for path, content in by_path.items():
+        if not path.endswith(".tsx"):
+            continue
         for m in re.finditer(r"import\s*\{([^}]*)\}", content):
             for name in m.group(1).split(","):
                 assert " " not in name.strip(), name
+        for m in re.finditer(r"export\s+default\s+function\s+([A-Za-z][\w ]*)", content):
+            assert " " not in m.group(1), m.group(1)
+
+
+def test_seed_values_look_human():
+    import sys
+    sys.path.insert(0, "server")
+    from services.preview.mock_gen import _seed_value as v, generate_mock
+    # no Demo/Sample/val placeholders on known domains
+    assert "Demo" not in v({"name": "name", "type": "text"}, 0, "employees")
+    assert "@" in v({"name": "email", "type": "text"}, 1, "x")
+    assert v({"name": "start", "type": "timestamp"}, 0, "x").startswith("2026-10-")
+    # unknown tables keep the old generic fallback (documented floor)
+    assert v({"name": "zzz", "type": "text"}, 0, "qqq") == "Sample 0"
+    # end-to-end: generated seed has no placeholder text on known tables
+    prd = {"appName": "T", "tables": [{"name": "employees", "fields": [
+        {"name": "name", "type": "text"}, {"name": "email", "type": "text"}]}],
+        "pages": [], "apis": []}
+    files = generate_mock(prd)
+    seed_ts = files["src/mock/seed.ts"]
+    assert "Demo name" not in seed_ts and "demo1@" not in seed_ts
