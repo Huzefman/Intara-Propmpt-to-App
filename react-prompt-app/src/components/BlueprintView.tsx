@@ -5,7 +5,8 @@
  * sends chat edits (JSON Patch behind a Details toggle).
  */
 import { Suspense, lazy, useEffect, useState } from 'react'
-import { approveRun, chatRun, getRun } from '../api/client'
+import { approveRun, chatRun, getRun, patchRun } from '../api/client'
+import { addRole, removeRole, setRule } from '../../../packages/runtime/editing/roles.ts'
 
 const RuntimePreview = lazy(() => import('../runtime/RuntimePreview').then(m => ({ default: m.RuntimePreview })))
 
@@ -28,6 +29,7 @@ export function BlueprintView({ runId }: { runId: string }) {
   const [patch, setPatch] = useState<any>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [newRole, setNewRole] = useState('')
 
   async function refresh() {
     try {
@@ -61,6 +63,18 @@ export function BlueprintView({ runId }: { runId: string }) {
       setMsg('Approved — this version is the build source of truth.')
     } catch (e: any) {
       setErr(e.message || 'approve failed')
+    } finally { setBusy(false) }
+  }
+
+  async function applyEdit(edit: { patch: any[]; summary: string }) {
+    if (!versionId) { setErr('No version to patch yet.'); return }
+    setBusy(true); setErr(null)
+    try {
+      const r = await patchRun(runId, edit.patch as any[], edit.summary, versionId)
+      setSpec(r.spec); setVersionId(r.version_id)
+      setMsg(r.summary)
+    } catch (e: any) {
+      setErr(e.message || 'patch failed')
     } finally { setBusy(false) }
   }
 
@@ -133,6 +147,66 @@ export function BlueprintView({ runId }: { runId: string }) {
           ))}
           {assumptions.length === 0 && <div className="muted" style={{ fontSize: 12 }}>Assumed: nothing yet.</div>}
         </Card>
+      </div>
+
+      <div className="glass" style={{ padding: '12px 14px', borderRadius: 14 }}>
+        <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 8 }}>Roles editor (deterministic patch)</div>
+        {(spec?.access?.roles || []).map((r: any) => {
+          // quick toggles scope to the primary entity; full-matrix edits go through chat
+          const firstEnt = (spec?.model?.entities || [])[0]?.id;
+          const rule = (spec?.access?.rules || []).find((x: any) => x.role === r.id && x.entity === firstEnt);
+          const on = (op: string) => !!rule && (rule.ops || []).includes(op);
+          return (
+          <div key={r.id} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, padding: '3px 0', flexWrap: 'wrap' }}>
+            <strong style={{ minWidth: 90 }}>{r.id}</strong>
+            {['read', 'create', 'update', 'delete'].map((op) => (
+              <button key={op} className="btn-ghost btn-sm" disabled={busy || !versionId || !firstEnt}
+                title={`${on(op) ? 'Remove' : 'Grant'} ${op} for ${r.id} on ${firstEnt}`}
+                style={on(op) ? { borderColor: 'rgba(139,92,246,0.9)' } : undefined}
+                onClick={() => {
+                  try {
+                    const cur = (((spec?.access?.rules || []).find((x: any) => x.role === r.id && x.entity === firstEnt)?.ops || []) as string[]);
+                    const next = on(op) ? cur.filter((o) => o !== op) : [...cur, op];
+                    applyEdit(setRule(spec, r.id, firstEnt, next));
+                  } catch (e: any) {
+                    setErr(e.message || 'edit failed');
+                  }
+                }}>
+                {op[0].toUpperCase()}
+              </button>
+            ))}
+            <button className="btn-ghost btn-sm" disabled={busy || !versionId}
+              onClick={() => {
+                try {
+                  if (!confirm(`Remove role ${r.id}?`)) return;
+                  applyEdit(removeRole(spec, r.id));
+                } catch (e: any) {
+                  setErr(e.message || 'edit failed');
+                }
+              }}>✕</button>
+          </div>
+          );
+        })}
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <input
+            value={newRole}
+            onChange={(e) => setNewRole(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newRole.trim()) {
+                try { applyEdit(addRole(spec, newRole.trim())); setNewRole(''); }
+                catch (er: any) { setErr(er.message || 'edit failed'); }
+              }
+            }}
+            placeholder="new-role-id"
+            style={{ flex: 1, background: '#0A0A0F', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '8px 12px', color: '#E2E8F0', fontSize: 13 }}
+            aria-label="New role id"
+          />
+          <button className="btn-primary btn-sm" disabled={busy || !versionId || !newRole.trim()}
+            onClick={() => {
+              try { applyEdit(addRole(spec, newRole.trim())); setNewRole(''); }
+              catch (e: any) { setErr(e.message || 'edit failed'); }
+            }}>Add role</button>
+        </div>
       </div>
 
       <div className="glass" style={{ padding: '12px 14px', borderRadius: 14 }}>

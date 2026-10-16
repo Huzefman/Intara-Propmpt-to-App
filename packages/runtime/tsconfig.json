@@ -13,6 +13,6 @@
     "types": ["node"],
     "baseUrl": "."
   },
-  "include": ["engine/**/*.ts", "adapters/**/*.ts", "shell/**/*.ts", "shell/**/*.tsx", "blocks/**/*.ts", "blocks/**/*.tsx", "testing/**/*.ts", "automation/**/*.ts", "storage/**/*.ts"],
+  "include": ["engine/**/*.ts", "adapters/**/*.ts", "shell/**/*.ts", "shell/**/*.tsx", "blocks/**/*.ts", "blocks/**/*.tsx", "testing/**/*.ts", "automation/**/*.ts", "storage/**/*.ts", "editing/**/*.ts"],
   "exclude": ["**/*.test.ts", "node_modules"]
 }

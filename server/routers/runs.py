@@ -210,7 +210,6 @@ class ChatIn(BaseModel):
     instruction: str = ""
     base_version: str | None = None
 
-
 @router.post("/runs/{run_id}/chat")
 @router.post("/api/runs/{run_id}/chat")
 async def chat_patch(run_id: str, body: ChatIn):
@@ -235,3 +234,51 @@ async def chat_patch(run_id: str, body: ChatIn):
         raise
     except Exception as e:
         raise HTTPException(500, f"chat patch failed: {e}")
+
+
+class PatchIn(BaseModel):
+    ops: list = []
+    summary: str = ""
+    base_version: str | None = None
+
+
+@router.post("/runs/{run_id}/patch")
+@router.post("/api/runs/{run_id}/patch")
+async def apply_patch(run_id: str, body: PatchIn):
+    """Deterministic patch (no LLM): UI-built ops validated by G0/G1.
+
+    Same versioning path as chat edits — the two iteration modes converge.
+    """
+    if not isinstance(body.ops, list) or not body.ops:
+        raise HTTPException(400, "ops must be a non-empty list")
+    if not body.summary or len(body.summary.strip()) < 4:
+        raise HTTPException(400, "summary required (chat shows human diffs)")
+    try:
+        from engine.patch import apply as _apply, PatchError
+        from gates.g0_validate import validate as g0
+        from gates.g1_lint import lint as g1
+        eng = _engine()
+        base_vid = body.base_version or _current_version(eng.store, run_id)
+        if not base_vid:
+            raise HTTPException(409, "no base version to patch yet")
+        base = eng.store.get_version(base_vid)
+        spec = dict(base.get("spec") or {})
+        try:
+            patched = _apply(spec, body.ops)
+        except PatchError as e:
+            raise HTTPException(400, f"patch rejected: {e}")
+        problems = g0(patched) + [e["message"] for e in g1(patched)["errors"]]
+        if problems:
+            raise HTTPException(422, f"patched spec failed G0/G1: {'; '.join(problems)[:500]}")
+        project_id = (base.get("project_id")
+                      or _project_id_for_run(eng.store, run_id))
+        vid = eng.store.create_version(project_id, base_vid, patched, "manual")
+        eng.emit(run_id, "patched",
+                 {"version": vid, "summary": body.summary.strip(),
+                  "ops": len(body.ops)})
+        return {"ok": True, "version_id": vid, "spec": patched,
+                "summary": body.summary.strip()}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"apply patch failed: {e}")

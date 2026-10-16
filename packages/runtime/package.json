@@ -5,8 +5,8 @@
   "type": "module",
   "description": "Intara runtime v1: spec-driven data engine, adapters, shell, blocks (Phase 6)",
   "scripts": {
-    "test": "node --test '../spec/formula/formula.test.ts' 'engine/**/*.test.ts' 'adapters/**/*.test.ts' 'shell/*.test.ts' 'blocks/*.test.ts' 'testing/**/*.test.ts' 'automation/**/*.test.ts' 'storage/**/*.test.ts' 'auth/**/*.test.ts'",
-    "test:coverage": "node --test --experimental-test-coverage '../spec/formula/formula.test.ts' 'engine/**/*.test.ts' 'adapters/**/*.test.ts' 'shell/*.test.ts' 'blocks/*.test.ts' 'testing/**/*.test.ts' 'automation/**/*.test.ts' 'storage/**/*.test.ts' 'auth/**/*.test.ts'",
+    "test": "node --test '../spec/formula/formula.test.ts' 'engine/**/*.test.ts' 'adapters/**/*.test.ts' 'shell/*.test.ts' 'blocks/*.test.ts' 'testing/**/*.test.ts' 'automation/**/*.test.ts' 'storage/**/*.test.ts' 'auth/**/*.test.ts' 'editing/**/*.test.ts'",
+    "test:coverage": "node --test --experimental-test-coverage '../spec/formula/formula.test.ts' 'engine/**/*.test.ts' 'adapters/**/*.test.ts' 'shell/*.test.ts' 'blocks/*.test.ts' 'testing/**/*.test.ts' 'automation/**/*.test.ts' 'storage/**/*.test.ts' 'auth/**/*.test.ts' 'editing/**/*.test.ts'",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

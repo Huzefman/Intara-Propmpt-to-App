@@ -271,12 +271,19 @@
 - **Done:** per user decision (PIN, no Resend; email integrates later via existing deferred effects). `auth/pin.ts` (PBKDF2-SHA256 100k, salt, constant-time compare, `_auth` store entity) + 2 tests; `PinGate.tsx` (setup/lock, digit-only, clears state); RuntimePreview wiring (auto-gate when enrolled, toolbar Set-PIN/Lock, notices). Email-later confirmed zero-rework (payloads already flow through deferred effects).
 - **Verify:** node **199/199 (1 skip)**, 91.0% lines; both tscs + vite build; python **190/190**, eval 5/5.
 - **Next:** 2 golds in review with user; roles editor design; print views already shipped.
+- **Verify:** node **199/199 (1 skip)**, 91.0% lines; both tscs + vite build; python **190/190**, eval 5/5.
+- **Next:** 2 golds in review with user; roles editor design; print views already shipped.
 
 ### Session 21 — 2026-10-16 — batch-2 golds promoted, prototype fully ported [x]
 - **Done:** both improved specs G0/G1-clean first try; ported checker delta (R48 block-id uniqueness, R49 mirror-ref, R50 placeholder/id-only templates) + 5 fail-patches; `today()`/`tomorrow()` in formula language (TZ-pinned, 135/135); S2/S3/S4 review rules (→ v3 prompts); `set_field` evaluates zero-arg date fns (literal fallback); adapter drops storage-managed fields; promoted productivity+gardening (10/10 G0/G1, G3 green all 10); seeded + index rebuilt.
 - **Verify:** node **204/204 (1 skip)**, 91.0% lines; both tscs + vite build; python **190/190**, eval 5/5.
 - **Decisions confirmed:** chained computed needs dependency-first field order (engine semantics, now in grammar.md); multi-hop `to` resolves at provider time (lint already proves resolvability); seeds WILL go stale (no relative tokens — noted).
 - **Next:** Phase 8 remainder (roles editor design) or Phase 9.
+
+### Session 22 — 2026-10-16 — roles editor (deterministic patches) [x]
+- **Done:** `editing/roles.ts` (add/remove/set with patch building + usage guards, 3 tests) + `POST /runs/{id}/patch` (G0/G1-gated, same version path as chat; 3 TestClient tests incl. a 422 that forced the test itself to write a complete role+page+rule patch) + Studio Roles section (op toggles scoped to primary entity, add/remove with guard messages) reusing the same lib. Backend restarted, endpoint live-verified (400 validation).
+- **Verify:** node **207/207 (1 skip)**; both tscs + vite build; python **193/193**, eval 5/5.
+- **Next:** Phase 8 remainder is now only: email key (blocked), 2 gold reviews (with user). Then Phase 9.
 
 ---
 
@@ -333,7 +340,7 @@
 | Requirement coverage | n/a | — | ≥ 80 % (100 % musts) |
 | LLM calls per build (median) | _pending P0.2_ | — | ≤ 14 (≤ 6 strong) |
 | Time to live preview post-approval | _pending P0.2_ | — | ≤ 30 s |
-| Unit suite | 93/93 (2026-10-11) | 190/190 py + 204/204 node (2026-10-16) | green every session |
+| Unit suite | 93/93 (2026-10-11) | 193/193 py + 207/207 node (2026-10-16) | green every session |
 | Golden eval | 5/5 (2026-10-11) | 5/5 (2026-10-12) | 5/5 + new suites |
 
 **Baseline 2026-10-12, pre-Phase-1** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):

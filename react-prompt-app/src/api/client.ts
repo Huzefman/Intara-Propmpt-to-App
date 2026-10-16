@@ -238,3 +238,12 @@ export async function chatRun(runId: string, instruction: string): Promise<{ ok:
   if (!res.ok) throw new Error(`chat patch failed ${res.status}`)
   return res.json()
 }
+
+export async function patchRun(runId: string, ops: any[], summary: string, baseVersion?: string): Promise<{ ok: boolean; version_id: string; summary: string; spec: any }> {
+  const res = await fetch(`/api/runs/${runId}/patch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ops, summary, base_version: baseVersion || null }) })
+  if (!res.ok) {
+    const t = await res.text().catch(() => '')
+    throw new Error(`patch failed ${res.status} ${t.slice(0, 200)}`)
+  }
+  return res.json()
+}
