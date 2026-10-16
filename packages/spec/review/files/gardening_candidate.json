@@ -1,0 +1,2171 @@
+{
+  "ui": {
+    "nav": [
+      {
+        "icon": "home",
+        "page": "dashboard",
+        "label": "Dashboard",
+        "roles": [
+          "owner",
+          "helper"
+        ]
+      },
+      {
+        "icon": "shovel",
+        "page": "plantings",
+        "label": "Plantings",
+        "roles": [
+          "owner",
+          "helper"
+        ]
+      },
+      {
+        "icon": "droplet",
+        "page": "care",
+        "label": "Care",
+        "roles": [
+          "owner",
+          "helper"
+        ]
+      },
+      {
+        "icon": "basket",
+        "page": "harvests",
+        "label": "Harvests",
+        "roles": [
+          "owner",
+          "helper"
+        ]
+      },
+      {
+        "icon": "leaf",
+        "page": "gardens",
+        "label": "Gardens",
+        "roles": [
+          "owner",
+          "helper"
+        ]
+      },
+      {
+        "icon": "sprout",
+        "page": "plants",
+        "label": "Plants",
+        "roles": [
+          "owner",
+          "helper"
+        ]
+      }
+    ],
+    "pages": [
+      {
+        "id": "dashboard",
+        "roles": [
+          "owner",
+          "helper"
+        ],
+        "route": "/",
+        "title": "Dashboard",
+        "blocks": [
+          {
+            "id": "planting_stats",
+            "type": "metric.stat",
+            "props": {
+              "entity": "planting",
+              "items": [
+                {
+                  "label": "Growing now",
+                  "agg": "count",
+                  "where": "status == 'planted'"
+                },
+                {
+                  "label": "Planned",
+                  "agg": "count",
+                  "where": "status == 'planned'"
+                },
+                {
+                  "label": "Harvested",
+                  "agg": "count",
+                  "where": "status == 'harvested'"
+                }
+              ]
+            }
+          },
+          {
+            "id": "care_stats",
+            "type": "metric.stat",
+            "props": {
+              "entity": "care_task",
+              "items": [
+                {
+                  "label": "Care due today",
+                  "agg": "count",
+                  "where": "status == 'pending' and due_date == today()"
+                },
+                {
+                  "label": "Overdue",
+                  "agg": "count",
+                  "where": "status == 'pending' and due_date < today()"
+                }
+              ]
+            }
+          },
+          {
+            "id": "harvest_stats",
+            "type": "metric.stat",
+            "props": {
+              "entity": "harvest",
+              "items": [
+                {
+                  "label": "Harvested this month (kg)",
+                  "agg": "sum",
+                  "field": "quantity_kg",
+                  "where": "harvested_on >= startOfMonth()"
+                },
+                {
+                  "label": "Harvested all time (kg)",
+                  "agg": "sum",
+                  "field": "quantity_kg"
+                }
+              ]
+            }
+          },
+          {
+            "id": "plantings_by_status",
+            "type": "chart.bar",
+            "props": {
+              "entity": "planting",
+              "title": "Plantings by Status",
+              "x": "status",
+              "y": "count"
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "gardens",
+        "roles": [
+          "owner",
+          "helper"
+        ],
+        "route": "/gardens",
+        "title": "Gardens",
+        "blocks": [
+          {
+            "id": "garden_table",
+            "type": "data.table",
+            "props": {
+              "entity": "garden",
+              "columns": [
+                "name",
+                "location",
+                "size_sqft",
+                "sun_exposure"
+              ],
+              "row_link": "garden_detail",
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "garden_detail",
+        "roles": [
+          "owner",
+          "helper"
+        ],
+        "route": "/gardens/:id",
+        "title": "Garden",
+        "blocks": [
+          {
+            "id": "garden_info",
+            "type": "record.detail",
+            "props": {
+              "entity": "garden",
+              "sections": [
+                {
+                  "title": "About",
+                  "fields": [
+                    "name",
+                    "location",
+                    "size_sqft",
+                    "sun_exposure"
+                  ]
+                },
+                {
+                  "title": "Owner",
+                  "fields": [
+                    "owner_name",
+                    "owner_email"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "garden_beds",
+            "type": "record.related_list",
+            "props": {
+              "entity": "bed",
+              "via": "garden",
+              "columns": [
+                "name",
+                "bed_type",
+                "soil_type",
+                "area_sqft"
+              ],
+              "row_link": "bed_detail",
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "bed_detail",
+        "roles": [
+          "owner",
+          "helper"
+        ],
+        "route": "/beds/:id",
+        "title": "Bed",
+        "blocks": [
+          {
+            "id": "bed_info",
+            "type": "record.detail",
+            "props": {
+              "entity": "bed",
+              "sections": [
+                {
+                  "title": "Bed",
+                  "fields": [
+                    "name",
+                    "garden",
+                    "bed_type",
+                    "soil_type",
+                    "area_sqft"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "bed_plantings",
+            "type": "record.related_list",
+            "props": {
+              "entity": "planting",
+              "via": "bed",
+              "columns": [
+                "plant.common_name",
+                "quantity",
+                "date_planted",
+                "expected_harvest",
+                "status"
+              ],
+              "row_link": "planting_detail",
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "plants",
+        "roles": [
+          "owner",
+          "helper"
+        ],
+        "route": "/plants",
+        "title": "Plant catalog",
+        "blocks": [
+          {
+            "id": "plant_filter",
+            "type": "filter.bar",
+            "props": {
+              "entity": "plant",
+              "fields": [
+                "category",
+                "sun_need"
+              ],
+              "search": [
+                "common_name",
+                "scientific_name"
+              ]
+            }
+          },
+          {
+            "id": "plant_table",
+            "type": "data.table",
+            "props": {
+              "entity": "plant",
+              "columns": [
+                "common_name",
+                "category",
+                "sun_need",
+                "days_to_harvest",
+                "water_every_days"
+              ],
+              "row_link": "plant_detail",
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "plant_detail",
+        "roles": [
+          "owner",
+          "helper"
+        ],
+        "route": "/plants/:id",
+        "title": "Plant",
+        "blocks": [
+          {
+            "id": "plant_info",
+            "type": "record.detail",
+            "props": {
+              "entity": "plant",
+              "sections": [
+                {
+                  "title": "About",
+                  "fields": [
+                    "common_name",
+                    "scientific_name",
+                    "category",
+                    "description"
+                  ]
+                },
+                {
+                  "title": "Growing",
+                  "fields": [
+                    "sun_need",
+                    "days_to_harvest",
+                    "water_every_days"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "plant_plantings",
+            "type": "record.related_list",
+            "props": {
+              "entity": "planting",
+              "via": "plant",
+              "columns": [
+                "bed.name",
+                "quantity",
+                "date_planted",
+                "status"
+              ],
+              "row_link": "planting_detail"
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "plantings",
+        "roles": [
+          "owner",
+          "helper"
+        ],
+        "route": "/plantings",
+        "title": "Plantings",
+        "blocks": [
+          {
+            "id": "planting_filter",
+            "type": "filter.bar",
+            "props": {
+              "entity": "planting",
+              "fields": [
+                "status"
+              ],
+              "search": [
+                "plant.common_name",
+                "bed.name"
+              ]
+            }
+          },
+          {
+            "id": "planting_board",
+            "type": "data.kanban",
+            "props": {
+              "entity": "planting",
+              "group_by": "status",
+              "card": {
+                "title": "plant.common_name",
+                "subtitle": "bed.name",
+                "badges": [
+                  "quantity"
+                ]
+              },
+              "drag_transitions": true
+            }
+          },
+          {
+            "id": "planting_table",
+            "type": "data.table",
+            "props": {
+              "entity": "planting",
+              "columns": [
+                "plant.common_name",
+                "bed.name",
+                "quantity",
+                "date_planted",
+                "expected_harvest",
+                "status",
+                "total_harvested"
+              ],
+              "row_link": "planting_detail",
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "planting_detail",
+        "roles": [
+          "owner",
+          "helper"
+        ],
+        "route": "/plantings/:id",
+        "title": "Planting",
+        "blocks": [
+          {
+            "id": "planting_lifecycle",
+            "type": "lifecycle.pipeline",
+            "props": {
+              "entity": "planting"
+            }
+          },
+          {
+            "id": "planting_info",
+            "type": "record.detail",
+            "props": {
+              "entity": "planting",
+              "sections": [
+                {
+                  "title": "Planting",
+                  "fields": [
+                    "plant",
+                    "bed",
+                    "quantity",
+                    "status"
+                  ]
+                },
+                {
+                  "title": "Dates",
+                  "fields": [
+                    "date_planted",
+                    "expected_harvest"
+                  ]
+                },
+                {
+                  "title": "Yield",
+                  "fields": [
+                    "total_harvested",
+                    "notes"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "planting_harvests",
+            "type": "record.related_list",
+            "props": {
+              "entity": "harvest",
+              "via": "planting",
+              "columns": [
+                "harvested_on",
+                "quantity_kg",
+                "notes"
+              ],
+              "create": true
+            }
+          },
+          {
+            "id": "planting_care",
+            "type": "record.related_list",
+            "props": {
+              "entity": "care_task",
+              "via": "planting",
+              "columns": [
+                "task_type",
+                "due_date",
+                "status"
+              ],
+              "row_link": "care_detail",
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "care",
+        "roles": [
+          "owner",
+          "helper"
+        ],
+        "route": "/care",
+        "title": "Care schedule",
+        "blocks": [
+          {
+            "id": "care_filter",
+            "type": "filter.bar",
+            "props": {
+              "entity": "care_task",
+              "fields": [
+                "task_type",
+                "status"
+              ],
+              "search": []
+            }
+          },
+          {
+            "id": "care_calendar",
+            "type": "calendar.month",
+            "props": {
+              "entity": "care_task",
+              "date_field": "due_date",
+              "row_link": "care_detail"
+            }
+          },
+          {
+            "id": "care_table",
+            "type": "data.table",
+            "props": {
+              "entity": "care_task",
+              "columns": [
+                "task_type",
+                "planting.plant.common_name",
+                "due_date",
+                "status"
+              ],
+              "row_link": "care_detail",
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "care_detail",
+        "roles": [
+          "owner",
+          "helper"
+        ],
+        "route": "/care/:id",
+        "title": "Care task",
+        "blocks": [
+          {
+            "id": "care_lifecycle",
+            "type": "lifecycle.pipeline",
+            "props": {
+              "entity": "care_task"
+            }
+          },
+          {
+            "id": "care_info",
+            "type": "record.detail",
+            "props": {
+              "entity": "care_task",
+              "sections": [
+                {
+                  "title": "Task",
+                  "fields": [
+                    "task_type",
+                    "planting",
+                    "due_date",
+                    "status"
+                  ]
+                },
+                {
+                  "title": "Notes",
+                  "fields": [
+                    "completed_on",
+                    "notes"
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "harvests",
+        "roles": [
+          "owner",
+          "helper"
+        ],
+        "route": "/harvests",
+        "title": "Harvests",
+        "blocks": [
+          {
+            "id": "harvest_table",
+            "type": "data.table",
+            "props": {
+              "entity": "harvest",
+              "columns": [
+                "planting.plant.common_name",
+                "harvested_on",
+                "quantity_kg",
+                "notes"
+              ],
+              "create": true
+            }
+          },
+          {
+            "id": "harvest_timeline",
+            "type": "activity.timeline",
+            "props": {
+              "entity": "harvest",
+              "date_field": "harvested_on",
+              "title": "Harvest log"
+            }
+          }
+        ],
+        "layout": "grid"
+      }
+    ],
+    "theme": {
+      "fonts": "Inter",
+      "radius": "lg",
+      "density": "comfortable",
+      "palette": "green",
+      "archetype": "pipeline-board"
+    }
+  },
+  "app": {
+    "name": "GardenPlan",
+    "domain": "gardening",
+    "locale": "en-IN",
+    "tagline": "Plan beds, track plantings and log every harvest",
+    "currency": "INR",
+    "timezone": "Asia/Kolkata"
+  },
+  "seed": {
+    "garden": [
+      {
+        "_key": "g_terrace",
+        "name": "Terrace Kitchen Garden",
+        "location": "Adajan, Surat",
+        "size_sqft": 220,
+        "sun_exposure": "full_sun",
+        "owner_name": "Meghna Desai",
+        "owner_email": "meghna.desai@example.com"
+      },
+      {
+        "_key": "g_plot",
+        "name": "Community Plot 7",
+        "location": "Vesu Community Garden, Surat",
+        "size_sqft": 150,
+        "sun_exposure": "part_shade",
+        "owner_name": "Meghna Desai",
+        "owner_email": "meghna.desai@example.com"
+      }
+    ],
+    "bed": [
+      {
+        "_key": "bed_a",
+        "garden": "@g_terrace",
+        "name": "Raised Bed A",
+        "bed_type": "raised",
+        "soil_type": "loam",
+        "area_sqft": 48
+      },
+      {
+        "_key": "bed_b",
+        "garden": "@g_terrace",
+        "name": "Raised Bed B",
+        "bed_type": "raised",
+        "soil_type": "mixed",
+        "area_sqft": 48
+      },
+      {
+        "_key": "bed_c",
+        "garden": "@g_terrace",
+        "name": "Container Row",
+        "bed_type": "container",
+        "soil_type": "potting_mix",
+        "area_sqft": 20
+      },
+      {
+        "_key": "bed_d",
+        "garden": "@g_plot",
+        "name": "Ground Bed 1",
+        "bed_type": "ground",
+        "soil_type": "clay",
+        "area_sqft": 80
+      },
+      {
+        "_key": "bed_e",
+        "garden": "@g_plot",
+        "name": "Ground Bed 2",
+        "bed_type": "ground",
+        "soil_type": "sandy",
+        "area_sqft": 60
+      }
+    ],
+    "plant": [
+      {
+        "_key": "pl_tomato",
+        "common_name": "Tomato",
+        "scientific_name": "Solanum lycopersicum",
+        "category": "vegetable",
+        "sun_need": "full_sun",
+        "days_to_harvest": 75,
+        "water_every_days": 2,
+        "description": "Cherry tomato variety; needs staking and regular feeding."
+      },
+      {
+        "_key": "pl_brinjal",
+        "common_name": "Brinjal",
+        "scientific_name": "Solanum melongena",
+        "category": "vegetable",
+        "sun_need": "full_sun",
+        "days_to_harvest": 80,
+        "water_every_days": 2,
+        "description": "Long purple brinjal; keep an eye out for fruit borer."
+      },
+      {
+        "_key": "pl_chilli",
+        "common_name": "Green chilli",
+        "scientific_name": "Capsicum annuum",
+        "category": "vegetable",
+        "sun_need": "full_sun",
+        "days_to_harvest": 90,
+        "water_every_days": 2,
+        "description": "Productive in containers; harvest regularly to keep it fruiting."
+      },
+      {
+        "_key": "pl_coriander",
+        "common_name": "Coriander",
+        "scientific_name": "Coriandrum sativum",
+        "category": "herb",
+        "sun_need": "part_shade",
+        "days_to_harvest": 40,
+        "water_every_days": 2,
+        "description": "Cool-season herb; sow in succession every two weeks."
+      },
+      {
+        "_key": "pl_spinach",
+        "common_name": "Spinach",
+        "scientific_name": "Spinacia oleracea",
+        "category": "vegetable",
+        "sun_need": "part_shade",
+        "days_to_harvest": 35,
+        "water_every_days": 2,
+        "description": "Fast leafy green for the cooler months."
+      },
+      {
+        "_key": "pl_marigold",
+        "common_name": "Marigold",
+        "scientific_name": "Tagetes erecta",
+        "category": "flower",
+        "sun_need": "full_sun",
+        "days_to_harvest": 60,
+        "water_every_days": 3,
+        "description": "Companion plant that deters pests; flowers used for festivals."
+      },
+      {
+        "_key": "pl_tulsi",
+        "common_name": "Holy basil (Tulsi)",
+        "scientific_name": "Ocimum tenuiflorum",
+        "category": "herb",
+        "sun_need": "full_sun",
+        "days_to_harvest": 60,
+        "water_every_days": 2,
+        "description": "Aromatic herb; pinch tips to keep it bushy."
+      },
+      {
+        "_key": "pl_mint",
+        "common_name": "Mint",
+        "scientific_name": "Mentha spicata",
+        "category": "herb",
+        "sun_need": "part_shade",
+        "days_to_harvest": 45,
+        "water_every_days": 1,
+        "description": "Spreads fast; best kept in its own bed or container."
+      }
+    ],
+    "planting": [
+      {
+        "_key": "p_tomato",
+        "bed": "@bed_a",
+        "plant": "@pl_tomato",
+        "quantity": 6,
+        "status": "planted",
+        "notes": "Staked at two weeks.",
+        "date_planted": "2026-09-20",
+        "expected_harvest": "2026-12-04"
+      },
+      {
+        "_key": "p_tulsi",
+        "bed": "@bed_a",
+        "plant": "@pl_tulsi",
+        "quantity": 4,
+        "status": "planted",
+        "notes": "Companion to the tomatoes.",
+        "date_planted": "2026-09-25",
+        "expected_harvest": "2026-11-24"
+      },
+      {
+        "_key": "p_coriander",
+        "bed": "@bed_b",
+        "plant": "@pl_coriander",
+        "quantity": 30,
+        "status": "planted",
+        "notes": "Broadcast sown.",
+        "date_planted": "2026-10-05",
+        "expected_harvest": "2026-11-14"
+      },
+      {
+        "_key": "p_spinach",
+        "bed": "@bed_b",
+        "plant": "@pl_spinach",
+        "quantity": 25,
+        "status": "harvested",
+        "notes": "Three cuttings, bed now resting.",
+        "date_planted": "2026-08-30",
+        "expected_harvest": "2026-10-04"
+      },
+      {
+        "_key": "p_chilli",
+        "bed": "@bed_c",
+        "plant": "@pl_chilli",
+        "quantity": 5,
+        "status": "planted",
+        "notes": "Container row, morning sun.",
+        "date_planted": "2026-09-10",
+        "expected_harvest": "2026-12-09"
+      },
+      {
+        "_key": "p_brinjal",
+        "bed": "@bed_d",
+        "plant": "@pl_brinjal",
+        "quantity": 8,
+        "status": "planned",
+        "notes": "Waiting for the bed to be prepared."
+      },
+      {
+        "_key": "p_marigold",
+        "bed": "@bed_d",
+        "plant": "@pl_marigold",
+        "quantity": 15,
+        "status": "planted",
+        "notes": "Border plants.",
+        "date_planted": "2026-09-28",
+        "expected_harvest": "2026-11-27"
+      },
+      {
+        "_key": "p_mint",
+        "bed": "@bed_e",
+        "plant": "@pl_mint",
+        "quantity": 6,
+        "status": "failed",
+        "notes": "Root rot after heavy rain.",
+        "date_planted": "2026-09-05"
+      }
+    ],
+    "harvest": [
+      {
+        "_key": "h1",
+        "planting": "@p_spinach",
+        "harvested_on": "2026-09-22",
+        "quantity_kg": 0.6
+      },
+      {
+        "_key": "h2",
+        "planting": "@p_spinach",
+        "harvested_on": "2026-09-29",
+        "quantity_kg": 0.9
+      },
+      {
+        "_key": "h3",
+        "planting": "@p_spinach",
+        "harvested_on": "2026-10-04",
+        "quantity_kg": 1.1,
+        "notes": "Final cutting"
+      },
+      {
+        "_key": "h4",
+        "planting": "@p_tulsi",
+        "harvested_on": "2026-10-12",
+        "quantity_kg": 0.15,
+        "notes": "Leaves for tea"
+      },
+      {
+        "_key": "h5",
+        "planting": "@p_tulsi",
+        "harvested_on": "2026-10-14",
+        "quantity_kg": 0.2
+      }
+    ],
+    "care_task": [
+      {
+        "_key": "c1",
+        "planting": "@p_tomato",
+        "task_type": "water",
+        "due_date": "2026-10-15",
+        "status": "pending"
+      },
+      {
+        "_key": "c2",
+        "planting": "@p_tomato",
+        "task_type": "fertilise",
+        "due_date": "2026-10-18",
+        "status": "pending",
+        "notes": "Tomato-specific feed"
+      },
+      {
+        "_key": "c3",
+        "planting": "@p_coriander",
+        "task_type": "weed",
+        "due_date": "2026-10-13",
+        "status": "pending"
+      },
+      {
+        "_key": "c4",
+        "planting": "@p_chilli",
+        "task_type": "pest_check",
+        "due_date": "2026-10-16",
+        "status": "pending",
+        "notes": "Look for leaf curl"
+      },
+      {
+        "_key": "c5",
+        "planting": "@p_marigold",
+        "task_type": "prune",
+        "due_date": "2026-10-20",
+        "status": "pending"
+      },
+      {
+        "_key": "c6",
+        "planting": "@p_tulsi",
+        "task_type": "water",
+        "due_date": "2026-10-12",
+        "status": "done",
+        "completed_on": "2026-10-12"
+      },
+      {
+        "_key": "c7",
+        "planting": "@p_coriander",
+        "task_type": "water",
+        "due_date": "2026-10-10",
+        "status": "done",
+        "completed_on": "2026-10-10"
+      },
+      {
+        "_key": "c8",
+        "planting": "@p_tomato",
+        "task_type": "water",
+        "due_date": "2026-10-10",
+        "status": "skipped",
+        "notes": "Rained overnight"
+      }
+    ]
+  },
+  "model": {
+    "enums": [
+      {
+        "id": "sun_exposure",
+        "values": [
+          {
+            "color": "#F9A825",
+            "label": "Full sun",
+            "value": "full_sun"
+          },
+          {
+            "color": "#9CCC65",
+            "label": "Part shade",
+            "value": "part_shade"
+          },
+          {
+            "color": "#78909C",
+            "label": "Shade",
+            "value": "shade"
+          }
+        ]
+      },
+      {
+        "id": "bed_type",
+        "values": [
+          {
+            "color": "#8D6E63",
+            "label": "Raised bed",
+            "value": "raised"
+          },
+          {
+            "color": "#66BB6A",
+            "label": "In-ground",
+            "value": "ground"
+          },
+          {
+            "color": "#42A5F5",
+            "label": "Container",
+            "value": "container"
+          }
+        ]
+      },
+      {
+        "id": "soil_type",
+        "values": [
+          {
+            "color": "#795548",
+            "label": "Loam",
+            "value": "loam"
+          },
+          {
+            "color": "#FFCA28",
+            "label": "Sandy",
+            "value": "sandy"
+          },
+          {
+            "color": "#A1887F",
+            "label": "Clay",
+            "value": "clay"
+          },
+          {
+            "color": "#6D4C41",
+            "label": "Potting mix",
+            "value": "potting_mix"
+          },
+          {
+            "color": "#90A4AE",
+            "label": "Mixed",
+            "value": "mixed"
+          }
+        ]
+      },
+      {
+        "id": "plant_category",
+        "values": [
+          {
+            "color": "#43A047",
+            "label": "Vegetable",
+            "value": "vegetable"
+          },
+          {
+            "color": "#26A69A",
+            "label": "Herb",
+            "value": "herb"
+          },
+          {
+            "color": "#EC407A",
+            "label": "Flower",
+            "value": "flower"
+          },
+          {
+            "color": "#FB8C00",
+            "label": "Fruit",
+            "value": "fruit"
+          },
+          {
+            "color": "#95A5A6",
+            "label": "Other",
+            "value": "other"
+          }
+        ]
+      },
+      {
+        "id": "planting_status",
+        "values": [
+          {
+            "color": "#90A4AE",
+            "label": "Planned",
+            "value": "planned"
+          },
+          {
+            "color": "#43A047",
+            "label": "Planted",
+            "value": "planted"
+          },
+          {
+            "color": "#FB8C00",
+            "label": "Harvested",
+            "value": "harvested"
+          },
+          {
+            "color": "#E53935",
+            "label": "Failed",
+            "value": "failed"
+          }
+        ]
+      },
+      {
+        "id": "care_type",
+        "values": [
+          {
+            "color": "#42A5F5",
+            "label": "Water",
+            "value": "water"
+          },
+          {
+            "color": "#8D6E63",
+            "label": "Fertilise",
+            "value": "fertilise"
+          },
+          {
+            "color": "#66BB6A",
+            "label": "Prune",
+            "value": "prune"
+          },
+          {
+            "color": "#FFA726",
+            "label": "Weed",
+            "value": "weed"
+          },
+          {
+            "color": "#E53935",
+            "label": "Pest check",
+            "value": "pest_check"
+          }
+        ]
+      },
+      {
+        "id": "care_status",
+        "values": [
+          {
+            "color": "#F5A623",
+            "label": "Pending",
+            "value": "pending"
+          },
+          {
+            "color": "#2ECC71",
+            "label": "Done",
+            "value": "done"
+          },
+          {
+            "color": "#95A5A6",
+            "label": "Skipped",
+            "value": "skipped"
+          }
+        ]
+      }
+    ],
+    "entities": [
+      {
+        "id": "garden",
+        "icon": "leaf",
+        "label": "Garden",
+        "fields": [
+          {
+            "id": "name",
+            "enum": null,
+            "type": "text",
+            "index": true,
+            "target": null,
+            "unique": true,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "location",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "size_sqft",
+            "enum": null,
+            "type": "int",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "sun_exposure",
+            "enum": "sun_exposure",
+            "type": "enum",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": "full_sun",
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "owner_name",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "owner_email",
+            "enum": null,
+            "type": "email",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          }
+        ],
+        "plural": "Gardens",
+        "display": {
+          "title": "name",
+          "subtitle": "location"
+        },
+        "lifecycle": null
+      },
+      {
+        "id": "bed",
+        "icon": "layout-grid",
+        "label": "Bed",
+        "fields": [
+          {
+            "id": "garden",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "garden",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "cascade",
+            "required": true,
+            "relation_name": "beds"
+          },
+          {
+            "id": "name",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "bed_type",
+            "enum": "bed_type",
+            "type": "enum",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": "raised",
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "soil_type",
+            "enum": "soil_type",
+            "type": "enum",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "area_sqft",
+            "enum": null,
+            "type": "int",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          }
+        ],
+        "plural": "Beds",
+        "display": {
+          "title": "name",
+          "subtitle": "bed_type"
+        },
+        "lifecycle": null
+      },
+      {
+        "id": "plant",
+        "icon": "sprout",
+        "label": "Plant",
+        "fields": [
+          {
+            "id": "common_name",
+            "enum": null,
+            "type": "text",
+            "index": true,
+            "target": null,
+            "unique": true,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "scientific_name",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "category",
+            "enum": "plant_category",
+            "type": "enum",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": "vegetable",
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "sun_need",
+            "enum": "sun_exposure",
+            "type": "enum",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "days_to_harvest",
+            "enum": null,
+            "type": "int",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "water_every_days",
+            "enum": null,
+            "type": "int",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "description",
+            "enum": null,
+            "type": "longtext",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "image",
+            "enum": null,
+            "type": "image",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          }
+        ],
+        "plural": "Plants",
+        "display": {
+          "title": "common_name",
+          "subtitle": "category"
+        },
+        "lifecycle": null
+      },
+      {
+        "id": "planting",
+        "icon": "shovel",
+        "label": "Planting",
+        "fields": [
+          {
+            "id": "bed",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "bed",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "cascade",
+            "required": true,
+            "relation_name": "plantings"
+          },
+          {
+            "id": "plant",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "plant",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "restrict",
+            "required": true,
+            "relation_name": "plantings"
+          },
+          {
+            "id": "quantity",
+            "enum": null,
+            "type": "int",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": 1,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "date_planted",
+            "enum": null,
+            "type": "date",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "expected_harvest",
+            "enum": null,
+            "type": "date",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "status",
+            "enum": "planting_status",
+            "type": "enum",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": "planned",
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "total_harvested",
+            "enum": null,
+            "type": "decimal",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": {
+              "formula": "sum(harvests.quantity_kg)"
+            },
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "notes",
+            "enum": null,
+            "type": "longtext",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          }
+        ],
+        "plural": "Plantings",
+        "display": {
+          "title": "plant.common_name",
+          "subtitle": "bed.name - status"
+        },
+        "lifecycle": {
+          "field": "status",
+          "states": [
+            "planned",
+            "planted",
+            "harvested",
+            "failed"
+          ],
+          "initial": "planned",
+          "transitions": [
+            {
+              "id": "plant_it",
+              "to": "planted",
+              "from": "planned",
+              "guard": null,
+              "label": "Mark planted",
+              "roles": [
+                "owner",
+                "helper"
+              ]
+            },
+            {
+              "id": "harvest",
+              "to": "harvested",
+              "from": "planted",
+              "guard": "date_planted != null",
+              "label": "Finish harvest",
+              "roles": [
+                "owner",
+                "helper"
+              ]
+            },
+            {
+              "id": "mark_failed",
+              "to": "failed",
+              "from": "planted",
+              "guard": null,
+              "label": "Mark failed",
+              "roles": [
+                "owner",
+                "helper"
+              ]
+            },
+            {
+              "id": "abandon",
+              "to": "failed",
+              "from": "planned",
+              "guard": null,
+              "label": "Abandon plan",
+              "roles": [
+                "owner"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "harvest",
+        "icon": "basket",
+        "label": "Harvest",
+        "fields": [
+          {
+            "id": "planting",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "planting",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "cascade",
+            "required": true,
+            "relation_name": "harvests"
+          },
+          {
+            "id": "harvested_on",
+            "enum": null,
+            "type": "date",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "quantity_kg",
+            "enum": null,
+            "type": "decimal",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "notes",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          }
+        ],
+        "plural": "Harvests",
+        "display": {
+          "title": "planting.plant.common_name",
+          "subtitle": "harvested_on"
+        },
+        "lifecycle": null
+      },
+      {
+        "id": "care_task",
+        "icon": "droplet",
+        "label": "Care task",
+        "fields": [
+          {
+            "id": "planting",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "planting",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "cascade",
+            "required": true,
+            "relation_name": "care_tasks"
+          },
+          {
+            "id": "task_type",
+            "enum": "care_type",
+            "type": "enum",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": "water",
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "due_date",
+            "enum": null,
+            "type": "date",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "status",
+            "enum": "care_status",
+            "type": "enum",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": "pending",
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "completed_on",
+            "enum": null,
+            "type": "date",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "notes",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          }
+        ],
+        "plural": "Care tasks",
+        "display": {
+          "title": "task_type",
+          "subtitle": "due_date"
+        },
+        "lifecycle": {
+          "field": "status",
+          "states": [
+            "pending",
+            "done",
+            "skipped"
+          ],
+          "initial": "pending",
+          "transitions": [
+            {
+              "id": "complete",
+              "to": "done",
+              "from": "pending",
+              "guard": null,
+              "label": "Mark done",
+              "roles": [
+                "owner",
+                "helper"
+              ]
+            },
+            {
+              "id": "skip",
+              "to": "skipped",
+              "from": "pending",
+              "guard": null,
+              "label": "Skip",
+              "roles": [
+                "owner",
+                "helper"
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "trace": [
+    {
+      "requirement": "R1",
+      "satisfied_by": [
+        "entity:garden",
+        "entity:bed",
+        "page:gardens",
+        "page:garden_detail",
+        "page:bed_detail"
+      ]
+    },
+    {
+      "requirement": "R2",
+      "satisfied_by": [
+        "entity:plant",
+        "page:plants",
+        "page:plant_detail"
+      ]
+    },
+    {
+      "requirement": "R3",
+      "satisfied_by": [
+        "entity:planting",
+        "lifecycle:planting",
+        "page:plantings",
+        "page:planting_detail",
+        "automation:planting_failed_notice"
+      ]
+    },
+    {
+      "requirement": "R4",
+      "satisfied_by": [
+        "entity:harvest",
+        "field:planting.total_harvested",
+        "page:harvests",
+        "automation:harvest_finished_notice"
+      ]
+    },
+    {
+      "requirement": "R5",
+      "satisfied_by": [
+        "entity:care_task",
+        "lifecycle:care_task",
+        "page:care",
+        "page:care_detail",
+        "automation:care_reminder_daily",
+        "automation:care_overdue_digest",
+        "automation:care_completed_stamp"
+      ]
+    },
+    {
+      "requirement": "R6",
+      "satisfied_by": [
+        "page:dashboard"
+      ]
+    },
+    {
+      "requirement": "R7",
+      "satisfied_by": [
+        "role:owner",
+        "role:helper"
+      ]
+    }
+  ],
+  "access": {
+    "roles": [
+      {
+        "id": "owner",
+        "label": "Garden Owner"
+      },
+      {
+        "id": "helper",
+        "label": "Helper"
+      }
+    ],
+    "rules": [
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "owner",
+        "where": null,
+        "entity": "garden"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "owner",
+        "where": null,
+        "entity": "bed"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "owner",
+        "where": null,
+        "entity": "plant"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "owner",
+        "where": null,
+        "entity": "planting"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "owner",
+        "where": null,
+        "entity": "harvest"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "owner",
+        "where": null,
+        "entity": "care_task"
+      },
+      {
+        "ops": [
+          "read"
+        ],
+        "role": "helper",
+        "where": null,
+        "entity": "garden"
+      },
+      {
+        "ops": [
+          "read"
+        ],
+        "role": "helper",
+        "where": null,
+        "entity": "bed"
+      },
+      {
+        "ops": [
+          "read"
+        ],
+        "role": "helper",
+        "where": null,
+        "entity": "plant"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update"
+        ],
+        "role": "helper",
+        "where": null,
+        "entity": "planting"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update"
+        ],
+        "role": "helper",
+        "where": null,
+        "entity": "harvest"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update"
+        ],
+        "role": "helper",
+        "where": null,
+        "entity": "care_task"
+      }
+    ]
+  },
+  "personas": [
+    {
+      "id": "garden_owner",
+      "name": "Garden owner",
+      "goals": [
+        "Plan what goes in each bed",
+        "See what needs care today and how much I have harvested"
+      ]
+    },
+    {
+      "id": "helper",
+      "name": "Helper (family or community volunteer)",
+      "goals": [
+        "Know which jobs are due",
+        "Log plantings, care and harvests"
+      ]
+    }
+  ],
+  "assumptions": [
+    "One person owns each garden; reminders go to the owner email stored on the garden",
+    "Helpers sign in with their own email; they share the owner's data",
+    "Outdoor and terrace gardens; no greenhouse climate control",
+    "Harvest quantities are recorded in kilograms",
+    "Expected harvest date is entered by the user, using the plant's days to harvest as a guide",
+    "No weather or soil-sensor integration",
+    "Plants are a user-maintained catalogue; photos are optional",
+    "Email notifications only; no SMS or push",
+    "Area in square feet; English only",
+    "Single-tenant application"
+  ],
+  "automations": [
+    {
+      "id": "care_reminder_daily",
+      "steps": [
+        {
+          "when": "status == 'pending' and due_date == today()",
+          "action": "send_email",
+          "params": {
+            "to": "planting.bed.garden.owner_email",
+            "subject": "Garden care due today: {task_type}",
+            "body": "A {task_type} task for {planting.plant.common_name} in {planting.bed.name} is due today."
+          }
+        }
+      ],
+      "trigger": {
+        "type": "schedule",
+        "entity": "care_task",
+        "schedule": "0 7 * * *",
+        "transition": null
+      }
+    },
+    {
+      "id": "care_overdue_digest",
+      "steps": [
+        {
+          "when": "status == 'pending' and due_date < today()",
+          "action": "send_email",
+          "params": {
+            "to": "planting.bed.garden.owner_email",
+            "subject": "Overdue: {task_type} for {planting.plant.common_name}",
+            "body": "This {task_type} task was due on {due_date} and is still pending."
+          }
+        }
+      ],
+      "trigger": {
+        "type": "schedule",
+        "entity": "care_task",
+        "schedule": "0 18 * * *",
+        "transition": null
+      }
+    },
+    {
+      "id": "care_completed_stamp",
+      "steps": [
+        {
+          "when": null,
+          "action": "set_field",
+          "params": {
+            "field": "completed_on",
+            "value": "today()"
+          }
+        }
+      ],
+      "trigger": {
+        "type": "lifecycle.transition",
+        "entity": "care_task",
+        "schedule": null,
+        "transition": "complete"
+      }
+    },
+    {
+      "id": "harvest_finished_notice",
+      "steps": [
+        {
+          "when": null,
+          "action": "send_email",
+          "params": {
+            "to": "bed.garden.owner_email",
+            "subject": "{plant.common_name} harvest finished",
+            "body": "{plant.common_name} in {bed.name} is fully harvested. Total yield: {total_harvested} kg."
+          }
+        }
+      ],
+      "trigger": {
+        "type": "lifecycle.transition",
+        "entity": "planting",
+        "schedule": null,
+        "transition": "harvest"
+      }
+    },
+    {
+      "id": "planting_failed_notice",
+      "steps": [
+        {
+          "when": null,
+          "action": "send_email",
+          "params": {
+            "to": "bed.garden.owner_email",
+            "subject": "{plant.common_name} planting failed",
+            "body": "{plant.common_name} in {bed.name} was marked failed. Notes: {notes}"
+          }
+        }
+      ],
+      "trigger": {
+        "type": "lifecycle.transition",
+        "entity": "planting",
+        "schedule": null,
+        "transition": "mark_failed"
+      }
+    }
+  ],
+  "integrations": [],
+  "requirements": [
+    {
+      "id": "R1",
+      "text": "Keep gardens and their beds, with bed type, soil and area",
+      "priority": "must"
+    },
+    {
+      "id": "R2",
+      "text": "Maintain a plant catalogue with category, sun need, days to harvest and watering interval",
+      "priority": "must"
+    },
+    {
+      "id": "R3",
+      "text": "Record plantings in beds and move each through planned, planted, harvested or failed",
+      "priority": "must"
+    },
+    {
+      "id": "R4",
+      "text": "Log harvests by weight and show the total yield per planting",
+      "priority": "must"
+    },
+    {
+      "id": "R5",
+      "text": "Schedule care tasks (water, fertilise, prune, weed, pest check), mark them done or skipped, and email reminders for tasks due or overdue",
+      "priority": "should"
+    },
+    {
+      "id": "R6",
+      "text": "Show a dashboard of what is growing, care due today, overdue tasks and monthly harvest",
+      "priority": "should"
+    },
+    {
+      "id": "R7",
+      "text": "Owners manage everything; helpers can log plantings, care and harvests but cannot delete records or change gardens, beds or the plant catalogue",
+      "priority": "must"
+    }
+  ],
+  "spec_version": "1.0"
+}

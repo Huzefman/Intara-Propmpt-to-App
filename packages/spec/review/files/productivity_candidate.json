@@ -1,0 +1,1568 @@
+{
+  "ui": {
+    "nav": [
+      {
+        "icon": "layout-dashboard",
+        "page": "dashboard",
+        "label": "Dashboard",
+        "roles": [
+          "owner",
+          "member"
+        ]
+      },
+      {
+        "icon": "columns",
+        "page": "board",
+        "label": "Board",
+        "roles": [
+          "owner",
+          "member"
+        ]
+      },
+      {
+        "icon": "check-square",
+        "page": "tasks",
+        "label": "Tasks",
+        "roles": [
+          "owner",
+          "member"
+        ]
+      },
+      {
+        "icon": "folder",
+        "page": "projects",
+        "label": "Projects",
+        "roles": [
+          "owner",
+          "member"
+        ]
+      }
+    ],
+    "pages": [
+      {
+        "id": "dashboard",
+        "roles": [
+          "owner",
+          "member"
+        ],
+        "route": "/",
+        "title": "Dashboard",
+        "blocks": [
+          {
+            "id": "task_stats",
+            "type": "metric.stat",
+            "props": {
+              "entity": "task",
+              "items": [
+                {
+                  "label": "Open tasks",
+                  "agg": "count",
+                  "where": "status != 'done'"
+                },
+                {
+                  "label": "Overdue",
+                  "agg": "count",
+                  "where": "status != 'done' and due_date < today()"
+                },
+                {
+                  "label": "In review",
+                  "agg": "count",
+                  "where": "status == 'in_review'"
+                }
+              ]
+            }
+          },
+          {
+            "id": "hours_stats",
+            "type": "metric.stat",
+            "props": {
+              "entity": "time_entry",
+              "items": [
+                {
+                  "label": "Hours this month",
+                  "agg": "sum",
+                  "field": "hours",
+                  "where": "logged_on >= startOfMonth()"
+                }
+              ]
+            }
+          },
+          {
+            "id": "tasks_by_status",
+            "type": "chart.bar",
+            "props": {
+              "entity": "task",
+              "title": "Tasks by Status",
+              "x": "status",
+              "y": "count"
+            }
+          },
+          {
+            "id": "due_timeline",
+            "type": "activity.timeline",
+            "props": {
+              "entity": "task",
+              "date_field": "due_date",
+              "title": "Upcoming deadlines"
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "board",
+        "roles": [
+          "owner",
+          "member"
+        ],
+        "route": "/board",
+        "title": "Board",
+        "blocks": [
+          {
+            "id": "board_filter",
+            "type": "filter.bar",
+            "props": {
+              "entity": "task",
+              "fields": [
+                "priority",
+                "project"
+              ],
+              "search": [
+                "title"
+              ]
+            }
+          },
+          {
+            "id": "task_board",
+            "type": "data.kanban",
+            "props": {
+              "entity": "task",
+              "group_by": "status",
+              "card": {
+                "title": "title",
+                "subtitle": "project.name",
+                "badges": [
+                  "priority"
+                ]
+              },
+              "drag_transitions": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "tasks",
+        "roles": [
+          "owner",
+          "member"
+        ],
+        "route": "/tasks",
+        "title": "Tasks",
+        "blocks": [
+          {
+            "id": "task_filter",
+            "type": "filter.bar",
+            "props": {
+              "entity": "task",
+              "fields": [
+                "status",
+                "priority",
+                "project"
+              ],
+              "search": [
+                "title",
+                "assignee_email"
+              ]
+            }
+          },
+          {
+            "id": "task_calendar",
+            "type": "calendar.month",
+            "props": {
+              "entity": "task",
+              "date_field": "due_date",
+              "row_link": "task_detail"
+            }
+          },
+          {
+            "id": "task_table",
+            "type": "data.table",
+            "props": {
+              "entity": "task",
+              "columns": [
+                "title",
+                "project.name",
+                "assignee_email",
+                "priority",
+                "due_date",
+                "status",
+                "hours_remaining"
+              ],
+              "row_link": "task_detail",
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "task_detail",
+        "roles": [
+          "owner",
+          "member"
+        ],
+        "route": "/tasks/:id",
+        "title": "Task",
+        "blocks": [
+          {
+            "id": "task_lifecycle",
+            "type": "lifecycle.pipeline",
+            "props": {
+              "entity": "task"
+            }
+          },
+          {
+            "id": "task_info",
+            "type": "record.detail",
+            "props": {
+              "entity": "task",
+              "sections": [
+                {
+                  "title": "Task",
+                  "fields": [
+                    "title",
+                    "project",
+                    "description",
+                    "status",
+                    "priority"
+                  ]
+                },
+                {
+                  "title": "Planning",
+                  "fields": [
+                    "assignee_email",
+                    "due_date",
+                    "estimate_hours"
+                  ]
+                },
+                {
+                  "title": "Time",
+                  "fields": [
+                    "hours_logged",
+                    "hours_remaining"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "task_time",
+            "type": "record.related_list",
+            "props": {
+              "entity": "time_entry",
+              "via": "task",
+              "columns": [
+                "logged_on",
+                "member_email",
+                "hours",
+                "note"
+              ],
+              "create": true
+            }
+          },
+          {
+            "id": "task_comments",
+            "type": "record.related_list",
+            "props": {
+              "entity": "comment",
+              "via": "task",
+              "columns": [
+                "author_email",
+                "body"
+              ],
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "projects",
+        "roles": [
+          "owner",
+          "member"
+        ],
+        "route": "/projects",
+        "title": "Projects",
+        "blocks": [
+          {
+            "id": "project_filter",
+            "type": "filter.bar",
+            "props": {
+              "entity": "project",
+              "fields": [
+                "status"
+              ],
+              "search": [
+                "name"
+              ]
+            }
+          },
+          {
+            "id": "project_table",
+            "type": "data.table",
+            "props": {
+              "entity": "project",
+              "columns": [
+                "name",
+                "owner_email",
+                "due_date",
+                "status"
+              ],
+              "row_link": "project_detail",
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      },
+      {
+        "id": "project_detail",
+        "roles": [
+          "owner",
+          "member"
+        ],
+        "route": "/projects/:id",
+        "title": "Project",
+        "blocks": [
+          {
+            "id": "project_lifecycle",
+            "type": "lifecycle.pipeline",
+            "props": {
+              "entity": "project"
+            }
+          },
+          {
+            "id": "project_info",
+            "type": "record.detail",
+            "props": {
+              "entity": "project",
+              "sections": [
+                {
+                  "title": "About",
+                  "fields": [
+                    "name",
+                    "description",
+                    "color",
+                    "status"
+                  ]
+                },
+                {
+                  "title": "Ownership",
+                  "fields": [
+                    "owner_email",
+                    "due_date"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "project_tasks",
+            "type": "record.related_list",
+            "props": {
+              "entity": "task",
+              "via": "project",
+              "columns": [
+                "title",
+                "assignee_email",
+                "priority",
+                "due_date",
+                "status"
+              ],
+              "row_link": "task_detail",
+              "create": true
+            }
+          }
+        ],
+        "layout": "grid"
+      }
+    ],
+    "theme": {
+      "fonts": "Inter",
+      "radius": "md",
+      "density": "compact",
+      "palette": "blue",
+      "archetype": "pipeline-board"
+    }
+  },
+  "app": {
+    "name": "TaskFlow",
+    "domain": "task_management",
+    "locale": "en-IN",
+    "tagline": "Projects, tasks, deadlines and hours in one place",
+    "currency": "INR",
+    "timezone": "Asia/Kolkata"
+  },
+  "seed": {
+    "project": [
+      {
+        "_key": "pr_web",
+        "name": "Website Redesign",
+        "description": "Redesign the corporate website with a new brand system.",
+        "color": "#F97316",
+        "owner_email": "asha.kapoor@example.com",
+        "due_date": "2026-12-15",
+        "status": "active"
+      },
+      {
+        "_key": "pr_app",
+        "name": "Mobile App Launch",
+        "description": "Ship version 1.0 of the mobile app to both stores.",
+        "color": "#06B6D4",
+        "owner_email": "asha.kapoor@example.com",
+        "due_date": "2026-11-30",
+        "status": "active"
+      },
+      {
+        "_key": "pr_mkt",
+        "name": "Festive Marketing Campaign",
+        "description": "Diwali and year-end campaign across email and social.",
+        "color": "#22C55E",
+        "owner_email": "rahul.menon@example.com",
+        "due_date": "2026-11-10",
+        "status": "on_hold"
+      }
+    ],
+    "task": [
+      {
+        "_key": "t1",
+        "project": "@pr_web",
+        "title": "Create wireframes",
+        "description": "Low-fidelity wireframes for home, pricing and contact pages.",
+        "priority": "high",
+        "due_date": "2026-10-20",
+        "status": "in_review",
+        "assignee_email": "dev.malhotra@example.com",
+        "estimate_hours": 12
+      },
+      {
+        "_key": "t2",
+        "project": "@pr_web",
+        "title": "Develop landing page",
+        "description": "Build the new landing page in React from the approved design.",
+        "priority": "high",
+        "due_date": "2026-11-05",
+        "status": "in_progress",
+        "assignee_email": "nisha.rao@example.com",
+        "estimate_hours": 30
+      },
+      {
+        "_key": "t3",
+        "project": "@pr_web",
+        "title": "Write homepage copy",
+        "description": "New headline, value props and calls to action.",
+        "priority": "medium",
+        "due_date": "2026-10-14",
+        "status": "todo",
+        "assignee_email": "tarun.bose@example.com",
+        "estimate_hours": 8
+      },
+      {
+        "_key": "t4",
+        "project": "@pr_app",
+        "title": "Set up CI/CD",
+        "description": "Automated builds and test runs for every pull request.",
+        "priority": "medium",
+        "due_date": "2026-10-09",
+        "status": "done",
+        "assignee_email": "dev.malhotra@example.com",
+        "estimate_hours": 10
+      },
+      {
+        "_key": "t5",
+        "project": "@pr_app",
+        "title": "Fix login crash on Android 13",
+        "description": "Crash on cold start after biometric prompt.",
+        "priority": "urgent",
+        "due_date": "2026-10-16",
+        "status": "in_progress",
+        "assignee_email": "nisha.rao@example.com",
+        "estimate_hours": 6
+      },
+      {
+        "_key": "t6",
+        "project": "@pr_app",
+        "title": "Prepare store listing",
+        "description": "Screenshots, descriptions and privacy labels.",
+        "priority": "medium",
+        "due_date": "2026-11-12",
+        "status": "todo",
+        "assignee_email": "tarun.bose@example.com",
+        "estimate_hours": 8
+      },
+      {
+        "_key": "t7",
+        "project": "@pr_app",
+        "title": "Beta feedback triage",
+        "description": "Group and prioritise feedback from 40 beta testers.",
+        "priority": "low",
+        "due_date": "2026-10-30",
+        "status": "todo"
+      },
+      {
+        "_key": "t8",
+        "project": "@pr_mkt",
+        "title": "Create ad creatives",
+        "description": "Banner and story creatives in four sizes.",
+        "priority": "medium",
+        "due_date": "2026-10-28",
+        "status": "in_progress",
+        "assignee_email": "tarun.bose@example.com",
+        "estimate_hours": 16
+      },
+      {
+        "_key": "t9",
+        "project": "@pr_mkt",
+        "title": "Analyse early campaign metrics",
+        "description": "Review click-through and conversion for the soft launch.",
+        "priority": "low",
+        "due_date": "2026-11-03",
+        "status": "todo",
+        "assignee_email": "dev.malhotra@example.com",
+        "estimate_hours": 5
+      },
+      {
+        "_key": "t10",
+        "project": "@pr_web",
+        "title": "Accessibility audit",
+        "description": "Check contrast, keyboard use and screen reader labels.",
+        "priority": "high",
+        "due_date": "2026-10-12",
+        "status": "done",
+        "assignee_email": "nisha.rao@example.com",
+        "estimate_hours": 10
+      }
+    ],
+    "time_entry": [
+      {
+        "_key": "te1",
+        "task": "@t1",
+        "member_email": "dev.malhotra@example.com",
+        "logged_on": "2026-10-12",
+        "hours": 5,
+        "note": "Home and pricing wireframes"
+      },
+      {
+        "_key": "te2",
+        "task": "@t1",
+        "member_email": "dev.malhotra@example.com",
+        "logged_on": "2026-10-14",
+        "hours": 6,
+        "note": "Contact page and review fixes"
+      },
+      {
+        "_key": "te3",
+        "task": "@t2",
+        "member_email": "nisha.rao@example.com",
+        "logged_on": "2026-10-13",
+        "hours": 7.5,
+        "note": "Hero and navigation"
+      },
+      {
+        "_key": "te4",
+        "task": "@t2",
+        "member_email": "nisha.rao@example.com",
+        "logged_on": "2026-10-14",
+        "hours": 6,
+        "note": "Feature sections"
+      },
+      {
+        "_key": "te5",
+        "task": "@t4",
+        "member_email": "dev.malhotra@example.com",
+        "logged_on": "2026-10-06",
+        "hours": 4,
+        "note": "Pipeline setup"
+      },
+      {
+        "_key": "te6",
+        "task": "@t4",
+        "member_email": "dev.malhotra@example.com",
+        "logged_on": "2026-10-08",
+        "hours": 5,
+        "note": "Caching and test stage"
+      },
+      {
+        "_key": "te7",
+        "task": "@t5",
+        "member_email": "nisha.rao@example.com",
+        "logged_on": "2026-10-14",
+        "hours": 3.5,
+        "note": "Reproduced on device farm"
+      },
+      {
+        "_key": "te8",
+        "task": "@t8",
+        "member_email": "tarun.bose@example.com",
+        "logged_on": "2026-10-13",
+        "hours": 6,
+        "note": "First two sizes"
+      },
+      {
+        "_key": "te9",
+        "task": "@t10",
+        "member_email": "nisha.rao@example.com",
+        "logged_on": "2026-10-09",
+        "hours": 5,
+        "note": "Screen reader pass"
+      },
+      {
+        "_key": "te10",
+        "task": "@t10",
+        "member_email": "nisha.rao@example.com",
+        "logged_on": "2026-10-11",
+        "hours": 4,
+        "note": "Contrast fixes"
+      }
+    ],
+    "comment": [
+      {
+        "_key": "cm1",
+        "task": "@t1",
+        "author_email": "dev.malhotra@example.com",
+        "body": "Wireframes are ready for review. The pricing page has two layout options."
+      },
+      {
+        "_key": "cm2",
+        "task": "@t1",
+        "author_email": "asha.kapoor@example.com",
+        "body": "Option B works better. Can you add the FAQ section before I approve?"
+      },
+      {
+        "_key": "cm3",
+        "task": "@t5",
+        "author_email": "nisha.rao@example.com",
+        "body": "Reproduced on a Pixel 7. The biometric callback fires before the activity is attached."
+      },
+      {
+        "_key": "cm4",
+        "task": "@t5",
+        "author_email": "asha.kapoor@example.com",
+        "body": "This blocks the beta release. Please prioritise it today."
+      },
+      {
+        "_key": "cm5",
+        "task": "@t8",
+        "author_email": "tarun.bose@example.com",
+        "body": "Using the festive palette from the brand guide. Sharing drafts tomorrow."
+      },
+      {
+        "_key": "cm6",
+        "task": "@t10",
+        "author_email": "nisha.rao@example.com",
+        "body": "Audit complete. Twelve issues found and fixed, notes are in the project folder."
+      }
+    ]
+  },
+  "model": {
+    "enums": [
+      {
+        "id": "project_status",
+        "values": [
+          {
+            "color": "#10B981",
+            "label": "Active",
+            "value": "active"
+          },
+          {
+            "color": "#F59E0B",
+            "label": "On hold",
+            "value": "on_hold"
+          },
+          {
+            "color": "#6B7280",
+            "label": "Completed",
+            "value": "completed"
+          }
+        ]
+      },
+      {
+        "id": "task_status",
+        "values": [
+          {
+            "color": "#6B7280",
+            "label": "To do",
+            "value": "todo"
+          },
+          {
+            "color": "#3B82F6",
+            "label": "In progress",
+            "value": "in_progress"
+          },
+          {
+            "color": "#8B5CF6",
+            "label": "In review",
+            "value": "in_review"
+          },
+          {
+            "color": "#10B981",
+            "label": "Done",
+            "value": "done"
+          }
+        ]
+      },
+      {
+        "id": "priority",
+        "values": [
+          {
+            "color": "#9CA3AF",
+            "label": "Low",
+            "value": "low"
+          },
+          {
+            "color": "#3B82F6",
+            "label": "Medium",
+            "value": "medium"
+          },
+          {
+            "color": "#F59E0B",
+            "label": "High",
+            "value": "high"
+          },
+          {
+            "color": "#EF4444",
+            "label": "Urgent",
+            "value": "urgent"
+          }
+        ]
+      }
+    ],
+    "entities": [
+      {
+        "id": "project",
+        "icon": "folder",
+        "label": "Project",
+        "fields": [
+          {
+            "id": "name",
+            "enum": null,
+            "type": "text",
+            "index": true,
+            "target": null,
+            "unique": true,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "description",
+            "enum": null,
+            "type": "longtext",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "color",
+            "enum": null,
+            "type": "color",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": "#3B82F6",
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "owner_email",
+            "enum": null,
+            "type": "email",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "due_date",
+            "enum": null,
+            "type": "date",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "status",
+            "enum": "project_status",
+            "type": "enum",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": "active",
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          }
+        ],
+        "plural": "Projects",
+        "display": {
+          "title": "name",
+          "subtitle": "status"
+        },
+        "lifecycle": {
+          "field": "status",
+          "states": [
+            "active",
+            "on_hold",
+            "completed"
+          ],
+          "initial": "active",
+          "transitions": [
+            {
+              "id": "pause",
+              "to": "on_hold",
+              "from": "active",
+              "guard": null,
+              "label": "Put on hold",
+              "roles": [
+                "owner"
+              ]
+            },
+            {
+              "id": "resume",
+              "to": "active",
+              "from": "on_hold",
+              "guard": null,
+              "label": "Resume",
+              "roles": [
+                "owner"
+              ]
+            },
+            {
+              "id": "finish",
+              "to": "completed",
+              "from": "active",
+              "guard": null,
+              "label": "Mark completed",
+              "roles": [
+                "owner"
+              ]
+            },
+            {
+              "id": "reopen",
+              "to": "active",
+              "from": "completed",
+              "guard": null,
+              "label": "Reopen",
+              "roles": [
+                "owner"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "task",
+        "icon": "check-square",
+        "label": "Task",
+        "fields": [
+          {
+            "id": "project",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "project",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "cascade",
+            "required": true,
+            "relation_name": "tasks"
+          },
+          {
+            "id": "title",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "description",
+            "enum": null,
+            "type": "longtext",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "assignee_email",
+            "enum": null,
+            "type": "email",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "priority",
+            "enum": "priority",
+            "type": "enum",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": "medium",
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "due_date",
+            "enum": null,
+            "type": "date",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "estimate_hours",
+            "enum": null,
+            "type": "decimal",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "hours_logged",
+            "enum": null,
+            "type": "decimal",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": {
+              "formula": "sum(time_entries.hours)"
+            },
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "hours_remaining",
+            "enum": null,
+            "type": "decimal",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": {
+              "formula": "estimate_hours - hours_logged"
+            },
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          },
+          {
+            "id": "status",
+            "enum": "task_status",
+            "type": "enum",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": "todo",
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          }
+        ],
+        "plural": "Tasks",
+        "display": {
+          "title": "title",
+          "subtitle": "due_date - status"
+        },
+        "lifecycle": {
+          "field": "status",
+          "states": [
+            "todo",
+            "in_progress",
+            "in_review",
+            "done"
+          ],
+          "initial": "todo",
+          "transitions": [
+            {
+              "id": "start",
+              "to": "in_progress",
+              "from": "todo",
+              "guard": null,
+              "label": "Start",
+              "roles": [
+                "owner",
+                "member"
+              ]
+            },
+            {
+              "id": "submit_review",
+              "to": "in_review",
+              "from": "in_progress",
+              "guard": null,
+              "label": "Submit for review",
+              "roles": [
+                "owner",
+                "member"
+              ]
+            },
+            {
+              "id": "approve",
+              "to": "done",
+              "from": "in_review",
+              "guard": null,
+              "label": "Approve",
+              "roles": [
+                "owner"
+              ]
+            },
+            {
+              "id": "request_changes",
+              "to": "in_progress",
+              "from": "in_review",
+              "guard": null,
+              "label": "Request changes",
+              "roles": [
+                "owner"
+              ]
+            },
+            {
+              "id": "reopen",
+              "to": "in_progress",
+              "from": "done",
+              "guard": null,
+              "label": "Reopen",
+              "roles": [
+                "owner"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "comment",
+        "icon": "message-square",
+        "label": "Comment",
+        "fields": [
+          {
+            "id": "task",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "task",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "cascade",
+            "required": true,
+            "relation_name": "comments"
+          },
+          {
+            "id": "author_email",
+            "enum": null,
+            "type": "email",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "body",
+            "enum": null,
+            "type": "longtext",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          }
+        ],
+        "plural": "Comments",
+        "display": {
+          "title": "body",
+          "subtitle": "author_email"
+        },
+        "lifecycle": null
+      },
+      {
+        "id": "time_entry",
+        "icon": "clock",
+        "label": "Time entry",
+        "fields": [
+          {
+            "id": "task",
+            "enum": null,
+            "type": "ref",
+            "index": true,
+            "target": "task",
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": "cascade",
+            "required": true,
+            "relation_name": "time_entries"
+          },
+          {
+            "id": "member_email",
+            "enum": null,
+            "type": "email",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "logged_on",
+            "enum": null,
+            "type": "date",
+            "index": true,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "hours",
+            "enum": null,
+            "type": "decimal",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": true,
+            "relation_name": null
+          },
+          {
+            "id": "note",
+            "enum": null,
+            "type": "text",
+            "index": null,
+            "target": null,
+            "unique": null,
+            "default": null,
+            "computed": null,
+            "onDelete": null,
+            "required": null,
+            "relation_name": null
+          }
+        ],
+        "plural": "Time entries",
+        "display": {
+          "title": "logged_on",
+          "subtitle": "hours"
+        },
+        "lifecycle": null
+      }
+    ]
+  },
+  "trace": [
+    {
+      "requirement": "R1",
+      "satisfied_by": [
+        "entity:project",
+        "lifecycle:project",
+        "page:projects",
+        "page:project_detail"
+      ]
+    },
+    {
+      "requirement": "R2",
+      "satisfied_by": [
+        "entity:task",
+        "page:tasks",
+        "page:task_detail",
+        "page:project_detail"
+      ]
+    },
+    {
+      "requirement": "R3",
+      "satisfied_by": [
+        "lifecycle:task",
+        "page:task_detail",
+        "page:board"
+      ]
+    },
+    {
+      "requirement": "R4",
+      "satisfied_by": [
+        "entity:time_entry",
+        "field:task.hours_logged",
+        "field:task.hours_remaining",
+        "page:task_detail"
+      ]
+    },
+    {
+      "requirement": "R5",
+      "satisfied_by": [
+        "entity:comment",
+        "page:task_detail"
+      ]
+    },
+    {
+      "requirement": "R6",
+      "satisfied_by": [
+        "automation:task_assigned_email",
+        "automation:review_requested_email",
+        "automation:task_approved_email",
+        "automation:overdue_digest"
+      ]
+    },
+    {
+      "requirement": "R7",
+      "satisfied_by": [
+        "page:dashboard",
+        "page:board",
+        "page:tasks"
+      ]
+    },
+    {
+      "requirement": "R8",
+      "satisfied_by": [
+        "role:owner",
+        "role:member"
+      ]
+    }
+  ],
+  "access": {
+    "roles": [
+      {
+        "id": "owner",
+        "label": "Project Owner"
+      },
+      {
+        "id": "member",
+        "label": "Team Member"
+      }
+    ],
+    "rules": [
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "owner",
+        "where": null,
+        "entity": "project"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "owner",
+        "where": null,
+        "entity": "task"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "owner",
+        "where": null,
+        "entity": "comment"
+      },
+      {
+        "ops": [
+          "read",
+          "create",
+          "update",
+          "delete"
+        ],
+        "role": "owner",
+        "where": null,
+        "entity": "time_entry"
+      },
+      {
+        "ops": [
+          "read"
+        ],
+        "role": "member",
+        "where": null,
+        "entity": "project"
+      },
+      {
+        "ops": [
+          "read",
+          "create"
+        ],
+        "role": "member",
+        "where": null,
+        "entity": "task"
+      },
+      {
+        "ops": [
+          "update"
+        ],
+        "role": "member",
+        "where": "assignee_email == $user.email",
+        "entity": "task"
+      },
+      {
+        "ops": [
+          "read",
+          "create"
+        ],
+        "role": "member",
+        "where": null,
+        "entity": "comment"
+      },
+      {
+        "ops": [
+          "update",
+          "delete"
+        ],
+        "role": "member",
+        "where": "author_email == $user.email",
+        "entity": "comment"
+      },
+      {
+        "ops": [
+          "read",
+          "create"
+        ],
+        "role": "member",
+        "where": null,
+        "entity": "time_entry"
+      },
+      {
+        "ops": [
+          "update",
+          "delete"
+        ],
+        "role": "member",
+        "where": "member_email == $user.email",
+        "entity": "time_entry"
+      }
+    ]
+  },
+  "personas": [
+    {
+      "id": "project_owner",
+      "name": "Project owner",
+      "goals": [
+        "See what is overdue or waiting for review",
+        "Approve finished work"
+      ]
+    },
+    {
+      "id": "team_member",
+      "name": "Team member",
+      "goals": [
+        "Know what is assigned to me and when it is due",
+        "Log my hours and discuss tasks"
+      ]
+    }
+  ],
+  "assumptions": [
+    "Small team sharing one workspace",
+    "Flat task list per project (no subtasks or dependencies)",
+    "People sign in with the email address stored on assignments, comments and time entries",
+    "Hours are logged in decimal hours against tasks, not against projects",
+    "Estimates are optional; hours remaining is blank without one",
+    "Email notifications only; no chat or push",
+    "No billing, invoicing or client portal",
+    "Web app only (responsive); English only",
+    "Single-tenant application"
+  ],
+  "automations": [
+    {
+      "id": "task_assigned_email",
+      "steps": [
+        {
+          "when": "assignee_email != null",
+          "action": "send_email",
+          "params": {
+            "to": "assignee_email",
+            "subject": "You have a new task: {title}",
+            "body": "{title} in {project.name} is assigned to you. Due: {due_date}. Priority: {priority}."
+          }
+        }
+      ],
+      "trigger": {
+        "type": "record.created",
+        "entity": "task",
+        "schedule": null,
+        "transition": null
+      }
+    },
+    {
+      "id": "review_requested_email",
+      "steps": [
+        {
+          "when": null,
+          "action": "send_email",
+          "params": {
+            "to": "project.owner_email",
+            "subject": "Ready for review: {title}",
+            "body": "{assignee_email} submitted {title} ({project.name}) for review."
+          }
+        }
+      ],
+      "trigger": {
+        "type": "lifecycle.transition",
+        "entity": "task",
+        "schedule": null,
+        "transition": "submit_review"
+      }
+    },
+    {
+      "id": "task_approved_email",
+      "steps": [
+        {
+          "when": "assignee_email != null",
+          "action": "send_email",
+          "params": {
+            "to": "assignee_email",
+            "subject": "Approved: {title}",
+            "body": "{title} was approved and is now done.\nHours logged: {hours_logged}."
+          }
+        }
+      ],
+      "trigger": {
+        "type": "lifecycle.transition",
+        "entity": "task",
+        "schedule": null,
+        "transition": "approve"
+      }
+    },
+    {
+      "id": "overdue_digest",
+      "steps": [
+        {
+          "when": "status != 'done' and due_date < today() and assignee_email != null",
+          "action": "send_email",
+          "params": {
+            "to": "assignee_email",
+            "subject": "Overdue: {title}",
+            "body": "{title} in {project.name} was due on {due_date} and is not done yet."
+          }
+        }
+      ],
+      "trigger": {
+        "type": "schedule",
+        "entity": "task",
+        "schedule": "0 8 * * 1-5",
+        "transition": null
+      }
+    }
+  ],
+  "integrations": [],
+  "requirements": [
+    {
+      "id": "R1",
+      "text": "Manage projects with an owner, due date and status (active, on hold, completed)",
+      "priority": "must"
+    },
+    {
+      "id": "R2",
+      "text": "Create tasks in a project with assignee, priority, due date and an hours estimate",
+      "priority": "must"
+    },
+    {
+      "id": "R3",
+      "text": "Move tasks through to do, in progress, in review and done, where only project owners can approve or reopen",
+      "priority": "must"
+    },
+    {
+      "id": "R4",
+      "text": "Log hours against tasks and show hours logged and hours remaining automatically",
+      "priority": "must"
+    },
+    {
+      "id": "R5",
+      "text": "Discuss each task with comments",
+      "priority": "should"
+    },
+    {
+      "id": "R6",
+      "text": "Email assignees when a task is assigned, approved or overdue, and email the project owner when a task is ready for review",
+      "priority": "should"
+    },
+    {
+      "id": "R7",
+      "text": "Show a dashboard, a kanban board and a due-date calendar of tasks",
+      "priority": "should"
+    },
+    {
+      "id": "R8",
+      "text": "Members edit only tasks assigned to them and only their own comments and time entries",
+      "priority": "must"
+    }
+  ],
+  "spec_version": "1.0"
+}

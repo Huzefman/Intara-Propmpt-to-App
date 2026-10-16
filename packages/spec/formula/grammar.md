@@ -31,6 +31,10 @@ C-style aliases: `&&` = `and`, `||` = `or`, `!x` = `not x` (single `&`/`|` are e
 strings (single/double quotes, `\\n \\t \\r \\\\ \\' \\"`), lists (only from
 relation access), records (only from context — literals can't build them).
 
+Computed fields evaluate in field order, so a formula may read an earlier
+computed field on the same entity (`hours_remaining = estimate_hours -
+hours_logged` requires `hours_logged` listed first).
+
 ## Names
 
 Bare `qty`, dotted `customer.name`. A dotted access on a **list** maps over

@@ -34,6 +34,19 @@ function matchTrigger(auto: Automation, ev: RunEvent): boolean {
   return true;
 }
 
+function coerceValue(value: unknown, record: Rec): unknown {
+  // Zero-arg date functions evaluate against now; everything else (including
+  // unknown calls) stays literal — never guess, never throw.
+  if (typeof value === "string" && /^(today|tomorrow|now|startOfMonth)\(\s*\)$/.test(value.trim())) {
+    try {
+      return evaluate(`${value.trim()}`, record as Record<string, never>, {});
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
 function whenPasses(when: string | undefined, record: Rec): boolean {
   if (!when) return true;
   try {
@@ -66,7 +79,7 @@ export async function runAutomations(
           if (typeof field !== "string" || record["id"] === undefined) break;
           const current = await db.get(entity, record["id"] as string | number);
           if (!current) break;
-          await db.put(entity, { ...current, [field]: value });
+          await db.put(entity, { ...current, [field]: coerceValue(value, current) });
           effects.push({ kind: "set_field", detail: `${entity}.${String(field)} := ${JSON.stringify(value)}` });
           break;
         }

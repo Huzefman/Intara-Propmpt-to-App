@@ -35,5 +35,9 @@
   {"id": "r34-seed-entity", "rules": ["R34"], "ops": [{"op": "add", "path": "/seed/nope", "value": []}]},
   {"id": "r35-seed-key", "rules": ["R35"], "ops": [{"op": "add", "path": "/seed/widget", "value": [{"_key": "k1", "name": "a"}]}, {"op": "add", "path": "/seed/part", "value": [{"widget": "@zz", "cost": 1}]}]},
   {"id": "r36-rule-role", "rules": ["R36"], "ops": [{"op": "add", "path": "/access/rules/-", "value": {"entity": "widget", "role": "nope", "ops": ["read"]}}]},
+  {"id": "r48-dup-block-across-pages", "rules": ["R48", "R20"], "ops": [{"op": "add", "path": "/ui/pages/-", "value": {"id": "second", "route": "/second", "title": "Second", "roles": ["owner"], "blocks": [{"id": "b1", "type": "data.table", "props": {"entity": "widget"}}]}}]},
+  {"id": "r48-block-equals-page", "rules": ["R48"], "ops": [{"op": "add", "path": "/ui/pages/0/blocks/-", "value": {"id": "home", "type": "data.table", "props": {"entity": "widget"}}}]},
+  {"id": "r49-mirror-ref", "rules": ["R49"], "ops": [{"op": "add", "path": "/model/entities/0/fields/-", "value": {"id": "parts", "type": "multi_ref", "target": "part"}}]},
+  {"id": "r50-placeholder-webhook", "rules": ["R50"], "ops": [{"op": "add", "path": "/automations/-", "value": {"id": "a1", "trigger": {"type": "manual_button"}, "steps": [{"action": "webhook", "params": {"url": "https://example.com/hook"}}]}}]},
   {"id": "w01-experimental-warn", "rules": [], "warnings": ["W01"], "ops": [{"op": "add", "path": "/ui/pages/0/blocks/-", "value": {"id": "bg", "type": "metric.gauge", "props": {"entity": "widget"}}}]}
 ]}

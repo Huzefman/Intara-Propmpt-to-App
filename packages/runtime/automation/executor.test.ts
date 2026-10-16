@@ -29,6 +29,22 @@ test("lifecycle trigger + guarded email defers without provider", async () => {
   assert.ok(fx.some((e) => e.kind === "notify"));
 });
 
+test("set_field evaluates zero-arg date functions, leaves literals alone", async () => {
+  const db = await seeded();
+  const spec = JSON.parse(JSON.stringify(repair)) as AppSpec;
+  spec.automations.push({
+    id: "stamp", trigger: { type: "record.updated", entity: "job" },
+    steps: [
+      { action: "set_field", params: { field: "closed_at", value: "today()" } },
+      { action: "set_field", params: { field: "technician", value: "Jo" } },
+    ],
+  });
+  await runAutomations(spec, db, { type: "record.updated", entity: "job", record: { id: "j1" } });
+  const rec = await db.get("job", "j1");
+  assert.match(String(rec?.["closed_at"]), /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(rec?.["technician"], "Jo");
+});
+
 test("non-matching trigger and failing guard do nothing", async () => {
   const db = await seeded();
   assert.deepEqual(await runAutomations(repair, db, { type: "record.created", entity: "job", record: {} }), []);

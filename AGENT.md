@@ -107,6 +107,7 @@
 ### Phase 5 — Gold specs + retrieval seed [x]
 *Goal: hand-authored truth to retrieve and eval against. (Guide M1.6, M7-start)*
 - **Golds (8):** inventory, booking, CRM/leads, repair tracker, leave/HR (hand) + veterinary, education, social (pipeline + human review).
+- **Golds (10):** + productivity (TaskFlow), gardening (GardenPlan) — pipeline + human review, promoted byte-identical except one seed value (see #37).
 - [x] P5.1 Five gold specs + `server/engine/prd_adapter.py` (legacy PRD→Spec; drops storage-managed id/created_at/updated_at per R40)
 - [x] P5.2 `server/services/retrieval.py` (768-d) + builder/seeder; 8 exemplar rows live; versioned index rebuilt.
 - [x] P5.3 Held-out #6–10 enforced; hit-rate recorded.
@@ -271,6 +272,12 @@
 - **Verify:** node **199/199 (1 skip)**, 91.0% lines; both tscs + vite build; python **190/190**, eval 5/5.
 - **Next:** 2 golds in review with user; roles editor design; print views already shipped.
 
+### Session 21 — 2026-10-16 — batch-2 golds promoted, prototype fully ported [x]
+- **Done:** both improved specs G0/G1-clean first try; ported checker delta (R48 block-id uniqueness, R49 mirror-ref, R50 placeholder/id-only templates) + 5 fail-patches; `today()`/`tomorrow()` in formula language (TZ-pinned, 135/135); S2/S3/S4 review rules (→ v3 prompts); `set_field` evaluates zero-arg date fns (literal fallback); adapter drops storage-managed fields; promoted productivity+gardening (10/10 G0/G1, G3 green all 10); seeded + index rebuilt.
+- **Verify:** node **204/204 (1 skip)**, 91.0% lines; both tscs + vite build; python **190/190**, eval 5/5.
+- **Decisions confirmed:** chained computed needs dependency-first field order (engine semantics, now in grammar.md); multi-hop `to` resolves at provider time (lint already proves resolvability); seeds WILL go stale (no relative tokens — noted).
+- **Next:** Phase 8 remainder (roles editor design) or Phase 9.
+
 ---
 
 ## 5. Known problems / error register
@@ -311,6 +318,7 @@
 32. 2026-10-15 · Strict block vocabulary (R37) broke host-injected props (`transitions`/`current` merged into pipeline block props by RuntimePreview) · host runtime data travels via component props, spec props stay pure · **FIXED**
 33. 2026-10-15 · Supabase contract subtests shared one table across fresh adapters (entity names collide) · per-subtest hard-clean hook in shared contract (memory/dexie unaffected) · **FIXED (18/18 all adapters)**
 34. 2026-10-15 · Live-network test keyed on ambient env: a leaked shell export + transient fetch failure flaked the gate suite · live tests are INTARA_LIVE=1 opt-in, never ambient · **FIXED**
+35. 2026-10-16 · Batch-2 review port: G3 caught a real seed gap the review missed (task row t7 without estimate_hours, needed by a computed formula) · added the missing value (flagged to reviewer); rule of thumb: G3-over-golds is the last reviewer · **FIXED**
 ---
 
 ## 6. Metrics dashboard
@@ -325,7 +333,7 @@
 | Requirement coverage | n/a | — | ≥ 80 % (100 % musts) |
 | LLM calls per build (median) | _pending P0.2_ | — | ≤ 14 (≤ 6 strong) |
 | Time to live preview post-approval | _pending P0.2_ | — | ≤ 30 s |
-| Unit suite | 93/93 (2026-10-11) | 190/190 py + 199/199 node (2026-10-15) | green every session |
+| Unit suite | 93/93 (2026-10-11) | 190/190 py + 204/204 node (2026-10-16) | green every session |
 | Golden eval | 5/5 (2026-10-11) | 5/5 (2026-10-12) | 5/5 + new suites |
 
 **Baseline 2026-10-12, pre-Phase-1** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):

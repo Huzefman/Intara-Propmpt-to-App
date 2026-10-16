@@ -275,6 +275,17 @@ def lint(spec: dict) -> dict:
                 errors.append(_finding("R09", f"ref target {f.get('target')!r} does not exist", p))
             if f.get("type") in ("enum", "multi_enum") and f.get("enum") not in enums:
                 errors.append(_finding("R10", f"enum {f.get('enum')!r} does not exist", p))
+            if f.get("type") == "multi_ref" and isinstance(f.get("target"), str):
+                # a multi_ref mirroring an existing ref stores the relation twice
+                for oe in entities.values():
+                    for of_ in (oe.get("fields") or []):
+                        if not isinstance(of_, dict):
+                            continue
+                        if of_.get("type") == "ref" and of_.get("target") == eid \
+                                and oe.get("id") == f["target"]:
+                            errors.append(_finding(
+                                "R49", f"multi_ref {fid!r} mirrors ref {oe.get('id')}.{of_.get('id')} (store once, on the child)",
+                                f"model.entities.{eid}.fields.{fid}"))
 
     # R14–R18 lifecycles
     for eid, e in entities.items():
@@ -673,6 +684,7 @@ def lint(spec: dict) -> dict:
 
     # Dup routes (R45); param routes need a record.detail (R46).
     seen_routes: set = set()
+    seen_bids: set = set()
     for pid, p in pages.items():
         route = p.get("route") or ""
         if route in seen_routes:
@@ -682,6 +694,15 @@ def lint(spec: dict) -> dict:
                 isinstance(b, dict) and b.get("type") == "record.detail"
                 for b in (p.get("blocks") or [])):
             errors.append(_finding("R46", f"param route without record.detail", f"ui.pages.{pid}"))
+        for b in (p.get("blocks") or []):
+            if not isinstance(b, dict):
+                continue
+            bid = b.get("id")
+            if bid in seen_bids:
+                errors.append(_finding("R48", f"duplicate block id {bid!r} (unique across the spec)", f"ui.pages.{pid}"))
+            seen_bids.add(bid)
+            if bid in pages:
+                errors.append(_finding("R48", f"block id {bid!r} equals a page id", f"ui.pages.{pid}"))
 
     # Seed strictness beyond R34/R35: required fields, enum values, no
     # computed seeds, date/datetime shape, unique dupes. Missing _key warns.
@@ -722,6 +743,7 @@ def lint(spec: dict) -> dict:
     # Automation template identifiers (R41): {vars} in params + when already
     # covered by R25; here templates + to/recipients/field shorthand.
     import re as _re
+    _PLACEHOLDER_HOSTS = ("example.com", "example.org", "example.net", "test.invalid", "localhost")
     for a in spec.get("automations") or []:
         if not isinstance(a, dict):
             continue
@@ -732,11 +754,17 @@ def lint(spec: dict) -> dict:
             for k, v in (s.get("params") or {}).items():
                 if not isinstance(v, str):
                     continue
-                for tmpl in _re.findall(r"\{([^{}]+)\}", v):
-                    if trig_ent in entities:
-                        _resolve_dotted(fields_of, accessors, accessor_target,
-                                        trig_ent, tmpl.strip(), errors,
-                                        f"automations.{a.get('id')}.{k}", "R41")
+                if k == "url" and any(h in v for h in _PLACEHOLDER_HOSTS):
+                    errors.append(_finding("R50", f"webhook url points at a placeholder host", f"automations.{a.get('id')}"))
+                tmpls = _re.findall(r"\{([^{}]+)\}", v)
+                if tmpls:
+                    for tmpl in tmpls:
+                        if trig_ent in entities:
+                            _resolve_dotted(fields_of, accessors, accessor_target,
+                                            trig_ent, tmpl.strip(), errors,
+                                            f"automations.{a.get('id')}.{k}", "R41")
+                    if all(_re.fullmatch(r"[\w.]*id", t.strip(), _re.IGNORECASE) for t in tmpls):
+                        errors.append(_finding("R50", f"template interpolates only an id (unreadable to humans)", f"automations.{a.get('id')}.{k}"))
                 if k in ("to", "recipients") and "{" not in v and trig_ent in entities:
                     if "." in v:
                         _resolve_dotted(fields_of, accessors, accessor_target,
