@@ -247,3 +247,27 @@ export async function patchRun(runId: string, ops: any[], summary: string, baseV
   }
   return res.json()
 }
+
+export async function getExemplars(): Promise<any[]> {
+  const res = await fetch('/api/exemplars')
+  if (!res.ok) throw new Error(`exemplars failed ${res.status}`)
+  return (await res.json()).exemplars ?? []
+}
+
+export async function getExemplar(name: string): Promise<any> {
+  const res = await fetch(`/api/exemplars/${name}`)
+  if (!res.ok) throw new Error(`exemplar failed ${res.status}`)
+  return (await res.json()).exemplar
+}
+
+export async function getEventlog(runId: string): Promise<any[]> {
+  const res = await fetch(`/api/runs/${runId}/eventlog`)
+  if (!res.ok) throw new Error(`eventlog failed ${res.status}`)
+  return (await res.json()).events ?? []
+}
+
+export async function postFeedback(kind: string, payload: any, projectId?: string, versionId?: string): Promise<{ ok: boolean; id: string }> {
+  const res = await fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, payload, project_id: projectId || null, version_id: versionId || null }) })
+  if (!res.ok) throw new Error(`feedback failed ${res.status}`)
+  return res.json()
+}

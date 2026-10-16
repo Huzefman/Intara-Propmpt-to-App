@@ -7,6 +7,8 @@ import './theme/intara.css'
 const WishVault = lazy(() => import('./pages/WishVault').then(m => ({ default: m.WishVault })))
 const Constellation = lazy(() => import('./pages/Constellation').then(m => ({ default: m.Constellation })))
 const Archives = lazy(() => import('./pages/Archives').then(m => ({ default: m.Archives })))
+const RunPage = lazy(() => import('./pages/RunPage').then(m => ({ default: m.RunPage })))
+const GalleryPage = lazy(() => import('./pages/GalleryPage').then(m => ({ default: m.GalleryPage })))
 
 function RouteFallback() {
   return <div className="glass" style={{ padding: 40, textAlign: 'center', borderRadius: 20 }}>
@@ -24,6 +26,8 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/wish/:id" element={<WishVault />} />
+            <Route path="/runs/:id" element={<RunPage />} />
+            <Route path="/templates" element={<GalleryPage />} />
             <Route path="/constellation" element={<Constellation />} />
             <Route path="/archives" element={<Archives />} />
           </Routes>

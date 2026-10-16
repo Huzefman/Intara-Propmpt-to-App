@@ -22,6 +22,7 @@ export function Header() {
         <nav style={{ display: 'flex', gap: 2, marginLeft: 16 }}>
           {[
             { to: '/', label: 'Wish' },
+            { to: '/templates', label: 'Templates' },
             { to: '/constellation', label: 'Constellation' },
             { to: '/archives', label: 'Archives' },
           ].map((l) => (

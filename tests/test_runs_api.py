@@ -138,3 +138,104 @@ def test_versions_list_revert_and_summary(monkeypatch):
     assert eng.store.get_version(body["version_id"])["parent"] == child_id
     # root has nothing to undo
     assert c.post(f"/api/versions/{vid}/revert", json={}).status_code == 409
+
+
+class _FakeQ:
+    def __init__(self, store, table, rows=None):
+        self._store = store
+        self._table = table
+        self._rows = list(rows) if rows is not None else None
+        self._insert = None
+
+    def _all(self):
+        return self._store.setdefault(self._table, [])
+
+    def select(self, *a):
+        self._rows = self._all()
+        return self
+
+    def eq(self, k, v):
+        self._rows = [r for r in (self._rows if self._rows is not None else self._all())
+                      if r.get(k) == v]
+        return self
+
+    def order(self, *a, **k):
+        return self
+
+    def limit(self, n):
+        self._rows = (self._rows if self._rows is not None else self._all())[:n]
+        return self
+
+    def insert(self, payload):
+        row = dict(payload)
+        row.setdefault("id", f"fake-{len(self._all()) + 1}")
+        self._all().append(row)
+        self._insert = [row]
+        return self
+
+    def execute(self):
+        return type("R", (), {"data": self._insert if self._insert is not None else (self._rows or [])})()
+
+
+class _FakeSupa:
+    def __init__(self):
+        self._tables = {}
+
+    def table(self, name):
+        return _FakeQ(self._tables, name)
+
+
+def _engine_with_events(monkeypatch):
+    mod, RE = _load_main()
+    store = RE.MemoryRunStore()
+    rid = store.create_run("p1", "build", {"wish": "x"})
+    store.append_event(rid, "run_started", {"kind": "build"})
+    store.append_event(rid, "step_done", {"step": "s0"})
+    eng = RE.RunEngine(store)
+    monkeypatch.setattr(RE, "_engine", eng)
+    return mod, eng, rid
+
+
+def test_eventlog_returns_history(monkeypatch):
+    pytest.importorskip("fastapi")
+    pytest.importorskip("starlette.testclient")
+    from fastapi.testclient import TestClient
+    mod, eng, rid = _engine_with_events(monkeypatch)
+    c = TestClient(mod.app)
+    r = c.get(f"/api/runs/{rid}/eventlog")
+    assert r.status_code == 200, r.text
+    assert [e["type"] for e in r.json()["events"]] == ["run_started", "step_done"]
+    assert c.get("/api/runs/nope/eventlog").status_code == 404
+
+
+def test_exemplars_and_feedback(monkeypatch):
+    pytest.importorskip("fastapi")
+    pytest.importorskip("starlette.testclient")
+    from fastapi.testclient import TestClient
+    mod, RE = _load_main()
+    import routers.runs as runs_router
+    fake = _FakeSupa()
+    fake._tables["exemplars"] = [
+        {"name": "t1", "domain": "d", "source": "hand-authored",
+         "spec": {"app": {"name": "T", "tagline": "tag"},
+                  "model": {"entities": [{"id": "e"}]},
+                  "ui": {"pages": [{"id": "p"}]}}}]
+    monkeypatch.setattr(runs_router, "_exemplars", lambda: fake)
+    store = RE.MemoryRunStore()
+    monkeypatch.setattr(RE, "_engine", RE.RunEngine(store))
+    c = TestClient(mod.app)
+    r = c.get("/api/exemplars")
+    assert r.status_code == 200, r.text
+    items = r.json()["exemplars"]
+    assert len(items) == 1 and items[0]["entities"] == 1 and items[0]["pages"] == 1
+    r = c.get("/api/exemplars/t1")
+    assert r.status_code == 200 and r.json()["exemplar"]["domain"] == "d"
+    assert c.get("/api/exemplars/nope").status_code == 404
+    r = c.post("/api/feedback", json={"kind": "rating",
+                                      "payload": {"stars": 5}})
+    assert r.status_code == 200, r.text
+    assert c.post("/api/feedback", json={"kind": "bogus"}).status_code == 400
+    r = c.get("/api/feedback/export")
+    assert r.status_code == 200 and len(r.json()["feedback"]) == 1
+    r = c.get("/api/feedback/export?format=csv")
+    assert r.status_code == 200 and "stars" in r.text and r.headers["content-type"].startswith("text/csv")

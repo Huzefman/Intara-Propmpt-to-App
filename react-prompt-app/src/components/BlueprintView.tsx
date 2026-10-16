@@ -5,7 +5,7 @@
  * sends chat edits (JSON Patch behind a Details toggle).
  */
 import { Suspense, lazy, useEffect, useState } from 'react'
-import { approveRun, chatRun, getRun, patchRun } from '../api/client'
+import { approveRun, chatRun, getEventlog, getRun, patchRun, postFeedback } from '../api/client'
 import { addRole, removeRole, setRule } from '../../../packages/runtime/editing/roles.ts'
 
 const RuntimePreview = lazy(() => import('../runtime/RuntimePreview').then(m => ({ default: m.RuntimePreview })))
@@ -31,6 +31,10 @@ export function BlueprintView({ runId }: { runId: string }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [newRole, setNewRole] = useState('')
+  const [dev, setDev] = useState(false)
+  const [events, setEvents] = useState<any[] | null>(null)
+  const [fb, setFb] = useState('')
+  const [fbSent, setFbSent] = useState(false)
 
   async function refresh() {
     try {
@@ -111,6 +115,10 @@ export function BlueprintView({ runId }: { runId: string }) {
         {versionId && <span className="mono" style={{ fontSize: 11, color: 'var(--intara-faint)' }}>v{versionId.slice(0, 8)}</span>}
         {approved && <span style={{ fontSize: 11, color: '#6EE7B7' }}>Approved ✓</span>}
         <span style={{ flex: 1 }} />
+        <div className="studio-seg" role="tablist" aria-label="Plain or developer">
+          <button role="tab" aria-selected={!dev} className={!dev ? 'active' : ''} onClick={() => setDev(false)}>Plain</button>
+          <button role="tab" aria-selected={dev} className={dev ? 'active' : ''} onClick={() => { setDev(true); if (events === null) getEventlog(runId).then(setEvents).catch(() => setEvents([])); }}>Developer</button>
+        </div>
         <button className="btn-primary btn-sm" onClick={approve} disabled={busy || !versionId || approved}>
           {busy ? 'Working…' : approved ? 'Approved' : 'Approve plan ✦'}
         </button>
@@ -263,6 +271,47 @@ export function BlueprintView({ runId }: { runId: string }) {
       <Suspense fallback={null}>
         <VersionTimeline projectId={projectId} onPick={(vid, s) => { setSpec(s); setVersionId(vid); setMsg('Viewing an older version — edits branch from here.'); }} />
       </Suspense>
+
+      {dev && (
+        <div className="glass" style={{ padding: '12px 14px', borderRadius: 14 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 8 }}>Developer · spec JSON</div>
+          <pre className="mono" style={{ fontSize: 11, overflow: 'auto', maxHeight: 320, background: '#0A0A0F', padding: 10, borderRadius: 8 }}>{JSON.stringify(spec, null, 1)?.slice(0, 20000)}</pre>
+          <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', margin: '10px 0 6px' }}>Run events · {(events || []).length}</div>
+          <div className="mono" style={{ fontSize: 11, maxHeight: 180, overflow: 'auto' }}>
+            {(events || []).map((e: any, i: number) => (
+              <div key={i} style={{ padding: '2px 0', color: 'var(--intara-dim)' }}>{e.type} <span style={{ color: 'var(--intara-faint)' }}>{JSON.stringify(e.payload || {}).slice(0, 120)}</span></div>
+            ))}
+            {events === null && <span className="muted">Loading…</span>}
+          </div>
+        </div>
+      )}
+
+      <div className="glass" style={{ padding: '12px 14px', borderRadius: 14 }}>
+        <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 8 }}>Feedback (learning loop)</div>
+        {fbSent ? (
+          <div style={{ fontSize: 12, color: '#6EE7B7' }}>Thanks — recorded.</div>
+        ) : (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button className="btn-ghost btn-sm" disabled={busy}
+              onClick={() => postFeedback('rating', { stars: 5 }, run?.run?.project_id, versionId || undefined).then(() => setFbSent(true)).catch((e: any) => setErr(e.message))}>👍</button>
+            <button className="btn-ghost btn-sm" disabled={busy}
+              onClick={() => postFeedback('rating', { stars: 1 }, run?.run?.project_id, versionId || undefined).then(() => setFbSent(true)).catch((e: any) => setErr(e.message))}>👎</button>
+            <input
+              value={fb}
+              onChange={(e) => setFb(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && fb.trim()) {
+                  postFeedback('comment', { text: fb.trim() }, run?.run?.project_id, versionId || undefined)
+                    .then(() => { setFbSent(true); setFb(''); }).catch((er: any) => setErr(er.message));
+                }
+              }}
+              placeholder="What worked, what didn't…"
+              style={{ flex: 1, minWidth: 180, background: '#0A0A0F', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '8px 12px', color: '#E2E8F0', fontSize: 13 }}
+              aria-label="Feedback comment"
+            />
+          </div>
+        )}
+      </div>
 
       {spec && (
         <div className="glass" style={{ padding: '12px 14px', borderRadius: 14 }}>

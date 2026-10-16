@@ -290,6 +290,11 @@
 - **Verify:** python **195/195**, eval 5/5; both tscs + vite build.
 - **Next:** user applies 009 → Phase 9 slice 2 (gallery, plain/dev toggle, feedback).
 
+### Session 24 — 2026-10-16 — Phase 9 slice 2 (gallery + dev toggle + feedback) [x]
+- **Done:** exemplars list/get + eventlog JSON + feedback post/export(CSV) endpoints (fake-supa tests; KeyError→404 fix); `/templates` Gallery page (live preview + build-similar → run view) + header link + `/runs/:id` route; Blueprint plain/developer toggle (spec JSON + event log) + feedback widget (rating/comment, version-linked). Backend restarted; gallery endpoint live-verified with real data.
+- **Verify:** python **197/197**, eval 5/5; node **207/207**; both tscs + vite build.
+- **Next:** user applies 009 (summaries degrade gracefully till then) → 3-human UAT → Phase 10/11 decision.
+
 ---
 
 ## 5. Known problems / error register
@@ -345,7 +350,7 @@
 | Requirement coverage | n/a | — | ≥ 80 % (100 % musts) |
 | LLM calls per build (median) | _pending P0.2_ | — | ≤ 14 (≤ 6 strong) |
 | Time to live preview post-approval | _pending P0.2_ | — | ≤ 30 s |
-| Unit suite | 93/93 (2026-10-11) | 195/195 py + 207/207 node (2026-10-16) | green every session |
+| Unit suite | 93/93 (2026-10-11) | 197/197 py + 207/207 node (2026-10-16) | green every session |
 | Golden eval | 5/5 (2026-10-11) | 5/5 (2026-10-12) | 5/5 + new suites |
 
 **Baseline 2026-10-12, pre-Phase-1** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):

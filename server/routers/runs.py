@@ -340,3 +340,112 @@ async def revert_version(version_id: str, body: RevertIn):
         raise
     except Exception as e:
         raise HTTPException(500, f"revert failed: {e}")
+
+
+@router.get("/runs/{run_id}/eventlog")
+@router.get("/api/runs/{run_id}/eventlog")
+async def run_eventlog(run_id: str):
+    """Run events as JSON (developer toggle, reports) — same source as SSE."""
+    try:
+        eng = _engine()
+        eng.store.get_run(run_id)
+        return {"ok": True, "events": eng.replay(run_id)}
+    except KeyError:
+        raise HTTPException(404, f"run {run_id} not found")
+    except Exception as e:
+        raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
+
+
+def _exemplars():
+    from services.run_engine import SupabaseRunStore
+    return SupabaseRunStore().supa
+
+
+@router.get("/exemplars")
+@router.get("/api/exemplars")
+async def list_exemplars():
+    """Template gallery data: name/domain/stats (specs fetched per item)."""
+    try:
+        rows = (_exemplars().table("exemplars")
+                .select("name,domain,source,spec").order("name").execute().data or [])
+        out = []
+        for r in rows:
+            spec = r.get("spec") or {}
+            out.append({
+                "name": r["name"], "domain": r.get("domain"),
+                "source": r.get("source"),
+                "app": (spec.get("app") or {}).get("name"),
+                "tagline": (spec.get("app") or {}).get("tagline", ""),
+                "entities": len((spec.get("model") or {}).get("entities", [])),
+                "pages": len((spec.get("ui") or {}).get("pages", [])),
+                "starter": (spec.get("app") or {}).get("tagline", "")
+                or f"A {r.get('domain', 'business')} app",
+            })
+        return {"ok": True, "exemplars": out}
+    except Exception as e:
+        raise HTTPException(500, f"exemplars failed: {e}")
+
+
+@router.get("/exemplars/{name}")
+@router.get("/api/exemplars/{name}")
+async def get_exemplar(name: str):
+    try:
+        rows = (_exemplars().table("exemplars").select("name,domain,spec")
+                .eq("name", name).limit(1).execute().data or [])
+        if not rows:
+            raise HTTPException(404, f"exemplar {name} not found")
+        return {"ok": True, "exemplar": rows[0]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"exemplar failed: {e}")
+
+
+class FeedbackIn(BaseModel):
+    kind: str = "comment"
+    project_id: str | None = None
+    version_id: str | None = None
+    payload: dict | None = None
+
+
+@router.post("/feedback")
+@router.post("/api/feedback")
+async def post_feedback(body: FeedbackIn):
+    if body.kind not in ("rating", "comment", "correction"):
+        raise HTTPException(400, f"bad kind {body.kind!r}")
+    try:
+        res = (_exemplars().table("feedback").insert({
+            "project_id": body.project_id, "version_id": body.version_id,
+            "kind": body.kind, "payload": body.payload or {}}).execute())
+        if not res.data:
+            raise RuntimeError("feedback insert failed")
+        return {"ok": True, "id": res.data[0]["id"]}
+    except Exception as e:
+        raise HTTPException(500, f"feedback failed: {e}")
+
+
+@router.get("/feedback/export")
+@router.get("/api/feedback/export")
+async def export_feedback(format: str = "json"):
+    """Learning-loop dataset export (JSON default, CSV on ?format=csv)."""
+    try:
+        rows = (_exemplars().table("feedback")
+                .select("id,project_id,version_id,kind,payload,created_at")
+                .order("created_at").execute().data or [])
+        if format == "csv":
+            import csv as _csv
+            import io as _io
+            buf = _io.StringIO()
+            w = _csv.writer(buf)
+            w.writerow(["id", "project_id", "version_id", "kind", "payload", "created_at"])
+            for r in rows:
+                w.writerow([r.get("id"), r.get("project_id"), r.get("version_id"),
+                            r.get("kind"), json.dumps(r.get("payload") or {}),
+                            r.get("created_at")])
+            from fastapi.responses import PlainTextResponse
+            return PlainTextResponse(buf.getvalue(), media_type="text/csv",
+                                     headers={"Content-Disposition":
+                                              "attachment; filename=feedback.csv"})
+        return {"ok": True, "feedback": rows}
+    except Exception as e:
+        raise HTTPException(500, f"feedback export failed: {e}")
