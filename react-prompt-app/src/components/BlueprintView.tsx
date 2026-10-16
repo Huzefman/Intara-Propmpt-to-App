@@ -9,6 +9,7 @@ import { approveRun, chatRun, getRun, patchRun } from '../api/client'
 import { addRole, removeRole, setRule } from '../../../packages/runtime/editing/roles.ts'
 
 const RuntimePreview = lazy(() => import('../runtime/RuntimePreview').then(m => ({ default: m.RuntimePreview })))
+const VersionTimeline = lazy(() => import('./VersionTimeline').then(m => ({ default: m.VersionTimeline })))
 
 function Card({ title, children }: { title: string; children: any }) {
   return (
@@ -34,7 +35,7 @@ export function BlueprintView({ runId }: { runId: string }) {
   async function refresh() {
     try {
       const r = await getRun(runId)
-      setRun(r.run)
+      setRun(r)
       if (r.spec) { setSpec(r.spec); setVersionId(r.version_id); }
     } catch (e: any) {
       setErr(e.message || 'load failed')
@@ -46,7 +47,7 @@ export function BlueprintView({ runId }: { runId: string }) {
     const t = setInterval(async () => {
       try {
         const r = await getRun(runId)
-        setRun(r.run)
+        setRun(r)
         if (r.spec) { setSpec(r.spec); setVersionId(r.version_id); }
         if (['done', 'degraded', 'failed', 'cancelled'].includes(r.run?.status)) clearInterval(t)
       } catch { /* keep polling */ }
@@ -91,12 +92,16 @@ export function BlueprintView({ runId }: { runId: string }) {
     } finally { setBusy(false) }
   }
 
-  const status = run?.status || 'loading'
+  const status = run?.run?.status || 'loading'
   const entities = spec?.model?.entities || []
   const pages = spec?.ui?.pages || []
   const rules = spec?.access?.rules || []
   const assumptions = spec?.assumptions || []
   const automations = spec?.automations || []
+  const steps = (run?.steps as any[]) || []
+  const projectId = run?.run?.project_id || null
+  const llmCalls = run?.llm_calls ?? null
+  const degradedSteps = run?.degraded_steps || []
 
   return (
     <div style={{ display: 'grid', gap: 12 }}>
@@ -232,6 +237,32 @@ export function BlueprintView({ runId }: { runId: string }) {
           </div>
         )}
       </div>
+
+      {status !== 'loading' && (
+        <div className="glass" style={{ padding: '12px 14px', borderRadius: 14 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 8 }}>
+            Build report{llmCalls !== null ? ` · ${llmCalls} LLM calls` : ''}
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 12 }}>
+            {steps.map((s: any) => (
+              <span key={s.step_key} title={s.fallback_reason || s.step_key}
+                className={`pill status-${s.status}`}>
+                {s.step_key.replace('s', 'S')}: {s.status}
+              </span>
+            ))}
+            {steps.length === 0 && <span className="muted">Steps appear as the run progresses.</span>}
+          </div>
+          {degradedSteps.length > 0 && (
+            <div style={{ fontSize: 12, color: '#FCD34D', marginTop: 6 }}>
+              Degraded (deterministic fallback): {degradedSteps.join(', ')}
+            </div>
+          )}
+        </div>
+      )}
+
+      <Suspense fallback={null}>
+        <VersionTimeline projectId={projectId} onPick={(vid, s) => { setSpec(s); setVersionId(vid); setMsg('Viewing an older version — edits branch from here.'); }} />
+      </Suspense>
 
       {spec && (
         <div className="glass" style={{ padding: '12px 14px', borderRadius: 14 }}>

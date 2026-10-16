@@ -16,6 +16,111 @@ class PatchError(ValueError):
     pass
 
 
+def _esc(seg: str) -> str:
+    return str(seg).replace("~", "~0").replace("/", "~1")
+
+
+def diff(old, new, path: str = "") -> list:
+    """Compute an RFC 6902 patch turning old into new (dicts/lists/scalars).
+
+    Arrays diff by index (documented limitation: moves show as remove+add).
+    Round-trips through apply(); covered by property tests.
+    """
+    ops: list = []
+    if isinstance(old, dict) and isinstance(new, dict):
+        for k in old:
+            if k not in new:
+                ops.append({"op": "remove", "path": f"{path}/{_esc(k)}"})
+        for k, v in new.items():
+            p = f"{path}/{_esc(k)}"
+            if k not in old:
+                ops.append({"op": "add", "path": p, "value": copy.deepcopy(v)})
+            else:
+                ops.extend(diff(old[k], v, p))
+    elif isinstance(old, list) and isinstance(new, list):
+        for i in range(min(len(old), len(new))):
+            ops.extend(diff(old[i], new[i], f"{path}/{i}"))
+        if len(new) > len(old):
+            for i in range(len(old), len(new)):
+                ops.append({"op": "add", "path": f"{path}/-",
+                            "value": copy.deepcopy(new[i])})
+        elif len(old) > len(new):
+            for i in range(len(old) - 1, len(new) - 1, -1):
+                ops.append({"op": "remove", "path": f"{path}/{i}"})
+    elif old != new:
+        ops.append({"op": "replace", "path": path or "/",
+                    "value": copy.deepcopy(new)})
+    return ops
+
+
+def _last(ptr: str) -> str:
+    return ptr.split("/")[-1].replace("~1", "/").replace("~0", "~")
+
+
+def _raw_tail(path: str) -> list:
+    return [s.replace("~1", "/").replace("~0", "~") for s in path.split("/")[1:]]
+
+
+def _entity_at(doc, parts: list) -> str | None:
+    """Entity id enclosing a path (walks `entities/<idx>`), or None."""
+    try:
+        for i, p in enumerate(parts):
+            if p == "entities" and i + 1 < len(parts) and str(parts[i + 1]).isdigit():
+                ent = ((doc.get("model") or {}).get("entities") or [])[int(parts[i + 1])]
+                if isinstance(ent, dict) and ent.get("id"):
+                    return ent["id"]
+    except Exception:
+        pass
+    return None
+
+
+def summarize_ops(ops: list, doc=None) -> list:
+    """One human sentence per patch op for chat/version displays.
+
+    doc (the new spec) resolves entity names for field-level ops.
+    """
+    out = []
+    for op in ops or []:
+        kind = op.get("op")
+        path = op.get("path", "")
+        tail = _raw_tail(path)
+        leaf = tail[-1] if tail else ""
+        val = op.get("value") if isinstance(op.get("value"), dict) else {}
+        if kind == "add" and tail[-2:-1] == ["fields"]:
+            ent = _entity_at(doc, tail) or "entity"
+            out.append(f"Added field {val.get('id', leaf)} to {ent}")
+        elif kind == "add" and tail[-2:-1] == ["entities"]:
+            out.append(f"Added entity {val.get('id', leaf)}")
+        elif kind == "add" and tail[-2:-1] == ["pages"]:
+            out.append(f"Added page {val.get('id', leaf)}")
+        elif kind == "add" and tail[-2:-1] == ["roles"]:
+            out.append(f"Added role {val.get('id', leaf)}")
+        elif kind == "remove" and tail[-2:-1] == ["fields"]:
+            ent = _entity_at(doc, tail) or "entity"
+            out.append(f"Removed field {leaf} from {ent}")
+        elif kind == "remove" and tail[-2:-1] == ["entities"]:
+            out.append(f"Removed entity {leaf}")
+        elif kind == "remove" and tail[-2:-1] == ["pages"]:
+            out.append(f"Removed page {leaf}")
+        elif kind == "remove" and tail[-2:-1] == ["roles"]:
+            out.append(f"Removed role {leaf}")
+        elif kind == "replace":
+            out.append(f"Changed {'/'.join(tail[-2:]) or 'root'}")
+        elif kind == "move":
+            out.append(f"Moved {_last(op.get('from', ''))} to {leaf or 'list'}")
+        elif kind == "copy":
+            out.append(f"Copied into {leaf or 'list'}")
+        elif kind == "test":
+            out.append(f"Verified {leaf or 'root'}")
+        elif kind == "add":
+            out.append(f"Added {leaf or 'item'}")
+        elif kind == "remove":
+            out.append(f"Removed {leaf or 'item'}")
+        else:
+            out.append(f"Edited {path or 'root'}")
+    return out
+
+
 def parse_pointer(ptr: str) -> list:
     """Split a JSON Pointer into segments (array indices as ints)."""
     if not isinstance(ptr, str):

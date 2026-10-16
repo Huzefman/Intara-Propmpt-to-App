@@ -176,3 +176,27 @@ def test_version_tree_rejects():
         t.get("nope")
     with pytest.raises(ValueError):
         t.undo(v1)
+
+
+def test_diff_round_trip_and_summaries():
+    import random
+    from engine.patch import diff, summarize_ops
+    a = {"model": {"entities": [{"id": "job", "fields": [{"id": "x"}]}]}}
+    b = {"model": {"entities": [{"id": "job", "fields": [{"id": "x"}, {"id": "y"}]},
+                                {"id": "inv"}]}}
+    ops = diff(a, b)
+    assert apply(a, ops) == b
+    assert apply(apply(a, ops), invert(a, ops)) == a
+    s = summarize_ops(ops, b)
+    assert any("field y" in x and "job" in x for x in s), s
+    assert any("entity inv" in x for x in s), s
+    # randomized diff round-trips
+    rng = random.Random(7)
+    for _ in range(60):
+        doc = {"a": [rng.randint(0, 5) for _ in range(rng.randint(0, 4))],
+               "b": {"c": rng.choice(["x", "y"])}}
+        doc2 = {"a": [rng.randint(0, 5) for _ in range(rng.randint(0, 4))],
+                "b": {"c": rng.choice(["x", "y"])}, "z": rng.randint(0, 2)}
+        ops = diff(doc, doc2)
+        assert apply(doc, ops) == doc2
+        assert isinstance(summarize_ops(ops, doc2), list)

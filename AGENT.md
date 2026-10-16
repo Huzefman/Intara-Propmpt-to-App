@@ -285,6 +285,11 @@
 - **Verify:** node **207/207 (1 skip)**; both tscs + vite build; python **193/193**, eval 5/5.
 - **Next:** Phase 8 remainder is now only: email key (blocked), 2 gold reviews (with user). Then Phase 9.
 
+### Session 23 — 2026-10-16 — Phase 9 slice 1 (timeline + report + diffs/undo) [x]
+- **Done:** `diff` + `summarize_ops` in engine/patch.py (round-trip + invert + 60 randomized cases); `009_version_summary.sql` (needs dashboard apply; Supabase writer degrades loudly without it); `create_version` summary plumbing (generate auto-summary, iterate/chat/manual summaries); `GET projects/{id}/versions` + `POST versions/{id}/revert` (4 endpoint tests); Studio `VersionTimeline` (summaries, parent diffs, view/undo) + build-report section in BlueprintView (steps, calls, degraded). Backend restarted, healthy.
+- **Verify:** python **195/195**, eval 5/5; both tscs + vite build.
+- **Next:** user applies 009 → Phase 9 slice 2 (gallery, plain/dev toggle, feedback).
+
 ---
 
 ## 5. Known problems / error register
@@ -340,7 +345,7 @@
 | Requirement coverage | n/a | — | ≥ 80 % (100 % musts) |
 | LLM calls per build (median) | _pending P0.2_ | — | ≤ 14 (≤ 6 strong) |
 | Time to live preview post-approval | _pending P0.2_ | — | ≤ 30 s |
-| Unit suite | 93/93 (2026-10-11) | 193/193 py + 207/207 node (2026-10-16) | green every session |
+| Unit suite | 93/93 (2026-10-11) | 195/195 py + 207/207 node (2026-10-16) | green every session |
 | Golden eval | 5/5 (2026-10-11) | 5/5 (2026-10-12) | 5/5 + new suites |
 
 **Baseline 2026-10-12, pre-Phase-1** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):

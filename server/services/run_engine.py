@@ -67,7 +67,7 @@ class RunStore:
         raise NotImplementedError
 
     def create_version(self, project_id: str, parent_id: str | None,
-                       spec: dict, source: str) -> str:
+                       spec: dict, source: str, summary: str | None = None) -> str:
         raise NotImplementedError
 
     def get_version(self, version_id: str) -> dict:
@@ -119,12 +119,13 @@ class MemoryRunStore(RunStore):
     def get_events(self, run_id):
         return list(self.events[run_id])
 
-    def create_version(self, project_id, parent_id, spec, source):
+    def create_version(self, project_id, parent_id, spec, source, summary=None):
         from engine.versions import spec_hash
         vid = self._id("v")
         self.versions[vid] = {"id": vid, "project_id": project_id,
                               "parent": parent_id, "spec": spec,
-                              "hash": spec_hash(spec), "source": source}
+                              "hash": spec_hash(spec), "source": source,
+                              "summary": summary}
         return vid
 
     def get_version(self, version_id):
@@ -194,11 +195,22 @@ class SupabaseRunStore(RunStore):
             "run_id", run_id).order("id").execute()
         return res.data or []
 
-    def create_version(self, project_id, parent_id, spec, source):
+    def create_version(self, project_id, parent_id, spec, source, summary=None):
         from engine.versions import spec_hash
-        res = self.supa.table("project_versions").insert(
-            {"project_id": project_id, "parent_id": parent_id, "spec": spec,
-             "spec_hash": spec_hash(spec), "source": source}).execute()
+        payload = {"project_id": project_id, "parent_id": parent_id, "spec": spec,
+                   "spec_hash": spec_hash(spec), "source": source}
+        if summary:
+            payload["summary"] = summary
+        try:
+            res = self.supa.table("project_versions").insert(payload).execute()
+        except Exception as e:
+            if summary and ("summary" in str(e).lower() or "column" in str(e).lower()):
+                # 009 not applied yet: degrade to summary-less insert, loudly
+                print("project_versions.summary missing (apply 009); storing without summary")
+                del payload["summary"]
+                res = self.supa.table("project_versions").insert(payload).execute()
+            else:
+                raise
         if not res.data:
             raise RuntimeError("project_versions insert failed")
         return res.data[0]["id"]
@@ -589,8 +601,14 @@ class RunEngine:
                     "llm_calls": self._llm_calls, "steps": self.store.get_steps(run_id)}
         # finalize: version the spec
         ctx["spec"]["seed"] = ctx.get("seed") or {}
+        _spec = ctx["spec"]
+        _auto_summary = (
+            f"Generated: {len((_spec.get('model') or {}).get('entities', []))} entities, "
+            f"{len((_spec.get('ui') or {}).get('pages', []))} pages"
+            + (f" ({len(degraded)} degraded: {', '.join(degraded)})" if degraded else ""))
         version_id = self.store.create_version(
-            project_id, inputs.get("base_version"), ctx["spec"], "generate")
+            project_id, inputs.get("base_version"), _spec, "generate",
+            summary=_auto_summary)
         status = "degraded" if degraded else "done"
         self.store.set_status(run_id, status)
         self.emit(run_id, "run_done",
@@ -705,7 +723,8 @@ class RunEngine:
             self.emit(run_id, "run_failed", {"error": "patched spec failed G0/G1"})
             return {"run_id": run_id, "status": "failed",
                     "error": "; ".join(problems)[:500]}
-        vid = self.store.create_version(project_id, base_vid, patched, "iterate")
+        vid = self.store.create_version(project_id, base_vid, patched, "iterate",
+                                            summary=out.get("summary", "")[:500] or None)
         self.store.set_status(run_id, "done")
         self.emit(run_id, "run_done", {"version": vid, "summary": out.get("summary", "")})
         return {"run_id": run_id, "status": "done", "version_id": vid,

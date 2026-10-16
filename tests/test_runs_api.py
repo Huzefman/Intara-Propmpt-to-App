@@ -108,3 +108,33 @@ def test_chat_validation(monkeypatch):
     assert r.status_code == 200
     body = r.json()
     assert body["run"]["id"] == rid and body["spec"] is None
+
+
+def test_versions_list_revert_and_summary(monkeypatch):
+    pytest.importorskip("fastapi")
+    pytest.importorskip("starlette.testclient")
+    from fastapi.testclient import TestClient
+    mod, eng, rid, vid = _engine_with_gold(monkeypatch)
+    c = TestClient(mod.app)
+    # patch stores its summary on the child version
+    r = c.post(f"/api/runs/{rid}/patch", json={
+        "base_version": vid,
+        "ops": [{"op": "replace", "path": "/app/tagline", "value": "v2"}],
+        "summary": "retitle"})
+    assert r.status_code == 200, r.text
+    child_id = r.json()["version_id"]
+    assert eng.store.get_version(child_id)["summary"] == "retitle"
+    # timeline lists parent→child with summaries
+    r = c.get("/api/projects/p1/versions")
+    assert r.status_code == 200, r.text
+    ids = [v["id"] for v in r.json()["versions"]]
+    assert ids == [vid, child_id]
+    assert r.json()["versions"][1]["summary"] == "retitle"
+    # revert the child → grandchild restoring the parent spec
+    r = c.post(f"/api/versions/{child_id}/revert", json={})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["spec"]["app"]["tagline"] != "v2"
+    assert eng.store.get_version(body["version_id"])["parent"] == child_id
+    # root has nothing to undo
+    assert c.post(f"/api/versions/{vid}/revert", json={}).status_code == 409

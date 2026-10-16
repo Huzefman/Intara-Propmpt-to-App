@@ -272,7 +272,8 @@ async def apply_patch(run_id: str, body: PatchIn):
             raise HTTPException(422, f"patched spec failed G0/G1: {'; '.join(problems)[:500]}")
         project_id = (base.get("project_id")
                       or _project_id_for_run(eng.store, run_id))
-        vid = eng.store.create_version(project_id, base_vid, patched, "manual")
+        vid = eng.store.create_version(project_id, base_vid, patched, "manual",
+                                           summary=body.summary.strip()[:500])
         eng.emit(run_id, "patched",
                  {"version": vid, "summary": body.summary.strip(),
                   "ops": len(body.ops)})
@@ -282,3 +283,60 @@ async def apply_patch(run_id: str, body: PatchIn):
         raise
     except Exception as e:
         raise HTTPException(500, f"apply patch failed: {e}")
+
+
+@router.get("/projects/{project_id}/versions")
+@router.get("/api/projects/{project_id}/versions")
+async def list_versions(project_id: str):
+    """Version timeline data: id/parent/source/time/summary + full specs."""
+    try:
+        eng = _engine()
+        store = eng.store
+        if hasattr(store, "supa"):
+            rows = (store.supa.table("project_versions")
+                    .select("id,project_id,parent_id,spec,spec_hash,source,summary,created_at")
+                    .eq("project_id", project_id).order("created_at").execute().data or [])
+            versions = [{
+                "id": r["id"], "parent": r.get("parent_id"), "spec": r.get("spec"),
+                "hash": (r.get("spec_hash") or "")[:12],
+                "source": r.get("source"), "summary": r.get("summary"),
+                "created_at": r.get("created_at"),
+            } for r in rows]
+        else:
+            versions = [{
+                "id": v["id"], "parent": v.get("parent"), "spec": v.get("spec"),
+                "hash": (v.get("hash") or "")[:12],
+                "source": v.get("source"), "summary": v.get("summary"),
+                "created_at": None,
+            } for v in store.versions.values() if v.get("project_id") == project_id]
+        return {"ok": True, "versions": versions}
+    except Exception as e:
+        raise HTTPException(500, f"versions failed: {e}")
+
+
+class RevertIn(BaseModel):
+    summary: str | None = None
+
+
+@router.post("/versions/{version_id}/revert")
+@router.post("/api/versions/{version_id}/revert")
+async def revert_version(version_id: str, body: RevertIn):
+    """Undo one step: new child version restoring the parent's spec."""
+    try:
+        eng = _engine()
+        ver = eng.store.get_version(version_id)
+        parent_id = ver.get("parent") or ver.get("parent_id")
+        if not parent_id:
+            raise HTTPException(409, "root version has nothing to undo")
+        parent = eng.store.get_version(parent_id)
+        project_id = ver.get("project_id") or parent.get("project_id")
+        summary = (body.summary or f"Reverted to {str(parent_id)[:8]}").strip()[:500]
+        vid = eng.store.create_version(
+            project_id, version_id, parent.get("spec") or {}, "manual",
+            summary=summary)
+        return {"ok": True, "version_id": vid, "summary": summary,
+                "spec": parent.get("spec") or {}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"revert failed: {e}")
