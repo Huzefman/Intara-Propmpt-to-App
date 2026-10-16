@@ -25,7 +25,7 @@ def test_node_runtime_suite_green():
         "engine/**/*.test.ts", "adapters/**/*.test.ts",
         "shell/*.test.ts", "blocks/*.test.ts", "testing/**/*.test.ts",
         "automation/**/*.test.ts", "storage/**/*.test.ts",
-        "auth/**/*.test.ts"],
+        "auth/**/*.test.ts", "editing/**/*.test.ts"],
         cwd=RUNTIME, capture_output=True, text=True, timeout=300)
     assert r.returncode == 0, f"runtime suite failed:\n{r.stdout[-3000:]}\n{r.stderr[-500:]}"
     assert "fail 0" in r.stdout, r.stdout[-500:]
