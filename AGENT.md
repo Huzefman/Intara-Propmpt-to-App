@@ -295,6 +295,10 @@
 - **Verify:** python **197/197**, eval 5/5; node **207/207**; both tscs + vite build.
 - **009 applied by user 2026-10-16** — verified live (probe insert/read/delete, zero residue). Summaries now persist.
 
+### Session 25 — 2026-10-16 — stop all in-flight wishes (ops) [x]
+- **Done (user-requested kill):** 2 v2 runs `running` → backend restarted (kills worker tasks) → boot sweeper flipped both to failed + requeued 1 step each. 3 orphaned v1 `wish_steps` (failed wishes) + 6 orphaned `run_steps` (failed runs) parked as failed with notes. Verified zero `running`/`building` rows everywhere; backend healthy.
+- **Next:** Phase 9 slice 3 / UAT as directed.
+
 ---
 
 ## 5. Known problems / error register
