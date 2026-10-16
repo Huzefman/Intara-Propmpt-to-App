@@ -299,6 +299,12 @@
 - **Done (user-requested kill):** 2 v2 runs `running` → backend restarted (kills worker tasks) → boot sweeper flipped both to failed + requeued 1 step each. 3 orphaned v1 `wish_steps` (failed wishes) + 6 orphaned `run_steps` (failed runs) parked as failed with notes. Verified zero `running`/`building` rows everywhere; backend healthy.
 - **Next:** Phase 9 slice 3 / UAT as directed.
 
+### Session 26 — 2026-10-16 — spaced-filename preview outage [x]
+- **Symptom:** HR wish `ready` but Trial preview errored — page files named `Daily Attendance.tsx` (spaces) produced `import { Daily Attendance }` (invalid JS). Validate gates never caught it: heavy gates run on template regen, light check ignores identifiers.
+- **Immediate:** repaired the wish's artifacts in DB (4 files → PascalCase + barrel + App imports/elements), verified zero broken identifiers remain.
+- **Systemic:** `page_ident()` + `normalize_frag()` in frontend_gen (template sites + end-of-pipeline normalization for LLM frags) + orchestrator final App/barrel slugged (labels/routes stay raw). 3 regression tests. Suite **200/200**, eval 5/5, backend restarted.
+- **Rule:** display names never enter code positions — filenames, imports, JSX, barrel all slugified at a single choke point.
+
 ---
 
 ## 5. Known problems / error register
