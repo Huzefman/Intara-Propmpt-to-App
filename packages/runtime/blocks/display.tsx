@@ -4,6 +4,17 @@ import { BlockShell } from "./chrome.tsx";
 import { displayPath, resolveState } from "./types.ts";
 import type { BlockHostProps, Rec } from "./types.ts";
 
+const TEXT_PATHS = ["title", "name", "common_name", "note"];
+
+/** First non-empty label among an optional override and common text fields. */
+function textOf(r: Rec, override?: string): string {
+  for (const p of [override, ...TEXT_PATHS].filter(Boolean) as string[]) {
+    const v = displayPath(r, p);
+    if (v !== "—") return v;
+  }
+  return "";
+}
+
 export function ChartBar({ block, rows, state, error }: BlockHostProps<{
   entity: string; title?: string; x: string; y?: string;
 }>) {
@@ -40,7 +51,6 @@ export function CalendarMonth({ block, rows, state, error, onAction }: BlockHost
 }>) {
   const st = resolveState(rows, undefined, state, error);
   const df = block.props.date_field;
-  const tf = block.props.title ?? "name";
   const days = new Map<string, Rec[]>();
   for (const r of rows ?? []) {
     const day = String(r[df] ?? "").slice(0, 10);
@@ -57,7 +67,7 @@ export function CalendarMonth({ block, rows, state, error, onAction }: BlockHost
               <strong>{d}</strong>
               {rs.map((r, i) => (
                 <button key={String(r["id"] ?? i)} onClick={() => onAction?.("open", r["id"])}>
-                  {displayPath(r, tf)}
+                  {textOf(r, block.props.title)}
                 </button>
               ))}
             </div>
@@ -72,15 +82,14 @@ export function ActivityTimeline({ block, rows, state, error }: BlockHostProps<{
   entity: string; date_field: string; title?: string;
 }>) {
   const st = resolveState(rows, undefined, state, error);
-  const tf = block.props.title ?? "note";
   return (
-    <BlockShell state={st} error={error}>
+    <BlockShell title={block.props.title} state={st} error={error}>
       {st === "ready" ? (
         <ol className="blk-timeline">
           {(rows ?? []).map((r, i) => (
             <li key={String(r["id"] ?? i)}>
               <span className="blk-date">{displayPath(r, block.props.date_field)}</span>
-              {" "}{displayPath(r, tf)}
+              {" "}{textOf(r)}
             </li>
           ))}
         </ol>

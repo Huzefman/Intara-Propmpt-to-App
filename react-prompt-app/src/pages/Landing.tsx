@@ -6,6 +6,7 @@ import { WishInput } from '../components/WishInput'
 import { Pillars, HowItWorks } from '../components/RocketSections'
 import { createWish, createPlan, askRag, reconcileWish, PlanAbortedError } from '../api/client'
 import { supabase } from '../supabase'
+import { DEMO, GITHUB_URL } from '../demo'
 import { useReveal } from '../hooks/useReveal'
 
 const heroContainer = {
@@ -47,6 +48,7 @@ export function Landing() {
   const [ragAns, setRagAns] = useState('')
 
   useEffect(() => {
+    if (DEMO) return
     supabase.from('wishes').select('id', { count: 'exact', head: true }).then(({ count }) => setCount(count ?? null)).then(() => {}, () => {})
   }, [])
 
@@ -105,18 +107,29 @@ export function Landing() {
             Intara listens beyond the heliopause. Describe any app — task tracker, blog, salon booking — and watch schemas, frontend, backend and specs emerge as stardust. Minimal. Fluid. Runnable.
           </motion.p>
           <motion.div variants={heroItem} style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
-            {EXAMPLES.slice(0, 4).map((ex) => (
+            {!DEMO && EXAMPLES.slice(0, 4).map((ex) => (
               <motion.button key={ex} whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} onClick={() => setPrompt(ex)} className="btn-ghost" style={{ fontSize: 11.5, fontWeight: 450, padding: '8px 12px', letterSpacing: '-0.01em' }}>{ex.slice(0, 34)}…</motion.button>
             ))}
           </motion.div>
           <motion.div variants={heroItem} style={{ marginTop: 14, fontSize: 11, fontWeight: 400, letterSpacing: '0.02em', color: 'var(--intara-dim)' }}>
-            {count !== null ? (
+            {DEMO ? (
+              <><span style={{ color: 'var(--intara-nebula-light)', fontWeight: 600 }}>10 gold apps</span> · static demo · runs in your browser <span style={{ opacity: 0.3, margin: '0 8px' }}>·</span> 3.7 light years away</>
+            ) : count !== null ? (
               <><span style={{ color: 'var(--intara-nebula-light)', fontWeight: 600 }}><CountUp value={count} /></span> wishes granted <span style={{ opacity: 0.3, margin: '0 8px' }}>·</span> 3.7 light years away</>
             ) : 'Intara listens from 3.7 light years away'}
           </motion.div>
           <motion.div variants={heroItem} style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
-            <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={scrollToWish} className="btn-primary" style={{ fontSize: 12.5, padding: '11px 20px' }}>Start weaving</motion.button>
-            <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => nav('/constellation')} className="btn-ghost" style={{ fontSize: 12.5 }}>View constellation</motion.button>
+            {DEMO ? (
+              <>
+                <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => nav('/templates')} className="btn-primary" style={{ fontSize: 12.5, padding: '11px 20px' }}>Open the 10 live apps</motion.button>
+                <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="btn-ghost" style={{ fontSize: 12.5, padding: '11px 20px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Source on GitHub</a>
+              </>
+            ) : (
+              <>
+                <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={scrollToWish} className="btn-primary" style={{ fontSize: 12.5, padding: '11px 20px' }}>Start weaving</motion.button>
+                <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => nav('/constellation')} className="btn-ghost" style={{ fontSize: 12.5 }}>View constellation</motion.button>
+              </>
+            )}
           </motion.div>
         </div>
         <motion.div variants={heroItem} style={{ display: 'grid', placeItems: 'center', padding: 8 }}>
@@ -124,15 +137,33 @@ export function Landing() {
         </motion.div>
       </motion.div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase', color: staged ? 'var(--intara-nebula-light)' : 'var(--intara-dim)' }}>Build mode</span>
-        <button onClick={() => setStaged(true)} style={{ padding: '6px 12px', borderRadius: 999, fontSize: 11.5, fontWeight: staged ? 600 : 450, border: staged ? '1px solid rgba(139,92,246,0.9)' : '1px solid rgba(255,255,255,0.06)', background: staged ? 'rgba(139,92,246,0.12)' : 'transparent', color: staged ? 'var(--intara-nebula-light)' : 'var(--intara-faint)', cursor: 'pointer' }}>Staged · plan → pages (detailed)</button>
-        <button onClick={() => setStaged(false)} style={{ padding: '6px 12px', borderRadius: 999, fontSize: 11.5, fontWeight: !staged ? 600 : 450, border: !staged ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(255,255,255,0.06)', background: !staged ? 'rgba(255,255,255,0.06)' : 'transparent', color: !staged ? 'var(--intara-text)' : 'var(--intara-faint)', cursor: 'pointer' }}>One-shot quick</button>
-        <span style={{ fontSize: 10.5, color: 'var(--intara-dim)', marginLeft: 6 }}>{staged ? 'Clarity check → Q&A → plan approval → sequential build → live trial' : 'Single prompt → artifacts'}</span>
-      </div>
-      <div ref={wishRef} style={{ scrollMarginTop: 90 }}>
-        <WishInput value={prompt} onChange={setPrompt} onSubmit={onWeave} loading={loading} placeholder={staged ? "I wish for a hackathon manager with teams, projects, votes..." : "I wish for a..."} autoFocus />
-      </div>
+      {!DEMO && (
+        <>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase', color: staged ? 'var(--intara-nebula-light)' : 'var(--intara-dim)' }}>Build mode</span>
+            <button onClick={() => setStaged(true)} style={{ padding: '6px 12px', borderRadius: 999, fontSize: 11.5, fontWeight: staged ? 600 : 450, border: staged ? '1px solid rgba(139,92,246,0.9)' : '1px solid rgba(255,255,255,0.06)', background: staged ? 'rgba(139,92,246,0.12)' : 'transparent', color: staged ? 'var(--intara-nebula-light)' : 'var(--intara-faint)', cursor: 'pointer' }}>Staged · plan → pages (detailed)</button>
+            <button onClick={() => setStaged(false)} style={{ padding: '6px 12px', borderRadius: 999, fontSize: 11.5, fontWeight: !staged ? 600 : 450, border: !staged ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(255,255,255,0.06)', background: !staged ? 'rgba(255,255,255,0.06)' : 'transparent', color: !staged ? 'var(--intara-text)' : 'var(--intara-faint)', cursor: 'pointer' }}>One-shot quick</button>
+            <span style={{ fontSize: 10.5, color: 'var(--intara-dim)', marginLeft: 6 }}>{staged ? 'Clarity check → Q&A → plan approval → sequential build → live trial' : 'Single prompt → artifacts'}</span>
+          </div>
+          <div ref={wishRef} style={{ scrollMarginTop: 90 }}>
+            <WishInput value={prompt} onChange={setPrompt} onSubmit={onWeave} loading={loading} placeholder={staged ? "I wish for a hackathon manager with teams, projects, votes..." : "I wish for a..."} autoFocus />
+          </div>
+        </>
+      )}
+      {DEMO && (
+        <div className="glass" style={{ padding: 18, borderRadius: 18, display: 'grid', gap: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 550, fontFamily: 'Space Grotesk', letterSpacing: '-0.02em' }}>This is the static demo — the builder itself runs locally</div>
+          <div style={{ fontSize: 12, fontWeight: 400, color: 'var(--intara-faint)', lineHeight: 1.7, letterSpacing: '-0.01em' }}>
+            The full pipeline (wish → validated spec → gates → runnable app) needs the FastAPI backend and LLM keys.
+            Here you can open the <span style={{ color: 'var(--intara-muted)' }}>10 human-reviewed gold apps</span> and use every block —
+            create rows, filter, drag cards, switch roles, export CSV, print — all executed by the spec runtime in your browser.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn-primary" onClick={() => nav('/templates')} style={{ fontSize: 12.5 }}>Open the live apps</button>
+            <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="btn-ghost" style={{ fontSize: 12.5, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Source on GitHub</a>
+          </div>
+        </div>
+      )}
       {err && <div style={{ marginTop: 12, fontSize: 12.5, fontWeight: 450, color: '#FCA5A5', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.14)', padding: '12px 14px', borderRadius: 14, backdropFilter: 'blur(12px)' }}>{err} <button onClick={() => nav('/constellation')} className="btn-ghost btn-sm" style={{ marginLeft: 8 }}>Open Constellation</button></div>}
       {weaveNote && !err && <div style={{ marginTop: 12, fontSize: 12.5, color: 'var(--intara-nebula-light)' }}>{weaveNote}</div>}
 
@@ -153,6 +184,7 @@ export function Landing() {
       </div>
 
       {/* Archives — scroll reveal */}
+      {!DEMO && (
       <div ref={archivesRef} className="glass reveal" style={{ marginTop: 16, padding: 16 }}>
         <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--intara-faint)' }}>Consult archives — RAG</div>
         <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
@@ -161,6 +193,7 @@ export function Landing() {
         </div>
         {ragAns && <pre className="code-block" style={{ marginTop: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>{ragAns}</pre>}
       </div>
+      )}
     </div>
   )
 }

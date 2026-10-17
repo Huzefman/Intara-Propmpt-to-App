@@ -26,6 +26,17 @@ export function resolveState(rows?: Rec[], record?: Rec | null, explicit?: Block
   return "ready";
 }
 
+/** Human label for hydrated ref values (objects/arrays of rows). */
+function labelOf(v: unknown): string {
+  if (typeof v !== "object" || v === null) return String(v);
+  const o = v as Rec;
+  for (const k of ["name", "full_name", "common_name", "title", "label", "id"]) {
+    const s = o[k];
+    if (typeof s === "string" && s) return s;
+  }
+  return "—";
+}
+
 /** Dotted display paths: customer.name. Missing → em dash. */
 export function displayPath(row: Rec, path: string): string {
   let cur: unknown = row;
@@ -35,5 +46,7 @@ export function displayPath(row: Rec, path: string): string {
   }
   if (cur === undefined || cur === null) return "—";
   if (typeof cur === "boolean") return cur ? "yes" : "no";
+  if (Array.isArray(cur)) return cur.map(labelOf).join(", ");
+  if (typeof cur === "object") return labelOf(cur);
   return String(cur);
 }

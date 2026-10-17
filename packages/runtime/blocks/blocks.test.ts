@@ -90,4 +90,9 @@ test("display paths for cards and cells", () => {
   assert.equal(displayPath(row, "done"), "yes");
   assert.equal(displayPath(row, "qty"), "3");
   assert.equal(displayPath(row, "qty.x"), "—");
+  assert.equal(displayPath({ customer: { name: "Anita", id: "c1" } }, "customer"), "Anita");
+  assert.equal(displayPath({ customer: { id: "c1" } }, "customer"), "c1");
+  assert.equal(displayPath({ tags: [{ name: "a" }, { title: "b" }] }, "tags"), "a, b");
+  assert.equal(displayPath({ plant: { common_name: "Tomato", id: "p1" } }, "plant"), "Tomato");
+  assert.equal(displayPath({ blob: {} }, "blob"), "—");
 });

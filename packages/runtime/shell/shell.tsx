@@ -24,9 +24,9 @@ export function AppShell({ spec, session, activePage, onNavigate, onRole, childr
   const entries = navForRole(spec, session.current);
   const vars = themeToCssVars(spec.ui.theme) as React.CSSProperties;
   return (
-    <div className="intara-shell" style={vars}>
-      <nav className="intara-nav">
-        <span className="intara-app">{spec.app.name}</span>
+    <div className="app-shell" style={vars}>
+      <nav className="app-nav">
+        <span className="app-brand">{spec.app.name}</span>
         {entries.map((e) => (
           <button
             key={e.pageId}
@@ -46,7 +46,7 @@ export function AppShell({ spec, session, activePage, onNavigate, onRole, childr
           ))}
         </select>
       </nav>
-      <main className="intara-main">{children}</main>
+      <main className="app-main">{children}</main>
     </div>
   );
 }

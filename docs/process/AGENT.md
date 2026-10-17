@@ -319,6 +319,15 @@
 - **Verify:** pytest **201/201**, eval 5/5, tsc clean, node suite 206+1 skip (via helper).
 - **Next:** portfolio packaging 2/6 — static demo mode (bundled exemplars, offline gallery) for the Vercel live link.
 
+### Session 29 — 2026-10-17 — portfolio packaging 2/6 (static demo + runtime display fixes) [x]
+- **Static demo (`VITE_DEMO=1`):** bundled the 10 gold specs (`src/demo/exemplars.ts`, `import.meta.glob`); Landing shows a demo panel ("Open the 10 live apps"), Header drops Wish/Build nav + adds "Static demo · no backend", GalleryView falls back to bundled specs offline, routes limited to `/`, `/templates`; `useAuth` disabled and supabase counts guarded. Offline smoke: 10 apps render, zero network calls, no page errors.
+- **Runtime visual layer:** blocks emitted `blk-*` with **no stylesheet** — new `packages/runtime/blocks/blocks.css` (dark glass for shell + every block) imported by `RuntimePreview.tsx`. Shell classes namespaced `intara-*` → `app-*`: the preview inherited the Studio page's `.intara-shell` (100vh starfield) causing stretched/over-styled previews.
+- **Display correctness:** `FilterBar` no longer derives "empty" from zero rows (controls are ready unless host says otherwise); `displayPath` falls back to name/full_name/common_name/title/label/id for object/array values (hydrated refs); `ActivityTimeline`/`CalendarMonth` no longer read the `title` prop as a row path — it's the block heading, item text now picks the first non-empty of title/name/common_name/note; `RuntimePreview` hydrates ref ids to target rows **for display only** (forms/exports/transitions keep raw ids) and fills seed computed fields (leaves, then per-record reverse relations — mirrors `engine.test.ts` contract) so `total`/`hours_remaining` show real math; submitted records get computed fields too.
+- **GalleryView:** `RuntimePreview` keyed by app name — the persisted `RoleSession` kept the first app's role, so switching apps could render an empty nav.
+- **Capture tooling:** `scripts/capture.mjs` (playwright-core, system Chrome, no download) screenshots the demo + doubles as the offline smoke test → `docs/assets/demo-*.png`. Locator lesson: Playwright `getByRole(name)` is a case-insensitive **substring** match — "Board" hit "Dashboard"; use `exact: true`.
+- **Verify:** pytest **201/201**, eval 5/5, tsc clean (studio + demo), node suite 206+1 skip, `VITE_DEMO=1 npm run build` green, capture smoke OK (10 apps, no page errors).
+- **Next:** portfolio packaging 3/6 — README draft + user-side GitHub rename (`intara`, public) and Vercel import (root `react-prompt-app`, env `VITE_DEMO=1`), then live URL into README.
+
 ---
 
 ## 5. Known problems / error register
@@ -360,6 +369,7 @@
 33. 2026-10-15 · Supabase contract subtests shared one table across fresh adapters (entity names collide) · per-subtest hard-clean hook in shared contract (memory/dexie unaffected) · **FIXED (18/18 all adapters)**
 34. 2026-10-15 · Live-network test keyed on ambient env: a leaked shell export + transient fetch failure flaked the gate suite · live tests are INTARA_LIVE=1 opt-in, never ambient · **FIXED**
 35. 2026-10-16 · Batch-2 review port: G3 caught a real seed gap the review missed (task row t7 without estimate_hours, needed by a computed formula) · added the missing value (flagged to reviewer); rule of thumb: G3-over-golds is the last reviewer · **FIXED**
+36. 2026-10-17 · Demo pass exposed four presentation-layer defects together: (a) preview shell reused Studio `.intara-shell` (100vh starfield leak), (b) `FilterBar` resolved "empty" from its empty rows list, (c) ref columns/detail/timeline/calendar showed ids or em dashes (no ref hydration; `title` prop misread as a row path; seed computed fields never filled), (d) switching gallery apps kept the first app's RoleSession → empty nav · fixed all four in session 29 (class namespace, ready default, display hydration + computed seeding, keyed remount) · **FIXED**
 ---
 
 ## 6. Metrics dashboard

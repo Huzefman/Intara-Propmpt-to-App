@@ -1,7 +1,8 @@
 import { Suspense, lazy } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { Landing } from './pages/Landing'
+import { DEMO } from './demo'
 import './theme/intara.css'
 
 const WishVault = lazy(() => import('./pages/WishVault').then(m => ({ default: m.WishVault })))
@@ -23,14 +24,22 @@ export default function App() {
     <BrowserRouter>
       <Layout>
         <Suspense fallback={<RouteFallback />}>
-          <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/wish/:id" element={<WishVault />} />
-            <Route path="/runs/:id" element={<RunPage />} />
-            <Route path="/templates" element={<GalleryPage />} />
-            <Route path="/constellation" element={<Constellation />} />
-            <Route path="/archives" element={<Archives />} />
-          </Routes>
+          {DEMO ? (
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/templates" element={<GalleryPage />} />
+              <Route path="*" element={<Navigate to="/templates" replace />} />
+            </Routes>
+          ) : (
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/wish/:id" element={<WishVault />} />
+              <Route path="/runs/:id" element={<RunPage />} />
+              <Route path="/templates" element={<GalleryPage />} />
+              <Route path="/constellation" element={<Constellation />} />
+              <Route path="/archives" element={<Archives />} />
+            </Routes>
+          )}
         </Suspense>
       </Layout>
     </BrowserRouter>

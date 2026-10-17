@@ -1,12 +1,21 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { isSupabaseDemo } from '../supabase'
+import { DEMO, GITHUB_URL } from '../demo'
 
 export function Header() {
   const loc = useLocation()
   const nav = useNavigate()
-  const { user } = useAuth()
+  const { user } = useAuth(!DEMO)
   const isActive = (p: string) => loc.pathname === p || (p !== '/' && loc.pathname.startsWith(p))
+  const links = DEMO
+    ? [{ to: '/templates', label: 'Live apps' }]
+    : [
+        { to: '/', label: 'Wish' },
+        { to: '/templates', label: 'Templates' },
+        { to: '/constellation', label: 'Constellation' },
+        { to: '/archives', label: 'Archives' },
+      ]
   return (
     <header style={{
       position: 'sticky', top: 0, zIndex: 20,
@@ -20,12 +29,7 @@ export function Header() {
           <span style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', border: '1px solid rgba(255,255,255,0.06)', padding: '3px 8px', borderRadius: 999, background: 'rgba(255,255,255,0.02)' }}>Planet of Wishes</span>
         </Link>
         <nav style={{ display: 'flex', gap: 2, marginLeft: 16 }}>
-          {[
-            { to: '/', label: 'Wish' },
-            { to: '/templates', label: 'Templates' },
-            { to: '/constellation', label: 'Constellation' },
-            { to: '/archives', label: 'Archives' },
-          ].map((l) => (
+          {links.map((l) => (
             <Link
               key={l.to}
               to={l.to}
@@ -41,12 +45,21 @@ export function Header() {
           ))}
         </nav>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-          {isSupabaseDemo ? (
-            <span style={{ fontSize: 11, fontWeight: 450, color: 'var(--intara-faint)', border: '1px solid rgba(255,255,255,0.05)', padding: '6px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.02)' }}>Demo · MEM</span>
-          ) : user ? (
-            <span style={{ fontSize: 11, color: 'var(--intara-muted)', border: '1px solid rgba(255,255,255,0.06)', padding: '6px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.02)' }}>{user.email?.slice(0, 18)}</span>
-          ) : null}
-          <button onClick={() => nav('/')} className="btn-ghost" style={{ fontSize: 12.5, padding: '9px 16px', fontWeight: 500 }}>New wish ✦</button>
+          {DEMO ? (
+            <>
+              <span style={{ fontSize: 11, fontWeight: 450, color: 'var(--intara-faint)', border: '1px solid rgba(255,255,255,0.05)', padding: '6px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.02)' }}>Static demo · no backend</span>
+              <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="btn-ghost" style={{ fontSize: 12.5, padding: '9px 16px', fontWeight: 500, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>GitHub</a>
+            </>
+          ) : (
+            <>
+              {isSupabaseDemo ? (
+                <span style={{ fontSize: 11, fontWeight: 450, color: 'var(--intara-faint)', border: '1px solid rgba(255,255,255,0.05)', padding: '6px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.02)' }}>Demo · MEM</span>
+              ) : user ? (
+                <span style={{ fontSize: 11, color: 'var(--intara-muted)', border: '1px solid rgba(255,255,255,0.06)', padding: '6px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.02)' }}>{user.email?.slice(0, 18)}</span>
+              ) : null}
+              <button onClick={() => nav('/')} className="btn-ghost" style={{ fontSize: 12.5, padding: '9px 16px', fontWeight: 500 }}>New wish ✦</button>
+            </>
+          )}
         </div>
       </div>
     </header>

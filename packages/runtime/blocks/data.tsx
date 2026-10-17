@@ -90,7 +90,7 @@ export function Kanban({ block, rows, state, error, onAction }: BlockHostProps<{
 export function FilterBar({ block, state, error, onAction }: BlockHostProps<{
   entity: string; fields?: string[]; search?: string[];
 }>) {
-  const st = resolveState([], undefined, state, error);
+  const st = error ? "error" : (state ?? "ready");
   const [q, setQ] = React.useState("");
   return (
     <BlockShell state={st} error={error}>
