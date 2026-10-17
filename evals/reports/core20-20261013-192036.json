@@ -1,0 +1,24 @@
+{
+ "n": 1,
+ "pass_g0g1": 0,
+ "rate": 0.0,
+ "median_wall_s": null,
+ "median_llm_calls": null,
+ "diversity": {
+  "distinct_combos": 0,
+  "mean_entity_overlap": 0.0
+ },
+ "results": [
+  {
+   "prompt": "A task tracker with projects, tasks and due dates",
+   "domain": "productivity",
+   "heldout": false,
+   "status": "failed",
+   "run_id": "f7c882dc-9c0c-42b8-ab35-12c51a15b360",
+   "version_id": null,
+   "wall_s": 204.2,
+   "llm_calls": 7,
+   "degraded_steps": []
+  }
+ ]
+}

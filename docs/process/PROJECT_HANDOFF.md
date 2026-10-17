@@ -2,10 +2,10 @@
 
 > **For:** a smart planning agent deciding where to steer this project.
 > **Companions (read in this order):** this file (decisions + state) →
-> `AGENT.md` (phased build ledger, sessions 0–26, error register §5) →
+> `AGENT.md` (phased build ledger, sessions 0–28, error register §5) →
 > `INTARA_ARCHITECTURE_GUIDE.md` (target architecture + why, 1170 lines) →
 > `PROJECT_SPEC_FOR_PLANNING_AGENT.md` (system as-built).
-> **Rule if anything disagrees:** trust code, then fix the doc.
+> All four live in `docs/process/`. **Rule if anything disagrees:** trust code, then fix the doc.
 
 ## 1. What this is
 

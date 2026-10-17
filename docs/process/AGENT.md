@@ -48,7 +48,7 @@
 | v2 pipeline | `server/agents/` (schemas/prompts/base/stages), `server/services/run_engine.py` | S0–S6 + Critic + Edit; budgets + resume + SSE v2 |
 | v2 API | `server/routers/runs.py` | start/status/events/approve/chat; wish writeback |
 | Tests | `tests/` (93 green baseline) | + `scripts/eval.py` (5/5) + `scripts/seed_components.py` |
-| Guide + spec | `INTARA_ARCHITECTURE_GUIDE.md`, `PROJECT_SPEC_FOR_PLANNING_AGENT.md` | Read both before planning |
+| Guide + spec | `docs/process/INTARA_ARCHITECTURE_GUIDE.md`, `docs/process/PROJECT_SPEC_FOR_PLANNING_AGENT.md` | Read both before planning |
 | Builds proof | `builds/photovault.zip` | Deterministic-build example |
 | Runtime (to build) | `packages/runtime/` *(proposed)* | Does not exist yet |
 | Spec schema (to build) | `packages/spec/` *(proposed)* | Does not exist yet |
@@ -311,6 +311,14 @@
 - **Live note:** HR retry of backend-users STILL fell back (all-provider 429/timeout wave incl. new groq 400). Quota hostile tonight — stop retrying till fresh quota; seed/slug fixes load on next restart.
 - **Verify:** template gates 16/16 (this area); full suite + restart deferred to after the running build lands.
 
+### Session 28 — 2026-10-17 — portfolio packaging 1/6 (hygiene + docs restructure) [x]
+- **Secrets audit (full history, gitleaks):** 8 findings, all false positives — seed-data invitation tokens (`"token": "inv_abc123xyz"`) in the social gold spec copied into core20 reports. No real credentials ever committed (`.env` files never tracked; only placeholders in history). `.gitleaks.toml` allowlist added so scans stay clean. **No rotation needed, no history rewrite.**
+- **Hygiene:** `server/backend.log` untracked (#12 closed); `.gitignore` += `*.log`, `core20.progress.json`, PDF/docx duplicates, review `files.zip`; committed real-but-untracked code (`packages/runtime/blocks/csv.ts` + test) and eval evidence (cassettes + core20 rerun reports).
+- **Docs:** root ledgers moved under `docs/process/` (git mv, history preserved): AGENT, PROJECT_HANDOFF, guide, spec, architecture, implementation, LOOM, intara-portfolio-shift; review candidates → `docs/process/reviews/`. MIT LICENSE added.
+- **Node robustness:** machine default node is v22.12 (`/usr/local/bin/node`, homebrew node absent) → type-stripped `.ts` tests were red. New `tests/_nodeutil.py` adds `--experimental-strip-types` when node < 22.18 → formula twin + runtime suite green locally again (no test skipped). CI will pin Node 24.
+- **Verify:** pytest **201/201**, eval 5/5, tsc clean, node suite 206+1 skip (via helper).
+- **Next:** portfolio packaging 2/6 — static demo mode (bundled exemplars, offline gallery) for the Vercel live link.
+
 ---
 
 ## 5. Known problems / error register
@@ -328,7 +336,7 @@
 9. 2026-10-11 · `VITE_API_URL` unused (client uses relative `/api` + proxy); `src/data/` empty; `TableExplorer.tsx`/`frontend_gen_new.py` referenced in stale docs but absent · cleanup at monorepo move · **OPEN**
 10. 2026-10-12 · Analyzer validator false-positive: `page Summary needs a table binding in crud mode` discarded a live LLM plan into mock fallback · relax/scope the rule in Phase 1 (with fixture) · **OPEN**
 11. 2026-10-12 · Free pools drain mid-run (Gemini 429 + OpenRouter upstream 429s during 20-wish baseline) · baseline cadence + per-tier budgets in Phase 1/2 · **OPEN**
-12. 2026-10-12 · `server/backend.log` is git-tracked runtime noise — never stage it · consider `git rm --cached` + gitignore entry · **OPEN**
+12. 2026-10-12 · `server/backend.log` is git-tracked runtime noise — never stage it · ~~consider `git rm --cached` + gitignore entry~~ · **FIXED (session 28: untracked + `*.log` ignore)**
 13. 2026-10-12 · Shipped `IndentationError` (`frontend_gen.py:181`, game branch) survived because full suite wasn't re-run post-edit in that session · rule: no session ends without the §0 verification trio · **FIXED (suite now gates it)**
 14. 2026-10-12 · `/api/wishes/health` returned UUID syntax error — router `/wishes/{wid}` matched first · fixed by mounting routers after direct routes + regression test · **FIXED**
 15. 2026-10-12 · Backend process died silently mid-session (health OK → port empty, no traceback) · cause unknown; single-process runs have no supervisor · consider restart check in session start routine · **OPEN, watch**
@@ -366,7 +374,7 @@
 | Requirement coverage | n/a | — | ≥ 80 % (100 % musts) |
 | LLM calls per build (median) | _pending P0.2_ | — | ≤ 14 (≤ 6 strong) |
 | Time to live preview post-approval | _pending P0.2_ | — | ≤ 30 s |
-| Unit suite | 93/93 (2026-10-11) | 197/197 py + 207/207 node (2026-10-16) | green every session |
+| Unit suite | 93/93 (2026-10-11) | 201/201 py + 206/207 node (2026-10-17) | green every session |
 | Golden eval | 5/5 (2026-10-11) | 5/5 (2026-10-12) | 5/5 + new suites |
 
 **Baseline 2026-10-12, pre-Phase-1** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):
@@ -391,4 +399,4 @@
 - **LLM spend:** measure first (Phase 0); cache by input hash; cassettes for CI; live evals only on manual dispatch; template gallery costs $0 — use it for demos.
 - **Commits:** code + AGENT.md update together, every session. Never leave the tree red.
 
-*End of AGENT.md v3 — Sessions 0–2 done, Session 3 closed Phase 1. Next: Phase 2 telemetry + cassettes.*
+*End of AGENT.md v3 — phases 0–9 code-complete; core20 17/20; portfolio packaging sessions 28+ underway (docs live under `docs/process/`).*

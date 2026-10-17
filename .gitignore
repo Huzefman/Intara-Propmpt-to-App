@@ -9,3 +9,12 @@ venv/
 .coverage
 .pytest_cache/
 .example-pages
+
+# Runtime logs (never commit)
+*.log
+evals/reports/core20.progress.json
+
+# Local duplicates of intara-portfolio-shift.md and review archives
+Intara as a Portfolio Project*.pdf
+*.docx
+docs/process/reviews/files.zip

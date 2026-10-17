@@ -1,0 +1,1 @@
+{"text": "{\"ping\":true}", "meta": {"provider": "groq", "model": "openai/gpt-oss-20b"}, "params": {"temperature": 0.2, "json_mode": true, "max_output_tokens": null, "max_tokens": null}}

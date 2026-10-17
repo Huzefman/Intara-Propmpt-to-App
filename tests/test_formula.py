@@ -88,7 +88,8 @@ def test_typescript_twin_passes_shared_cases():
     node = shutil.which("node")
     if not node:
         pytest.skip("node not installed")
-    r = subprocess.run([node, "--test", "packages/spec/formula/formula.test.ts"],
+    from tests._nodeutil import node_cmd
+    r = subprocess.run(node_cmd("--test", "packages/spec/formula/formula.test.ts"),
                        cwd=ROOT, capture_output=True, text=True, timeout=120)
     assert r.returncode == 0, f"node --test failed:\n{r.stdout[-2000:]}\n{r.stderr[-500:]}"
     assert "fail 0" in r.stdout, r.stdout[-500:]

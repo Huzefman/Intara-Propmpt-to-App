@@ -1,0 +1,10 @@
+# Intara — secret scanning config (gitleaks).
+# Audit 2026-10-17: the only gitleaks hits in full history (8) are false
+# positives — seed-data invitation tokens in the social gold spec (a
+# book-club app), e.g. "token": "inv_abc123xyz", copied into eval reports.
+# No real credentials were ever committed (.env files never tracked).
+title = "Intara"
+
+[allowlist]
+description = "Seed-data invitation tokens in gold specs and eval reports"
+regexes = ['''inv_[a-z0-9]{9}''']
