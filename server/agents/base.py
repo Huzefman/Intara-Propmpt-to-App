@@ -54,6 +54,17 @@ def run_agent(*, stage: str, prompt_version: str, prompt: str, output_model,
         tele.update(telemetry_extra)
     calls = 0
 
+    def _attribute(info: dict, outcome: str, repaired: bool = False) -> None:
+        """Best-effort: stamp the parse outcome onto this call's telemetry row."""
+        tid = info.get("telemetry_id") if isinstance(info, dict) else None
+        if tid is None:
+            return
+        try:
+            from services import telemetry as _tm
+            _tm.set_parse_outcome(tid, outcome, repaired)
+        except Exception:
+            pass
+
     def _call(prompt_text: str, temp: float):
         nonlocal calls
         info: dict = {}
@@ -66,9 +77,11 @@ def run_agent(*, stage: str, prompt_version: str, prompt: str, output_model,
             return None, {"error": f"{type(e).__name__}: {e}"}, info
         calls += 1
         trunc = detect_truncation(info.get("finish_reason"))
+        repair_rows: list[dict] = []
 
         def _repair(err: str, bad: str):
             rinfo: dict = {}
+            repair_rows.append(rinfo)
             fixed, _ = caller(
                 f"Fix this to valid JSON (parse error: {err}): {bad}",
                 temperature=0.1, json_mode=True, info=rinfo, telemetry=tele)
@@ -78,8 +91,14 @@ def run_agent(*, stage: str, prompt_version: str, prompt: str, output_model,
             data, repaired = parse_json_with_repair(text, _repair, truncated=trunc)
             if repaired:
                 calls += 1
+            _attribute(info, "repaired" if repaired else "ok", repaired)
+            for rinfo in repair_rows:
+                _attribute(rinfo, "ok")  # its text is the one that parsed
             return data, None, {**info, "repaired": repaired}
         except Exception as e:
+            _attribute(info, "failed")
+            for rinfo in repair_rows:
+                _attribute(rinfo, "failed")
             return None, {"error": f"parse: {e}"}, info
 
     data, err, info = _call(prompt, temperature)

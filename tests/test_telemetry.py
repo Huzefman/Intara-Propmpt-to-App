@@ -71,6 +71,7 @@ class _FakeExec:
 class _FakeTable:
     def __init__(self, error=None):
         self.inserted: list = []
+        self.updated: list = []
         self._error = error
 
     def insert(self, payload):
@@ -78,6 +79,15 @@ class _FakeTable:
             raise self._error
         self.inserted.append(payload)
         return _FakeExec(data=[{"id": 1}])
+
+    def update(self, payload):
+        if self._error:
+            raise self._error
+        self.updated.append(payload)
+        return self
+
+    def eq(self, *a):
+        return self
 
     def select(self, *a):
         return self
@@ -139,6 +149,53 @@ def test_record_disables_on_missing_table(monkeypatch):
     tm.reset_for_tests()
 
 
+def test_record_threads_row_id_into_info_out(monkeypatch):
+    import services.telemetry as tm
+    importlib.reload(tm)
+    tm.reset_for_tests()
+    fake = _FakeTable()
+    _patch_db_client(monkeypatch, fake)
+    out: dict = {}
+    assert tm.record_llm_call(provider="groq", info_out=out) is True
+    assert out["telemetry_id"] == 1
+
+
+def test_set_parse_outcome_updates_row(monkeypatch):
+    import services.telemetry as tm
+    importlib.reload(tm)
+    tm.reset_for_tests()
+    fake = _FakeTable()
+    fake._rows = [{"id": 7}]  # PostgREST returns updated rows on .select("id")
+    _patch_db_client(monkeypatch, fake)
+    assert tm.set_parse_outcome(7, "repaired", True) is True
+    assert fake.updated == [{"parse_outcome": "repaired", "repair_used": True}]
+    # invalid enum rejected locally (DB check constraint would just noise)
+    assert tm.set_parse_outcome(7, "bogus") is False
+    assert tm.set_parse_outcome(None, "ok") is False
+    assert len(fake.updated) == 1
+
+
+def test_set_parse_outcome_zero_rows_warns(monkeypatch, capsys):
+    """RLS without migration 010 → update matches 0 rows → loud False, not silent."""
+    import services.telemetry as tm
+    importlib.reload(tm)
+    tm.reset_for_tests()
+    fake = _FakeTable()  # _rows defaults to [] — the no-op case
+    _patch_db_client(monkeypatch, fake)
+    assert tm.set_parse_outcome(7, "ok") is False
+    assert "migration" in capsys.readouterr().out.lower()
+
+
+def test_set_parse_outcome_fail_soft(monkeypatch):
+    import services.telemetry as tm
+    importlib.reload(tm)
+    tm.reset_for_tests()
+    fake = _FakeTable(error=RuntimeError("network down"))
+    _patch_db_client(monkeypatch, fake)
+    assert tm.set_parse_outcome(1, "ok") is False  # never raises
+    tm.reset_for_tests()
+
+
 def test_gateway_records_success_with_context(monkeypatch):
     llm = _fresh_llm(monkeypatch, {"GROQ_API_KEY": "x", "LLM_TELEMETRY": "1"})
     seen = {}
@@ -162,6 +219,28 @@ def test_gateway_records_success_with_context(monkeypatch):
     assert seen["tokens_in"] == 10 and seen["tokens_out"] == 5
     assert seen["wish_id"] == "w-9" and seen["agent"] == "planner"
     assert isinstance(seen["latency_ms"], int) and seen["latency_ms"] >= 0
+
+
+def test_gateway_threads_telemetry_id_into_info(monkeypatch):
+    llm = _fresh_llm(monkeypatch, {"GROQ_API_KEY": "x", "LLM_TELEMETRY": "1"})
+
+    def fake_inner(prompt, temperature=0.2, max_tokens=None, *, json_mode=False,
+                   max_output_tokens=None, info=None):
+        if info is not None:
+            info.update({"provider": "groq", "model": "m", "finish_reason": "stop"})
+        return "{}"
+
+    monkeypatch.setattr(llm, "_call_llm_inner", fake_inner)
+    import services.telemetry as tm
+
+    def fake_record(**kw):
+        kw["info_out"]["telemetry_id"] = 42
+        return True
+
+    monkeypatch.setattr(tm, "record_llm_call", fake_record)
+    info: dict = {}
+    assert llm.call_llm("hi", json_mode=True, info=info) == "{}"
+    assert info["telemetry_id"] == 42
 
 
 def test_gateway_attributes_fallback_reason(monkeypatch):
@@ -331,4 +410,17 @@ def test_migration_006a_additive_only():
     sql = open(fp).read().lower()
     assert "create table if not exists llm_calls" in sql
     for banned in ("alter table wishes", "alter table wish_steps", "drop table", "delete from"):
+        assert banned not in sql, f"migration must not contain: {banned}"
+
+
+def test_migration_010_narrow_update_only():
+    """Parse-outcome attribution: update on exactly two columns, nothing else."""
+    fp = os.path.join(ROOT, "supabase", "migrations",
+                      "010_llm_calls_outcome_attribution.sql")
+    sql = open(fp).read().lower()
+    assert "for update using (true) with check (true)" in sql
+    assert "grant update (parse_outcome, repair_used) on llm_calls" in sql
+    assert "revoke update on llm_calls from anon, authenticated" in sql
+    for banned in ("alter table wishes", "alter table wish_steps", "drop table",
+                   "delete from", "drop policy if exists \"llm calls append\""):
         assert banned not in sql, f"migration must not contain: {banned}"

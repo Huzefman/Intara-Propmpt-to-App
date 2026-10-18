@@ -13,6 +13,7 @@ venv/
 # Runtime logs (never commit)
 *.log
 evals/reports/core20.progress.json
+.ipynb_checkpoints/
 
 # Local duplicates of intara-portfolio-shift.md and review archives
 Intara as a Portfolio Project*.pdf

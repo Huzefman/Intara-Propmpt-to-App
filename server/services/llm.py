@@ -617,6 +617,7 @@ def _record_gateway_call(sub: dict | None, elapsed_s: float, telemetry: dict | N
             parse_outcome=ctx.get("parse_outcome"),
             repair_used=bool(ctx.get("repair_used", False)),
             fallback_reason=sub.get("fallback_reason") or ctx.get("fallback_reason"),
+            info_out=sub,  # sub["telemetry_id"] lets the agent attribute parse outcome
         )
     except Exception:
         pass
@@ -657,6 +658,8 @@ def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int | None = Non
                      temperature=temperature, json_mode=json_mode,
                      max_output_tokens=max_output_tokens, max_tokens=max_tokens)
     _record_gateway_call(sub, time.perf_counter() - t0, telemetry)
+    if info is not None and sub.get("telemetry_id") is not None:
+        info["telemetry_id"] = sub["telemetry_id"]
     return text
 
 
@@ -685,6 +688,8 @@ def call_llm_with_meta(prompt: str, temperature: float = 0.2, max_tokens: int | 
                      temperature=temperature, json_mode=json_mode,
                      max_output_tokens=max_output_tokens, max_tokens=max_tokens)
     _record_gateway_call(sub, time.perf_counter() - t0, telemetry)
+    if info is not None and sub.get("telemetry_id") is not None:
+        info["telemetry_id"] = sub["telemetry_id"]
     return text, meta
 
 

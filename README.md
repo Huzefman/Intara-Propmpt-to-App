@@ -39,7 +39,7 @@ The repo contains the whole system: the LLM pipeline, a durable resumable run en
 - **Spec-first runtime.** LLM stages emit small typed App Specs; the runtime engine (validation, defaults, computed fields, refs, permissions, guards, formulas) executes them. No LLM at runtime — the engine is deterministic and statically tested.
 - **Staged pipeline, fail-closed.** S0 intake → S6 seed with schema-validated outputs at every stage, bounded repair loops (≤2, cooling temperatures), and deterministic fallbacks that are *labelled and counted as failures* — never silent.
 - **Gates, not vibes.** G0 schema (Pydantic/TS generated from one JSON Schema + drift check) · G1 semantic lint R01–R50 (ported from two human review rounds) · G2 requirement coverage · G3 generated engine tests · G4 render smoke.
-- **Durable run engine.** Budgets, content-addressed artifacts, resume-after-crash by run id (proven live: a killed run resumed and finished), quota-aware retries across free-tier providers (Gemini / Groq / OpenRouter / Nvidia), per-call telemetry.
+- **Durable run engine.** Budgets, content-addressed artifacts, resume-after-crash by run id (proven live: a killed run resumed and finished), quota-aware retries across free-tier providers (Gemini / Groq / OpenRouter / Nvidia), per-call telemetry — 429 live calls analysed in [`notebooks/telemetry.ipynb`](notebooks/telemetry.ipynb) (provider mix, failure causes, latency, truncation).
 - **Own formula language.** Hand-written parser + evaluator in Python **and** TypeScript — no `eval` — with 135 shared conformance cases plus a 500-input fuzzer. Edits are RFC 6902 JSON patches with invert + version tree (1,175/1,175 randomized round-trips).
 
 ## Measured numbers (free-tier, lab)

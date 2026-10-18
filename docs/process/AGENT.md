@@ -328,6 +328,15 @@
 - **Verify:** pytest **201/201**, eval 5/5, tsc clean (studio + demo), node suite 206+1 skip, `VITE_DEMO=1 npm run build` green, capture smoke OK (10 apps, no page errors).
 - **Next:** portfolio packaging 3/6 — README draft + user-side GitHub rename (`intara`, public) and Vercel import (root `react-prompt-app`, env `VITE_DEMO=1`), then live URL into README.
 
+### Session 33 — 2026-10-18 — portfolio packaging 6/6 (telemetry analysis + per-call parse attribution) [x]
+- **Export:** `scripts/export_llm_calls.py` — Supabase → CSV (fail-soft, no prompts, paged). First export: **429 real calls** (2026-10-12 → 16) → `evals/telemetry/llm_calls.csv` (committed so reviewers can run the notebook without creds).
+- **Notebook:** `notebooks/telemetry.ipynb` (executed, outputs embedded; pandas+matplotlib in `notebooks/requirements.txt`). Findings: provider mix (groq 206 / nvidia 182 / openrouter 24 / gemini 17 — the "primary" served 4%); **62% of calls (265/429) succeeded only after a fallthrough, 85% of causes quota/429**; latency bimodal (groq ~8s median vs nvidia ~76s, max 336s); **17.5% of groq calls truncated** (`finish_reason: length`) — truncation handling is load-bearing.
+- **Gap found by the analysis:** `parse_outcome`/`repair_used` were NULL on every historical row — rows are inserted at call time, parsing happens after, nothing wrote it back. Fix (proper, not workaround): `record_llm_call` now returns the row id via `info_out` → gateway threads it into `info` → `run_agent` stamps outcomes after parsing (`set_parse_outcome`, enum-guarded, fail-soft, **loud when the update matches 0 rows**). Ladder semantics: original row `repaired`/`failed`, repair-call row `ok`/`failed`.
+- **Migration 010** (`010_llm_calls_outcome_attribution.sql`, additive): RLS update policy for the attribution + **column-scoped grants** (`grant update (parse_outcome, repair_used)`; `revoke update` otherwise) so tokens/latency/etc stay write-once. **User must apply 010 in the Supabase SQL editor** (same flow as 007–009) — pre-application the update warns, never silently no-ops (live probe verified: insert→attribute→read = graceful False pre-010, probe row deleted, zero residue).
+- **Tests:** +8 (telemetry row-id threading, outcome update + enum guard + zero-rows warning + fail-soft, migration-010 guard, gateway id propagation, agent attribution ok/failed paths). Suite **209/209**, eval 5/5, tsc clean.
+- **Docs:** README run-engine bullet links the notebook; RESULTS.md gains a "Telemetry analysis" section; `.gitignore` += `.ipynb_checkpoints/`.
+- **Next:** user-side — apply migration 010; GitHub rename → `intara` + make public; Vercel import (steps in `docs/process/DEPLOY.md`); record the 2-min video (`DEMO_SCRIPT.md`). Optional deferred extra: local-model experiment.
+
 ### Session 32 — 2026-10-18 — portfolio packaging 5/6 (results write-up + ownership answers) [x]
 - **`docs/RESULTS.md`:** one-page write-up with only measured numbers (baseline 0/10 full plans parsed → 15/15 after the parse ladder; core20 4/20 → 13/20 → **17/20** with median 9 calls / 4.4 min; held-out 3/5; suites 201 py + 206 node). Three failure stories in interview form: silent fallback hiding the 0% parse rate, eval overfitting (tuned vs held-out), hollow resume (paths not bytes; now content-addressed). Standing failure classes documented.
 - **Accuracy fix:** the docx's “0/21 parse rate” doesn't match repo evidence (measured 0/10 full plans on the first baseline) — RESULTS.md and README use the measured 0/10. *(Only claim what is true.)*
@@ -430,4 +439,4 @@
 - **LLM spend:** measure first (Phase 0); cache by input hash; cassettes for CI; live evals only on manual dispatch; template gallery costs $0 — use it for demos.
 - **Commits:** code + AGENT.md update together, every session. Never leave the tree red.
 
-*End of AGENT.md v3 — phases 0–9 code-complete; core20 17/20; portfolio packaging 5/6 landed (README + deploy prep + CI + results/ownership docs; telemetry notebook next).*
+*End of AGENT.md v3 — phases 0–9 code-complete; core20 17/20; portfolio packaging 6/6 landed (README + deploy prep + CI + results/ownership docs + telemetry notebook & per-call parse attribution). User-side: apply migration 010, publish repo, deploy to Vercel.*

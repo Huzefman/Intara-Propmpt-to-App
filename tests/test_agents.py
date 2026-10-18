@@ -104,6 +104,48 @@ def test_agent_quota_propagates_without_burn():
     assert caller.calls["n"] == 1, "no repair loop on empty quota"
 
 
+def test_agent_attributes_parse_outcomes_to_rows(monkeypatch):
+    import services.telemetry as tm
+    seen = []
+    monkeypatch.setattr(tm, "set_parse_outcome",
+                        lambda tid, outcome, repaired=False: seen.append((tid, outcome, repaired)))
+    seq = {"n": 0}
+
+    def caller(prompt, temperature=0.2, **kw):
+        info = kw.get("info")
+        seq["n"] += 1
+        if info is not None:
+            info.update({"provider": "mock", "model": "mock", "finish_reason": "stop",
+                         "telemetry_id": seq["n"]})
+        if seq["n"] == 1:
+            return "not json at all", {}
+        return json.dumps(S2_OK), {}
+
+    res = _run_s2(caller)
+    assert res.parse_outcome == "repaired" and res.llm_calls == 2
+    assert (1, "repaired", True) in seen     # original row: repaired via ladder
+    assert (2, "ok", False) in seen          # repair-call row: its text is the one that parsed
+
+
+def test_agent_attributes_failed_parse_rows(monkeypatch):
+    import services.telemetry as tm
+    seen = []
+    monkeypatch.setattr(tm, "set_parse_outcome",
+                        lambda tid, outcome, repaired=False: seen.append((tid, outcome)))
+    seq = {"n": 0}
+
+    def caller(prompt, temperature=0.2, **kw):
+        info = kw.get("info")
+        seq["n"] += 1
+        if info is not None:
+            info.update({"provider": "mock", "model": "mock", "telemetry_id": seq["n"]})
+        return "still garbage", {}
+
+    res = _run_s2(caller)
+    assert res.degraded and res.parse_outcome == "failed"
+    assert (1, "failed") in seen and (2, "failed") in seen
+
+
 def test_stages_registry_shape():
     from agents.stages import STAGES
     from agents.prompts import PROMPT_VERSIONS, TIERS

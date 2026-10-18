@@ -43,6 +43,18 @@ The run engine is resumable by design, and the first version *looked* resumable:
 
 **Lesson:** durability is not "does it resume?" but "are the bytes the real bytes?"
 
+## Telemetry analysis (the data-science angle)
+
+429 live calls logged to `llm_calls` (2026-10-12 → 16), analysed in
+[`notebooks/telemetry.ipynb`](../notebooks/telemetry.ipynb):
+
+- **62% of calls (265/429) succeeded only after burning an earlier provider** — and 85% of those burn-outs were quota/429s, not model quality. The fallback chain *is* the production path on $0.
+- **Latency is bimodal:** Groq ~8 s median vs Nvidia ~76 s (reasoning model, max 336 s) — which provider wins decides whether a build takes 2 or 8 minutes.
+- **17.5% of Groq calls truncate** (`finish_reason: length`) — JSON truncation is routine, which is why the parse ladder's truncation detection + capped repair call is load-bearing.
+- **A schema gap found while analysing:** parse outcomes were tracked per *stage*, never per *call* → fixed with row-id attribution (migration 010 grants update on exactly `parse_outcome, repair_used`); historical rows stay NULL by design.
+
+Regenerate with: `python scripts/export_llm_calls.py` → re-run the notebook.
+
 ## What the pipeline still fails at (standing, documented)
 
 - **Free-tier quota** shapes roughly half of observed live failures — labelled, retried across providers, still there. A paid key removes this class outright.
