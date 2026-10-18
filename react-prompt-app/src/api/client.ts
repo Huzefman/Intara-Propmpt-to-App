@@ -7,7 +7,16 @@ export async function generateSchema(prompt: string): Promise<GenerateRes> {
   return res.json()
 }
 
-export async function askRag(question: string): Promise<{ answer: string; cites: string[] }> {
+export type RagAnswer = {
+  answer: string
+  cites: string[]
+  retrieval?: 'vector' | 'lexical' | null
+  retrieval_detail?: 'match_docs' | 'client-cosine' | 'bm25' | null
+  provider?: string | null
+  model?: string | null
+}
+
+export async function askRag(question: string): Promise<RagAnswer> {
   const res = await fetch('/api/rag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question }) })
   if (!res.ok) throw new Error(`rag failed ${res.status}`)
   return res.json()

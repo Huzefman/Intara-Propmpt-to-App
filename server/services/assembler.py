@@ -68,7 +68,7 @@ uvicorn main:app --reload --port 8000
 Intara weaves stardust into code. Make another wish at intara.planet.wish
 """
 
-    # cites — try RAG, fallback mock (handle dim mismatch)
+    # cites — retrieve from the archives (no synthesis call; cheap)
     cites = []
     try:
         try:
@@ -79,9 +79,9 @@ Intara weaves stardust into code. Make another wish at intara.planet.wish
         supa_url = os.getenv("SUPABASE_URL", "")
         if _has_llm and supa_url:
             try:
-                from rag import answer
-                rag_res = answer(f"What stack for {app_name}? {prompt[:100]}")
-                cites = rag_res.get("cites", [])[:3]
+                from rag import retrieve
+                docs, _mode, _detail = retrieve(f"stack and architecture for {app_name}: {prompt[:100]}")
+                cites = [d.get("content", "") for d in docs if d.get("content")][:3]
             except Exception as e:
                 print(f"assembler rag failed, fallback cites: {e}")
                 cites = []
@@ -89,8 +89,8 @@ Intara weaves stardust into code. Make another wish at intara.planet.wish
         print(f"assembler cites outer failed: {e}")
     if not cites:
         cites = [
-            f"DhiWise builds Rocket.new — prompt to app with DB/auth/API and deployment. Intara mirrors this for {app_name}.",
-            f"Supabase pgvector enables vector search via match_docs RPC with cosine similarity for {app_name}.",
+            f"Intara emits validated JSON App Specs and a TypeScript runtime executes them for {app_name} — spec-first, no LLM at runtime.",
+            f"Every stage output is schema-validated with fail-closed gates (G0 schema, G1 lint R01-R50, G2 coverage, G3 generated tests).",
             f"Intara forged {app_name}: {tagline[:80]}"
         ]
 

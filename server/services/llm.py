@@ -725,6 +725,27 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
             client = genai.Client(api_key=key, http_options={"timeout": 60000})
         except Exception:
             client = genai.Client(api_key=key)
+        # One batched request when available (fewer quota units for seeding),
+        # per-text loop as fallback — same normalization either way.
+        if len(texts) > 1:
+            try:
+                rb = client.models.embed_content(model="gemini-embedding-001", contents=list(texts))
+                embs = list(getattr(rb, "embeddings", None) or [])
+                if len(embs) == len(texts):
+                    batched = []
+                    for e in embs:
+                        vals = getattr(e, 'values', None)
+                        if vals is None and isinstance(e, dict):
+                            vals = e.get('values')
+                        vals = [float(x) for x in (vals or [])]
+                        if len(vals) > 3072: vals = vals[:3072]
+                        elif len(vals) < 3072: vals = vals + [0.0]*(3072-len(vals))
+                        batched.append(vals)
+                    if batched and all(any(x != 0.0 for x in v) for v in batched):
+                        return batched
+                    print("gemini embed batch returned zero vectors, per-text fallback")
+            except Exception as e:
+                print(f"gemini embed batch failed, per-text fallback: {e}")
         out = []
         for t in texts:
             r = client.models.embed_content(model="gemini-embedding-001", contents=t)
