@@ -328,6 +328,12 @@
 - **Verify:** pytest **201/201**, eval 5/5, tsc clean (studio + demo), node suite 206+1 skip, `VITE_DEMO=1 npm run build` green, capture smoke OK (10 apps, no page errors).
 - **Next:** portfolio packaging 3/6 — README draft + user-side GitHub rename (`intara`, public) and Vercel import (root `react-prompt-app`, env `VITE_DEMO=1`), then live URL into README.
 
+### Session 31 — 2026-10-18 — portfolio packaging 4/6 (GitHub Actions CI) [x]
+- **CI (`.github/workflows/ci.yml`):** two fail-closed jobs — `python` (3.12: `pytest tests/` incl. the TS-twin suites via Node 24 + mocked golden eval; installs `ruff` so the eval's lint gate actually runs, and global `typescript` so eval's `npx tsc` doesn't cold-download) and `web` (Node 24: runtime suite + typecheck, then `VITE_DEMO=1 npm run build` for tsc+vite). npm cache keyed on both lockfiles; concurrency cancels superseded runs; triggers on push to main + PRs.
+- **Fix found by CI prep:** `packages/runtime` declared a `typecheck` script but had no `typescript` devDep — `tsc: command not found` outside the Studio tree. Added `typescript@^5.5.3` (same pin as Studio); `npm run typecheck --prefix packages/runtime` now green standalone.
+- **Local rehearsal of exact CI commands:** runtime suite green (needs the strip-types flag on this machine's Node 22.12; CI's Node 24 strips natively), runtime typecheck green, `npm ci` + `VITE_DEMO=1 npm run build` green, pytest 201/201, eval 5/5.
+- **Next:** portfolio packaging 5/6 — one-page results write-up + written ownership-test answers.
+
 ### Session 30 — 2026-10-18 — portfolio packaging 3/6 (README + demo script + deploy prep) [x]
 - **README rewritten** for the portfolio audience: one-line pitch, ASCII pipeline diagram, live-demo slot (placeholder until Vercel deploy), screenshots from `docs/assets/`, measured-numbers table (5/5 gold, core20 17/20, held-out 3/5, 201 py + 206 node tests, 135 formula cases, Supabase contract 6/6), short Quickstart (static demo + full Studio), Limitations (short list → handoff §6), honest AI-assisted note, `docs/process/` linked only at the bottom.
 - **Demo script:** stale 60-sec `LOOM.md` → `docs/process/DEMO_SCRIPT.md` (git mv, history kept; 2-min script matched to the static demo; recording is user-side).
@@ -416,4 +422,4 @@
 - **LLM spend:** measure first (Phase 0); cache by input hash; cassettes for CI; live evals only on manual dispatch; template gallery costs $0 — use it for demos.
 - **Commits:** code + AGENT.md update together, every session. Never leave the tree red.
 
-*End of AGENT.md v3 — phases 0–9 code-complete; core20 17/20; portfolio packaging 3/6 landed (README + deploy prep; CI + results write-up + notebook next).*
+*End of AGENT.md v3 — phases 0–9 code-complete; core20 17/20; portfolio packaging 4/6 landed (README + deploy prep + CI; results write-up + telemetry notebook next).*

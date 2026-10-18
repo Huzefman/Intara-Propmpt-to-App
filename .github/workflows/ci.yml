@@ -1,0 +1,78 @@
+name: CI
+
+# Fail-closed gates, same as the local verification trio:
+#   pytest tests/  ·  python scripts/eval.py --mocked  ·  tsc + vite build
+# Node 24 is pinned because the pytest suite shells out to
+# `node --test` on TypeScript twins (native type stripping).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python gates (pytest + mocked eval)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: server/requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            react-prompt-app/package-lock.json
+            packages/runtime/package-lock.json
+
+      - name: Install Python deps (pytest + ruff for the eval gate)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r server/requirements.txt pytest ruff
+
+      - name: Install Node deps (pytest shells out to node --test / tsc)
+        run: |
+          npm ci --prefix react-prompt-app
+          npm ci --prefix packages/runtime
+          npm install -g typescript
+
+      - name: pytest (incl. TS-twin formula + runtime suites via node)
+        run: pytest tests/ -q
+
+      - name: Golden eval (mocked, $0)
+        run: python scripts/eval.py --mocked
+
+  web:
+    name: Web (runtime suite + typechecks + demo build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            react-prompt-app/package-lock.json
+            packages/runtime/package-lock.json
+
+      - name: Runtime — deps, suite, typecheck
+        run: |
+          npm ci --prefix packages/runtime
+          npm test --prefix packages/runtime
+          npm run typecheck --prefix packages/runtime
+
+      - name: Studio — deps, static demo build (tsc + vite)
+        run: |
+          npm ci --prefix react-prompt-app
+          VITE_DEMO=1 npm run build --prefix react-prompt-app
