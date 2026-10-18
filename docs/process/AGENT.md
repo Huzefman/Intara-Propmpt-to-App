@@ -328,6 +328,14 @@
 - **Verify:** pytest **201/201**, eval 5/5, tsc clean (studio + demo), node suite 206+1 skip, `VITE_DEMO=1 npm run build` green, capture smoke OK (10 apps, no page errors).
 - **Next:** portfolio packaging 3/6 — README draft + user-side GitHub rename (`intara`, public) and Vercel import (root `react-prompt-app`, env `VITE_DEMO=1`), then live URL into README.
 
+### Session 32 — 2026-10-18 — portfolio packaging 5/6 (results write-up + ownership answers) [x]
+- **`docs/RESULTS.md`:** one-page write-up with only measured numbers (baseline 0/10 full plans parsed → 15/15 after the parse ladder; core20 4/20 → 13/20 → **17/20** with median 9 calls / 4.4 min; held-out 3/5; suites 201 py + 206 node). Three failure stories in interview form: silent fallback hiding the 0% parse rate, eval overfitting (tuned vs held-out), hollow resume (paths not bytes; now content-addressed). Standing failure classes documented.
+- **Accuracy fix:** the docx's “0/21 parse rate” doesn't match repo evidence (measured 0/10 full plans on the first baseline) — RESULTS.md and README use the measured 0/10. *(Only claim what is true.)*
+- **`docs/process/OWNERSHIP_TEST.md`:** written answers to the five ownership-test questions, each grounded in files to read (`run_engine.py`, `formula.py`+`formula.ts`, `patch.py`, `core20.py`, `RuntimePreview.tsx`).
+- **README:** fix parse-rate number; bottom process links now include RESULTS + OWNERSHIP_TEST.
+- **Verify:** docs-only change — no code touched; tree verification trio ran green in session 31 (same tree, tests were 201/201 + eval 5/5 + build green this session).
+- **Next:** portfolio packaging 6/6 — telemetry notebook (`llm_calls` analysis: parse success by provider, latency, failure causes).
+
 ### Session 31 — 2026-10-18 — portfolio packaging 4/6 (GitHub Actions CI) [x]
 - **CI (`.github/workflows/ci.yml`):** two fail-closed jobs — `python` (3.12: `pytest tests/` incl. the TS-twin suites via Node 24 + mocked golden eval; installs `ruff` so the eval's lint gate actually runs, and global `typescript` so eval's `npx tsc` doesn't cold-download) and `web` (Node 24: runtime suite + typecheck, then `VITE_DEMO=1 npm run build` for tsc+vite). npm cache keyed on both lockfiles; concurrency cancels superseded runs; triggers on push to main + PRs.
 - **Fix found by CI prep:** `packages/runtime` declared a `typecheck` script but had no `typescript` devDep — `tsc: command not found` outside the Studio tree. Added `typescript@^5.5.3` (same pin as Studio); `npm run typecheck --prefix packages/runtime` now green standalone.
@@ -422,4 +430,4 @@
 - **LLM spend:** measure first (Phase 0); cache by input hash; cassettes for CI; live evals only on manual dispatch; template gallery costs $0 — use it for demos.
 - **Commits:** code + AGENT.md update together, every session. Never leave the tree red.
 
-*End of AGENT.md v3 — phases 0–9 code-complete; core20 17/20; portfolio packaging 4/6 landed (README + deploy prep + CI; results write-up + telemetry notebook next).*
+*End of AGENT.md v3 — phases 0–9 code-complete; core20 17/20; portfolio packaging 5/6 landed (README + deploy prep + CI + results/ownership docs; telemetry notebook next).*

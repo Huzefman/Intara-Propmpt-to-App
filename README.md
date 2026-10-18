@@ -54,7 +54,7 @@ The repo contains the whole system: the LLM pipeline, a durable resumable run en
 | Formula conformance cases (shared Py/TS) | **135** + fuzzing |
 | Live Supabase adapter contract | **6/6** |
 
-The interesting failures are documented in the results write-up (`docs/RESULTS.md`): a silent template fallback that hid a 0/21 parse rate, eval overfitting, and a "hollow resume" bug.
+The interesting failures are documented in the results write-up (`docs/RESULTS.md`): a silent template fallback that hid a 0% parse rate (0/10 full plans on the first baseline), eval overfitting, and a "hollow resume" bug.
 
 ## Run it yourself
 
@@ -95,4 +95,4 @@ In 2026 that is normal; what matters is what is true. **I specified the architec
 
 Built by **Huzefa Mandviwala** — B.Tech AI & DS, SCET Surat · [LICENSE](LICENSE)
 
-<sub>Process docs (build ledger, decisions, architecture, honest limitations): [`docs/process/AGENT.md`](docs/process/AGENT.md) · [`docs/process/PROJECT_HANDOFF.md`](docs/process/PROJECT_HANDOFF.md) · [`docs/process/INTARA_ARCHITECTURE_GUIDE.md`](docs/process/INTARA_ARCHITECTURE_GUIDE.md)</sub>
+<sub>Process docs (build ledger, decisions, architecture, results, interview prep): [`docs/process/AGENT.md`](docs/process/AGENT.md) · [`docs/RESULTS.md`](docs/RESULTS.md) · [`docs/process/PROJECT_HANDOFF.md`](docs/process/PROJECT_HANDOFF.md) · [`docs/process/INTARA_ARCHITECTURE_GUIDE.md`](docs/process/INTARA_ARCHITECTURE_GUIDE.md) · [`docs/process/OWNERSHIP_TEST.md`](docs/process/OWNERSHIP_TEST.md)</sub>
