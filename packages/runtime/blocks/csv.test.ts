@@ -20,13 +20,22 @@ test("csv import parses quotes, commas, BOM, blank lines", () => {
   assert.equal(rows[0]["name"], "a, b");
   assert.equal(rows[0]["qty"], "3");
   assert.equal(rows[1]["qty"], "");
-  assert.ok(String(rows[0]["id"]).startsWith("csv-"));
+  assert.equal(rows[0]["id"], "1", "a real id column round-trips");
+});
+
+test("csv import leaves id-less rows id-less (adapter mints unique ids)", () => {
+  const rows = parseCsv("name,qty\nWidget,3\nGadget,4\n");
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0]["id"], undefined);
+  assert.equal(rows[1]["id"], undefined);
+  assert.equal(rows[0]["name"], "Widget");
 });
 
 test("csv round-trips through parse", () => {
   const rows = [{ id: "x", title: "hello", n: 1 }];
   const back = parseCsv(toCsv(rows));
   assert.equal(back.length, 1);
+  assert.equal(back[0]["id"], "x");
   assert.equal(back[0]["title"], "hello");
   assert.equal(back[0]["n"], "1", "csv values are strings; engine coerces");
 });

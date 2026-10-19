@@ -15,7 +15,7 @@
   --intara-text: #F8FAFC;
   --intara-muted: #CBD5E1;
   --intara-faint: #94A3B8;
-  --intara-dim: #64748B;
+  --intara-dim: #74839B; /* ≥4.5:1 on panels (WCAG AA small text) */
   --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-fluid: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-gentle: cubic-bezier(0.25, 0.1, 0.25, 1);

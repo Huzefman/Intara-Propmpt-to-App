@@ -42,10 +42,16 @@ export function parseCsv(text: string): Rec[] {
   if (row.some((x) => x.trim() !== "")) rows.push(row);
   if (!rows.length) return [];
   const header = rows[0].map((h) => h.trim());
-  return rows.slice(1).map((r, i) => {
-    const rec: Rec = { id: `csv-${i + 1}` };
+  return rows.slice(1).map((r) => {
+    const rec: Rec = {};
     header.forEach((h, j) => {
-      if (h && h !== "id") rec[h] = (r[j] ?? "").trim();
+      if (!h) return;
+      const v = (r[j] ?? "").trim();
+      // A real `id` column (the export format) round-trips as an upsert key;
+      // rows without one are left id-less so the adapter mints a fresh,
+      // collision-free id (the old `csv-N` scheme overwrote earlier imports).
+      if (h === "id") { if (v) rec["id"] = v; return; }
+      rec[h] = v;
     });
     return rec;
   });

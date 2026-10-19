@@ -44,6 +44,15 @@ function cmpRows(a: Rec, b: Rec, field: string, dir: "asc" | "desc"): number {
 
 let autoId = 1;
 
+/** Id for a row stored without one. Must be unique across sessions: the old
+ * `m${autoId}` reset on every page load and silently overwrote a persisted
+ * row of the same id (imports/seed collisions). */
+function genId(): string {
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  if (c?.randomUUID) return c.randomUUID();
+  return `r${Date.now().toString(36)}-${autoId++}`;
+}
+
 export class MemoryAdapter implements StorageAdapter {
   protected tables = new Map<string, Map<string | number, Row>>();
 
@@ -98,7 +107,7 @@ export class MemoryAdapter implements StorageAdapter {
 
   async put(entity: string, rec: Rec, expectedVersion?: number): Promise<Rec> {
     const t = this.table(entity);
-    const id = (rec["id"] ?? `m${autoId++}`) as string | number;
+    const id = (rec["id"] ?? genId()) as string | number;
     const prev = t.get(id);
     if (expectedVersion !== undefined) {
       const cur = prev && !prev.deleted ? prev.version : 0;

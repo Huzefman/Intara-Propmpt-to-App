@@ -27,14 +27,28 @@ export function resolveState(rows?: Rec[], record?: Rec | null, explicit?: Block
 }
 
 /** Human label for hydrated ref values (objects/arrays of rows). */
-function labelOf(v: unknown): string {
+export function labelOf(v: unknown): string {
   if (typeof v !== "object" || v === null) return String(v);
   const o = v as Rec;
-  for (const k of ["name", "full_name", "common_name", "title", "label", "id"]) {
+  for (const k of ["name", "full_name", "common_name", "title", "label"]) {
     const s = o[k];
     if (typeof s === "string" && s) return s;
   }
-  return "—";
+  // A row without its own label (e.g. a join row like a planting) borrows the
+  // labels of its hydrated ref fields: "Raised Bed A · Tomato" beats "planting-1".
+  const parts: string[] = [];
+  for (const x of Object.values(o)) {
+    if (x && typeof x === "object" && !Array.isArray(x)) {
+      for (const k of ["name", "full_name", "common_name", "title", "label"]) {
+        const t = (x as Rec)[k];
+        if (typeof t === "string" && t && !parts.includes(t)) { parts.push(t); break; }
+      }
+    }
+    if (parts.length >= 2) break;
+  }
+  if (parts.length) return parts.join(" · ");
+  const id = o["id"];
+  return typeof id === "string" || typeof id === "number" ? String(id) : "—";
 }
 
 /** Dotted display paths: customer.name. Missing → em dash. */

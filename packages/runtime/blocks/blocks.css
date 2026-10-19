@@ -17,7 +17,7 @@
   --blk-border-strong: rgba(255, 255, 255, 0.14);
   --blk-text: #f4f4f8;
   --blk-muted: #a8a8b8;
-  --blk-faint: #72728a;
+  --blk-faint: #82829c; /* ≥4.5:1 on shell surfaces (WCAG AA small text) */
   --blk-accent: #8b5cf6;
   --blk-accent-soft: rgba(139, 92, 246, 0.16);
   --blk-accent-border: rgba(139, 92, 246, 0.45);
@@ -148,6 +148,12 @@
   box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.14);
 }
 
+.app-shell input::placeholder,
+.app-shell textarea::placeholder {
+  color: var(--blk-faint);
+  opacity: 1;
+}
+
 .app-shell select option {
   background: #14141d;
   color: var(--blk-text);
@@ -178,6 +184,11 @@
   text-align: center;
   color: var(--blk-faint);
   font-size: 12px;
+}
+
+/* Empty state nested inside a block that still offers actions (create/import). */
+.blk > .blk-empty {
+  padding: 12px 0 6px;
 }
 
 .blk-error {
@@ -228,6 +239,11 @@
 
 .blk-table tbody tr:hover {
   background: var(--blk-surface);
+}
+
+.blk-table tbody tr.blk-row-link,
+.blk-related li.blk-row-link {
+  cursor: pointer;
 }
 
 .blk-actions {
@@ -571,7 +587,7 @@
 
 .blk-form button[type="submit"] {
   justify-self: start;
-  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  background: linear-gradient(135deg, #6d28d9, #7c3aed);
   border-color: transparent;
   color: #fff;
   font-weight: 600;
@@ -579,7 +595,84 @@
 }
 
 .blk-form button[type="submit"]:hover:not(:disabled) {
-  background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+  background: linear-gradient(135deg, #6d28d9, #7c3aed);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.22), 0 6px 18px rgba(109, 40, 217, 0.4);
+  transform: translateY(-1px);
+  color: #fff;
+}
+
+/* ---------- create dialog (host-level, spec-driven form) ---------- */
+
+.blk-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(5, 5, 10, 0.62);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 44px 16px 24px;
+  overflow: auto;
+}
+
+.blk-modal-card {
+  width: 100%;
+  max-width: 470px;
+  max-height: calc(100vh - 80px);
+  overflow: auto;
+  background: #14141d;
+  border: 1px solid var(--blk-border-strong);
+  border-radius: 16px;
+  padding: 18px 20px 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+.blk-modal-card h3 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--blk-text);
+}
+
+.blk-modal-card .blk-form {
+  max-width: none;
+}
+
+.blk-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.blk-modal-actions button {
+  font: inherit;
+  font-size: 12px;
+  padding: 8px 16px;
+  border-radius: 9px;
+  border: 1px solid var(--blk-border-strong);
+  background: transparent;
+  color: var(--blk-muted);
+  cursor: pointer;
+}
+
+.blk-modal-actions button:hover {
+  color: var(--blk-text);
+  background: var(--blk-surface-2);
+}
+
+.blk-modal-actions button[type="submit"] {
+  background: linear-gradient(135deg, #6d28d9, #7c3aed);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+
+.blk-modal-actions button[type="submit"]:hover:not(:disabled) {
+  background: linear-gradient(135deg, #6d28d9, #7c3aed);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.22), 0 6px 18px rgba(109, 40, 217, 0.4);
+  transform: translateY(-1px);
   color: #fff;
 }
 
@@ -639,7 +732,7 @@
 }
 
 .blk-hero button {
-  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  background: linear-gradient(135deg, #6d28d9, #7c3aed);
   border-color: transparent;
   color: #fff;
   font-weight: 600;
@@ -647,6 +740,8 @@
 }
 
 .blk-hero button:hover:not(:disabled) {
-  background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+  background: linear-gradient(135deg, #6d28d9, #7c3aed);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.22), 0 6px 18px rgba(109, 40, 217, 0.4);
+  transform: translateY(-1px);
   color: #fff;
 }

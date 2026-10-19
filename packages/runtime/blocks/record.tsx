@@ -27,20 +27,25 @@ export function RecordDetail({ block, record, state, error }: BlockHostProps<{
 }
 
 export function RelatedList({ block, rows, state, error, onAction }: BlockHostProps<{
-  entity: string; via?: string; columns?: string[]; create?: boolean;
+  entity: string; via?: string; columns?: string[]; create?: boolean; row_link?: string;
 }>) {
   const st = resolveState(rows, undefined, state, error);
   const cols = block.props.columns ?? [];
+  const addBtn = block.props.create ? <button onClick={() => onAction?.("create")}>Add</button> : null;
   return (
-    <BlockShell state={st} error={error}>
+    <BlockShell state={st} error={error} emptyActions={addBtn ?? undefined}>
       {st === "ready" ? (
         <>
           <ul className="blk-related">
             {(rows ?? []).map((r, i) => (
-              <li key={String(r["id"] ?? i)}>{cols.map((c) => displayPath(r, c)).join(" · ")}</li>
+              <li key={String(r["id"] ?? i)}
+                className={block.props.row_link ? "blk-row-link" : undefined}
+                onClick={block.props.row_link ? () => onAction?.("open", r["id"]) : undefined}>
+                {cols.map((c) => displayPath(r, c)).join(" · ")}
+              </li>
             ))}
           </ul>
-          {block.props.create ? <button onClick={() => onAction?.("create")}>Add</button> : null}
+          {addBtn}
         </>
       ) : undefined}
     </BlockShell>

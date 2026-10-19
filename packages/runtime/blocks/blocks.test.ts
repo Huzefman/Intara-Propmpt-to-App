@@ -95,4 +95,9 @@ test("display paths for cards and cells", () => {
   assert.equal(displayPath({ tags: [{ name: "a" }, { title: "b" }] }, "tags"), "a, b");
   assert.equal(displayPath({ plant: { common_name: "Tomato", id: "p1" } }, "plant"), "Tomato");
   assert.equal(displayPath({ blob: {} }, "blob"), "—");
+  // label-less join row: borrow the hydrated ref labels, not the raw id
+  assert.equal(
+    displayPath({ planting: { id: "planting-1", bed: { name: "Raised Bed A" }, plant: { common_name: "Tomato" } } }, "planting"),
+    "Raised Bed A · Tomato");
+  assert.equal(displayPath({ planting: { id: "planting-1" } }, "planting"), "planting-1");
 });

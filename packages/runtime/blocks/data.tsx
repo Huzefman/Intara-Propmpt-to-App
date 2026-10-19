@@ -8,31 +8,36 @@ export function DataTable({ block, rows, state, error, onAction }: BlockHostProp
   const st = resolveState(rows, undefined, state, error);
   const cols = block.props.columns ?? [];
   const importRef = React.useRef<HTMLInputElement>(null);
+  const actions = (
+    <div className="blk-actions">
+      {block.props.create ? <button onClick={() => onAction?.("create")}>New</button> : null}
+      <button onClick={() => onAction?.("export")}>Export CSV</button>
+      <button onClick={() => importRef.current?.click()}>Import CSV</button>
+      <input ref={importRef} type="file" accept=".csv,text/csv" hidden
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          if (f) onAction?.("import", { text: await f.text(), filename: f.name });
+          e.target.value = "";
+        }} />
+    </div>
+  );
   return (
-    <BlockShell state={st} error={error}>
+    <BlockShell state={st} error={error} emptyActions={block.props.create ? actions : undefined}>
       {st === "ready" ? (
         <>
           <table className="blk-table">
             <thead><tr>{cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
             <tbody>
               {(rows ?? []).map((r, i) => (
-                <tr key={String(r["id"] ?? i)}>
+                <tr key={String(r["id"] ?? i)}
+                  className={block.props.row_link ? "blk-row-link" : undefined}
+                  onClick={block.props.row_link ? () => onAction?.("open", r["id"]) : undefined}>
                   {cols.map((c) => <td key={c}>{displayPath(r, c)}</td>)}
                 </tr>
               ))}
             </tbody>
           </table>
-          <div className="blk-actions">
-            {block.props.create ? <button onClick={() => onAction?.("create")}>New</button> : null}
-            <button onClick={() => onAction?.("export")}>Export CSV</button>
-            <button onClick={() => importRef.current?.click()}>Import CSV</button>
-            <input ref={importRef} type="file" accept=".csv,text/csv" hidden
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                if (f) onAction?.("import", { text: await f.text(), filename: f.name });
-                e.target.value = "";
-              }} />
-          </div>
+          {actions}
         </>
       ) : undefined}
     </BlockShell>
