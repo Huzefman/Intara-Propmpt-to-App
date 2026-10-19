@@ -75,7 +75,7 @@ export function GalleryView() {
         {items.map((t) => (
           <button key={t.name} onClick={() => open(t.name)}
             className="glass" style={{ padding: 14, borderRadius: 14, textAlign: 'left', cursor: 'pointer', border: active?.name === t.name ? '1px solid rgba(139,92,246,0.9)' : undefined }}>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>{t.app || t.name}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--intara-muted)' }}>{t.app || t.name}</div>
             <div style={{ fontSize: 11.5, color: 'var(--intara-muted)', margin: '4px 0' }}>{t.tagline}</div>
             <div className="mono" style={{ fontSize: 11, color: 'var(--intara-faint)' }}>{t.domain} · {t.entities} entities · {t.pages} pages</div>
           </button>
