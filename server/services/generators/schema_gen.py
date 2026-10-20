@@ -144,6 +144,10 @@ def generate_schema(prd: dict):
             else:
                 fallback_reason = "incomplete LLM schema (missing tables/sql/prisma)"
         except Exception as e:
+            if getattr(e, "byok_error", False):
+                # Own-key failure: the build should stop and say why, not
+                # quietly hand back a template schema.
+                raise
             print(f"LLM schema gen failed, template fallback: {e}")
             fallback_reason = str(e)[:200]
 

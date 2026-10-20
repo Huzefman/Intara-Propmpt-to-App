@@ -7,6 +7,7 @@ until the user Accepts; every apply keeps a snapshot for one-click revert.
 Fail-open: wish_iterations table missing → pending previews live in memory
 and applies go through without snapshots.
 """
+import contextvars
 import json
 import re
 
@@ -68,6 +69,8 @@ def resolve_step(wish: dict, step_id: str | None, instruction: str) -> dict | No
             if n.get("id") == guess:
                 return n
     except Exception as e:
+        if getattr(e, "byok_error", False):
+            raise
         if _is_quota_msg(str(e)):
             raise
         print(f"iterate classify failed: {e}")
@@ -161,14 +164,22 @@ def _bounded_call(prompt: str, temperature: float, what: str) -> str:
     """call_llm with output cap + wall-clock deadline. Raises RuntimeError (429-prefixed on quota)."""
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
     from services.llm import call_llm
+    # ThreadPoolExecutor does not copy contextvars: carry the request's BYOK
+    # identity into the worker thread explicitly, or the call would fall back
+    # to the shared pool.
+    ctx = contextvars.copy_context()
     with ThreadPoolExecutor(max_workers=1) as ex:
-        fut = ex.submit(call_llm, prompt, temperature, EDIT_MAX_TOKENS)
+        fut = ex.submit(ctx.run, call_llm, prompt, temperature, EDIT_MAX_TOKENS)
         try:
             return _strip_fences(fut.result(timeout=EDIT_DEADLINE))
         except FuturesTimeout:
             raise RuntimeError(
                 f"{what} took too long (>{EDIT_DEADLINE}s) — try a narrower instruction targeting fewer lines")
         except RuntimeError as e:
+            if getattr(e, "byok_error", False):
+                # The account's own key failed. Don't relabel it as the shared
+                # pool being out of stardust — the user needs the real reason.
+                raise
             if _is_quota_msg(str(e)):
                 raise RuntimeError(f"429 {STARDUST}")
             raise RuntimeError(f"{what} failed: {e}")
@@ -304,7 +315,10 @@ def preview_iteration(wish: dict, wid: str, node: dict, instruction: str) -> dic
         return None
 
     with ThreadPoolExecutor(max_workers=len(targets)) as ex:
-        for result in ex.map(_one, targets):
+        # Context per file edit: ThreadPoolExecutor workers start with an empty
+        # context, which would silently drop the caller's BYOK identity.
+        carried = [(t, contextvars.copy_context()) for t in targets]
+        for result in ex.map(lambda pair: pair[1].run(_one, pair[0]), carried):
             if result:
                 files.append(result)
     if not files:

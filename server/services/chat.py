@@ -109,6 +109,14 @@ def answer_chat(wish: dict, history: list[dict], question: str) -> dict:
             raise ValueError("empty reply")
         return {"reply": reply[:2000], "actions": actions}
     except Exception as e:
+        if getattr(e, "byok_error", False):
+            # The account's own key failed — say so instead of blaming the
+            # shared free pool (or pretending the reply came from their key).
+            return {
+                "reply": str(e)[:600],
+                "actions": actions,
+                "degraded": True,
+            }
         msg = str(e).lower()
         if "429" in msg or "quota" in msg or "rate" in msg or "limit" in msg:
             return {

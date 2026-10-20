@@ -14,6 +14,9 @@ import os
 import time
 
 from fastapi import Header, HTTPException
+from starlette.concurrency import run_in_threadpool
+
+from userkeys import set_byok_snapshot, set_current_user
 
 # Validated-token cache: the Studio polls every 2s, so verifying the JWT against
 # Supabase on every request would be wasteful. 60s is short enough that revoked
@@ -32,10 +35,13 @@ def _unauthorized(message: str) -> HTTPException:
     return HTTPException(401, message, headers={"WWW-Authenticate": "Bearer"})
 
 
-def require_user(authorization: str | None = Header(default=None)) -> dict:
+async def require_user(authorization: str | None = Header(default=None)) -> dict:
     """FastAPI dependency: resolve the bearer token to {id, email}."""
+    # A new request must never inherit a background task's pinned key set.
+    set_byok_snapshot(None)
     if not auth_required():
         # Dev/test bypass. ``id`` is None so ownership helpers skip filtering.
+        set_current_user(None)
         return {"id": None, "email": "dev@localhost", "dev": True}
 
     if not authorization or not authorization.lower().startswith("bearer "):
@@ -49,11 +55,12 @@ def require_user(authorization: str | None = Header(default=None)) -> dict:
     now = time.time()
     hit = _CACHE.get(cache_key)
     if hit and hit[0] > now:
+        set_current_user(hit[1].get("id"))
         return hit[1]
 
     try:
         from db.wishes import _client
-        res = _client().auth.get_user(token)
+        res = await run_in_threadpool(lambda: _client().auth.get_user(token))
         user = getattr(res, "user", None)
     except Exception:
         raise _unauthorized("Your session expired — sign in again.")
@@ -66,6 +73,7 @@ def require_user(authorization: str | None = Header(default=None)) -> dict:
     if len(_CACHE) >= _CACHE_MAX:
         _CACHE.clear()
     _CACHE[cache_key] = (now + _CACHE_TTL, resolved)
+    set_current_user(uid)
     return resolved
 
 

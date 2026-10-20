@@ -67,6 +67,18 @@ def _require_account(user: dict | None) -> str | None:
     return user.get("id")
 
 
+def _byok(owner: str) -> bool:
+    """True when this account builds with its own key (no shared-pool quota)."""
+    raw = os.getenv("AUTH_REQUIRED", "1").strip().lower()
+    if raw in ("0", "false", "off", "no"):
+        return False
+    try:
+        from userkeys import has_keys
+        return has_keys(owner)
+    except Exception:
+        return False
+
+
 def check_build_quota(user: dict | None) -> None:
     """Raise 429 when today's builds are spent; 503 when metering is missing."""
     owner = _require_account(user)
@@ -126,7 +138,16 @@ def record_build(user: dict | None, wish_id: str | None = None, kind: str = "bui
 
 
 def consume_build(user: dict | None, wish_id: str | None = None, kind: str = "build") -> None:
-    """Atomically check + record (single worker, so a process lock is enough)."""
+    """Atomically check + record (single worker, so a process lock is enough).
+
+    Accounts with a saved BYOK key skip the shared-pool quota entirely: their
+    builds use their own key and never fall back to Intara's keys.
+    """
+    owner = _require_account(user)
+    if not owner or daily_limit() <= 0:
+        return
+    if _byok(owner):
+        return
     with _LOCK:
         check_build_quota(user)
         record_build(user, wish_id=wish_id, kind=kind)

@@ -201,7 +201,7 @@ def _fake_openai_client(comp):
 def test_json_mode_attaches_response_format(monkeypatch):
     llm = _fresh_llm(monkeypatch, {"GROQ_API_KEY": "g"})
     comp = _FakeCompletions(lambda kw: _FakeResp('{"a": 1}'))
-    monkeypatch.setattr(llm, "_groq_client", lambda: _fake_openai_client(comp))
+    monkeypatch.setattr(llm, "_groq_client", lambda key=None: _fake_openai_client(comp))
     info: dict = {}
     out = llm._call_groq("hi", "m", json_mode=True, info=info)
     assert out == '{"a": 1}'
@@ -218,13 +218,13 @@ def test_json_mode_unsupported_falls_back_and_caches(monkeypatch):
         return _FakeResp('{"a": 2}')
 
     comp = _FakeCompletions(fail_then_ok)
-    monkeypatch.setattr(llm, "_groq_client", lambda: _fake_openai_client(comp))
+    monkeypatch.setattr(llm, "_groq_client", lambda key=None: _fake_openai_client(comp))
     out = llm._call_groq("hi", "m", json_mode=True)
     assert out == '{"a": 2}'
     assert ("groq", "m") in llm._NO_JSON_MODE
     # second call goes plain immediately (cached), single transport call
     comp2 = _FakeCompletions(lambda kw: _FakeResp('{"a": 3}'))
-    monkeypatch.setattr(llm, "_groq_client", lambda: _fake_openai_client(comp2))
+    monkeypatch.setattr(llm, "_groq_client", lambda key=None: _fake_openai_client(comp2))
     assert llm._call_groq("hi", "m", json_mode=True) == '{"a": 3}'
     assert len(comp2.seen_kwargs) == 1 and "response_format" not in comp2.seen_kwargs[0]
 
@@ -236,7 +236,7 @@ def test_json_mode_quota_never_downgrades(monkeypatch):
         raise RuntimeError("429 quota exhausted")
 
     comp = _FakeCompletions(quota)
-    monkeypatch.setattr(llm, "_groq_client", lambda: _fake_openai_client(comp))
+    monkeypatch.setattr(llm, "_groq_client", lambda key=None: _fake_openai_client(comp))
     with pytest.raises(RuntimeError, match="429"):
         llm._call_groq("hi", "m", json_mode=True)
     assert ("groq", "m") not in llm._NO_JSON_MODE
@@ -246,7 +246,7 @@ def test_json_mode_quota_never_downgrades(monkeypatch):
 def test_max_output_tokens_forwarded(monkeypatch):
     llm = _fresh_llm(monkeypatch, {"GROQ_API_KEY": "g"})
     comp = _FakeCompletions(lambda kw: _FakeResp('{"a": 1}'))
-    monkeypatch.setattr(llm, "_groq_client", lambda: _fake_openai_client(comp))
+    monkeypatch.setattr(llm, "_groq_client", lambda key=None: _fake_openai_client(comp))
     llm._call_groq("hi", "m", max_output_tokens=512)
     assert comp.seen_kwargs[0].get("max_tokens") == 512
 

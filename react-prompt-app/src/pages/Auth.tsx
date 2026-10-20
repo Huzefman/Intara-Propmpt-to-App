@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { supabase, isSupabaseDemo } from '../supabase'
@@ -54,6 +54,7 @@ export function Auth() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const toAccount = useRef(false)
 
   const from = useMemo(() => {
     const target = loc.state?.from
@@ -61,7 +62,9 @@ export function Auth() {
   }, [loc.state])
 
   useEffect(() => {
-    if (!loading && user) nav(from, { replace: true })
+    // A fresh signup goes to /account to add a key. Keep this effect from
+    // racing that redirect while Supabase emits its auth-state change.
+    if (!loading && user && !toAccount.current) nav(from, { replace: true })
   }, [loading, user, from, nav])
 
   function switchMode(next: Mode) {
@@ -98,22 +101,28 @@ export function Auth() {
           const j = await res.json().catch(() => ({} as any))
           throw new Error(j?.detail || `Could not create the account (${res.status}).`)
         }
+        // From here on, the auth-state listener must not redirect to `from`:
+        // a brand-new account should land on the account page once.
+        toAccount.current = true
         const { error } = await supabase.auth.signInWithPassword({ email: clean, password })
         if (error) {
           if ((error.message || '').toLowerCase().includes('email not confirmed')) {
+            toAccount.current = false
             setMode('signin')
             setNotice('Account created — but this Supabase project still requires email confirmation. Turn off “Confirm email” in Authentication → Providers → Email, then sign in.')
             return
           }
           throw error
         }
-        nav(from, { replace: true })
+        nav('/account?welcome=1', { replace: true })
       } else {
+        toAccount.current = false
         const { error } = await supabase.auth.signInWithPassword({ email: clean, password })
         if (error) throw error
         nav(from, { replace: true })
       }
     } catch (e: any) {
+      toAccount.current = false
       setErr(humanize(e?.message || 'Could not sign in.'))
     } finally {
       setBusy(false)
@@ -128,13 +137,13 @@ export function Auth() {
           Your wishes.<br /><span style={{ color: 'var(--intara-muted)', fontWeight: 300 }}>Only yours.</span>
         </div>
         <p style={{ fontSize: 13.5, lineHeight: 1.75, color: 'var(--intara-faint)', maxWidth: 440, letterSpacing: '-0.01em', margin: 0 }}>
-          Every account gets a private workspace in the same Intara database — your plans, builds and chat history are scoped to you and invisible to everyone else. The public landing and the ten template apps stay open to all.
+          Every account gets a private workspace in the same Intara database — your plans, builds and chat history are scoped to you and invisible to everyone else. Add your own model key for unlimited builds, or use the shared free pool. The public landing and the ten template apps stay open to all.
         </p>
         <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 4 }}>
           {[
             ['Private by default', 'Owner-scoped queries + row-level security'],
-            ['3 builds / day', 'Shared free LLM pool, fair use per account'],
-            ['No email friction', 'Create an account and start weaving'],
+            ['3 builds / day', 'On the shared free LLM pool'],
+            ['Your key, your quota', 'Add any provider key after signup'],
           ].map(([title, detail]) => (
             <div key={title} style={{ minWidth: 150 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--intara-muted)' }}>{title}</div>
@@ -182,6 +191,12 @@ export function Auth() {
             {busy ? 'One moment…' : mode === 'signup' ? 'Create my account' : 'Sign in'}
           </button>
         </form>
+
+        {mode === 'signup' && (
+          <div style={{ marginTop: 12, fontSize: 11, lineHeight: 1.7, color: 'var(--intara-dim)' }}>
+            Next: add an LLM key for unlimited builds (optional). Skip it to use the shared pool — 3 builds per day.
+          </div>
+        )}
 
         {isSupabaseDemo && (
           <div style={{ marginTop: 14, padding: '10px 12px', borderRadius: 12, border: '1px solid rgba(251,191,36,0.35)', background: 'rgba(251,191,36,0.06)', fontSize: 11.5, lineHeight: 1.6, color: '#FCD34D' }}>

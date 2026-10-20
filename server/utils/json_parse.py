@@ -151,7 +151,9 @@ def parse_json_with_repair(text: str, repair_fn, *, truncated: bool | None = Non
         snippet = text if len(text) <= max_repair_chars else text[-max_repair_chars:]
         try:
             fixed = repair_fn(str(first_err), snippet)
-        except Exception:
+        except Exception as e:
+            if getattr(e, "byok_error", False):
+                raise
             raise first_err
         if not isinstance(fixed, str) or not fixed.strip():
             raise first_err

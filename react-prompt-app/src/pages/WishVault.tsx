@@ -185,7 +185,11 @@ function eventLabel(ev: any): { text: string; tone: 'ok' | 'busy' | 'bad' | 'dim
     case 'plan_ready': return { text: 'Plan ready — awaiting approval', tone: 'ok' }
     case 'plan_failed': return { text: `Plan failed — ${(d.error || '').slice(0, 140)}`, tone: 'bad' }
     case 'build_done': return { text: 'Build done — packing the trial…', tone: 'ok' }
-    case 'build_failed': return { text: `Build failed at ${d.failedStep || 'unknown step'}`, tone: 'bad' }
+    case 'build_failed': {
+      const where = d.failedStep ? ` at ${d.failedStep}` : ''
+      const why = d.error || d.reason
+      return { text: `Build failed${where}${why ? ` — ${String(why).slice(0, 160)}` : ''}`, tone: 'bad' }
+    }
     case 'heartbeat': return { text: `Still working — status ${(d.status || '').replace('_', ' ')}`, tone: 'dim' }
     case 'error': return { text: `Stream note: ${(d.error || ev.error || '').slice(0, 140)}`, tone: 'dim' }
     default: return { text: `${ev.event}`, tone: 'dim' }

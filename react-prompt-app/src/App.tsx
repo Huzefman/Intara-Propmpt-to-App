@@ -7,6 +7,7 @@ import { DEMO } from './demo'
 import './theme/intara.css'
 
 const Auth = lazy(() => import('./pages/Auth').then(m => ({ default: m.Auth })))
+const Account = lazy(() => import('./pages/Account').then(m => ({ default: m.Account })))
 const WishVault = lazy(() => import('./pages/WishVault').then(m => ({ default: m.WishVault })))
 const Constellation = lazy(() => import('./pages/Constellation').then(m => ({ default: m.Constellation })))
 const Archives = lazy(() => import('./pages/Archives').then(m => ({ default: m.Archives })))
@@ -36,6 +37,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
               <Route path="/wish/:id" element={<RequireAuth><WishVault /></RequireAuth>} />
               <Route path="/runs/:id" element={<RequireAuth><RunPage /></RequireAuth>} />
               <Route path="/templates" element={<GalleryPage />} />

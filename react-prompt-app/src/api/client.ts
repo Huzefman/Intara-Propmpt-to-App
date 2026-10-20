@@ -336,3 +336,102 @@ export async function postFeedback(kind: string, payload: any, projectId?: strin
   if (!res.ok) throw new Error(`feedback failed ${res.status}`)
   return res.json()
 }
+
+// Account + bring-your-own LLM keys. Secret keys are write-only: the API only
+// ever returns a masked hint, never the key itself.
+export type AccountProvider = {
+  id: string
+  label: string
+  docs_url: string
+  placeholder: string
+  description: string
+  default_model: string
+  needs_base_url: boolean
+}
+
+export type AccountKey = {
+  provider: string
+  label: string
+  masked: string
+  model: string | null
+  base_url: string | null
+  created_at: string | null
+  updated_at: string | null
+  docs_url: string
+}
+
+export type AccountQuota = {
+  mode: 'byok' | 'shared'
+  limit: number | null
+  used: number
+  remaining: number | null
+}
+
+export type AccountInfo = {
+  email: string | null
+  mode: 'byok' | 'shared'
+  byok_available: boolean
+  error: string | null
+  keys: AccountKey[]
+  providers: AccountProvider[]
+  quota: AccountQuota
+}
+
+export type KeyTestResult = {
+  ok: boolean
+  provider?: string
+  model?: string
+  sample?: string
+  error?: string
+}
+
+async function readJson<T>(res: Response, label: string): Promise<T> {
+  const text = await res.text().catch(() => '')
+  let body: any = {}
+  try { body = text ? JSON.parse(text) : {} } catch { body = {} }
+  if (!res.ok) {
+    const detail = typeof body?.detail === 'string' ? body.detail : ''
+    throw new Error(detail || text.slice(0, 200) || `${label} failed (${res.status})`)
+  }
+  return body as T
+}
+
+export async function getAccount(): Promise<AccountInfo> {
+  return readJson<AccountInfo>(await apiFetch('/api/account'), 'account')
+}
+
+export async function saveAccountKey(
+  provider: string,
+  input: { api_key: string; model?: string | null; base_url?: string | null },
+): Promise<{ ok: boolean; key: AccountKey }> {
+  const res = await apiFetch(`/api/account/keys/${encodeURIComponent(provider)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  return readJson(res, 'save key')
+}
+
+export async function deleteAccountKey(provider: string): Promise<{ ok: boolean }> {
+  const res = await apiFetch(`/api/account/keys/${encodeURIComponent(provider)}`, { method: 'DELETE' })
+  return readJson(res, 'remove key')
+}
+
+export async function testAccountKey(input: {
+  provider: string
+  api_key: string
+  model?: string | null
+  base_url?: string | null
+}): Promise<KeyTestResult> {
+  const res = await apiFetch('/api/account/keys/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  return readJson(res, 'test key')
+}
+
+export async function testSavedAccountKey(provider: string): Promise<KeyTestResult> {
+  const res = await apiFetch(`/api/account/keys/${encodeURIComponent(provider)}/test`, { method: 'POST' })
+  return readJson(res, 'test key')
+}

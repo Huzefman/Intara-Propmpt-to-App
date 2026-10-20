@@ -3,6 +3,7 @@ Finished FastAPI — 65 lines you type in 25 min
 Interview: "I guard LLM JSON, retry on 429, and write to Supabase"
 """
 import os, json, re, time
+from functools import lru_cache
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -93,16 +94,26 @@ def parse_json(text: str):
     if m: text = m.group(0)
     return json.loads(text)
 
+@lru_cache(maxsize=16)
+def _gemini_client_for(api_key: str):
+    return _make_gemini_client(api_key)
+
+
 @retry(wait=wait_exponential(min=1, max=8), stop=stop_after_attempt(3), retry=retry_if_exception(_gemini_retryable))
-def call_gemini(prompt: str, *, response_mime_type: str | None = None, max_output_tokens: int | None = None, info: dict | None = None):
-    if not client:
+def call_gemini(prompt: str, *, response_mime_type: str | None = None, max_output_tokens: int | None = None, info: dict | None = None,
+                api_key: str | None = None, model: str | None = None):
+    gem = client
+    if api_key and api_key != GEMINI_KEY:
+        gem = _gemini_client_for(api_key)
+    if not gem:
         raise RuntimeError("Missing GEMINI_API_KEY")
+    mdl = model or MODEL
     config: dict = {"temperature": 0.2}
     if response_mime_type:
         config["response_mime_type"] = response_mime_type
     if max_output_tokens:
         config["max_output_tokens"] = max_output_tokens
-    resp = client.models.generate_content(model=MODEL, contents=prompt, config=config)
+    resp = gem.models.generate_content(model=mdl, contents=prompt, config=config)
     if info is not None:
         finish = None
         try:
@@ -112,7 +123,7 @@ def call_gemini(prompt: str, *, response_mime_type: str | None = None, max_outpu
                 finish = str(finish).split(".")[-1] if finish is not None else None
         except Exception:
             finish = None
-        info.update({"provider": "gemini", "model": MODEL,
+        info.update({"provider": "gemini", "model": mdl,
                      "finish_reason": finish,
                      "json_mode": bool(response_mime_type)})
         try:
@@ -132,7 +143,14 @@ def generate(inp: PromptIn, user: dict = Depends(require_user)):
     try:
         from services.llm import call_llm
         raw = call_llm(PROMPT.format(prompt=inp.prompt), json_mode=True)
-    except Exception:
+    except Exception as e:
+        # A BYOK account must never silently fall back to the app's Gemini key
+        # (that would bypass the shared quota and spend Intara's budget).
+        if getattr(e, "byok_error", False):
+            raise
+        from userkeys import using_byok
+        if using_byok():
+            raise
         raw = call_gemini(PROMPT.format(prompt=inp.prompt))
     try:
         data = parse_json(raw)
@@ -143,7 +161,12 @@ def generate(inp: PromptIn, user: dict = Depends(require_user)):
         try:
             from services.llm import call_llm
             raw2 = call_llm(f"Fix this to valid JSON with tables: {raw}", json_mode=True)
-        except Exception:
+        except Exception as e:
+            if getattr(e, "byok_error", False):
+                raise
+            from userkeys import using_byok
+            if using_byok():
+                raise
             raw2 = call_gemini(f"Fix this to valid JSON with tables: {raw}")
         try:
             data = parse_json(raw2)
@@ -259,3 +282,8 @@ try:
     app.include_router(accounts_router, prefix="/api")
 except Exception as e:
     print(f"accounts router not loaded: {e}")
+try:
+    from routers.keys import router as keys_router
+    app.include_router(keys_router, prefix="/api")
+except Exception as e:
+    print(f"account keys router not loaded: {e}")

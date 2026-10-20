@@ -118,6 +118,8 @@ def _try_llm_frontend_page(appName, tagline, table, fields, pageName, route, com
                     return {"path": data["path"], "content": v}
         return None
     except Exception as e:
+        if getattr(e, "byok_error", False):
+            raise
         print(f"LLM frontend page {pageName} fallback: {e}")
         return None
 
@@ -143,6 +145,8 @@ def _try_llm_backend_table(appName, table, fields, all_tables, apis):
             return data
         return None
     except Exception as e:
+        if getattr(e, "byok_error", False):
+            raise
         print(f"LLM backend table {table} fallback: {e}")
         return None
 

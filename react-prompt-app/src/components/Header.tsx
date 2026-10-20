@@ -17,6 +17,7 @@ export function Header() {
           { to: '/templates', label: 'Templates' },
           { to: '/constellation', label: 'Constellation' },
           { to: '/archives', label: 'Archives' },
+          { to: '/account', label: 'Account' },
         ]
       : [
           { to: '/', label: 'Wish' },
@@ -65,9 +66,13 @@ export function Header() {
             <span style={chipStyle}>Demo · MEM</span>
           ) : onAuth ? null : user ? (
             <>
-              <span title={user.email || ''} style={{ ...chipStyle, color: 'var(--intara-muted)', maxWidth: 190, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <Link
+                to="/account"
+                title="Account & API keys"
+                style={{ ...chipStyle, color: 'var(--intara-muted)', maxWidth: 190, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'none' }}
+              >
                 {user.email?.slice(0, 22)}
-              </span>
+              </Link>
               <button
                 onClick={async () => { await signOut(); nav('/') }}
                 className="btn-ghost"

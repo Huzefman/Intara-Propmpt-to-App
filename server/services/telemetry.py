@@ -17,6 +17,7 @@ def record_llm_call(*, provider: str, model: str | None = None,
                     tokens_in: int | None = None, tokens_out: int | None = None,
                     latency_ms: int | None = None, finish_reason: str | None = None,
                     json_mode: bool | None = None,
+                    user_id: str | None = None,
                     wish_id: str | None = None, step_key: str | None = None,
                     agent: str | None = None, prompt_version: str | None = None,
                     parse_outcome: str | None = None, repair_used: bool = False,
@@ -45,6 +46,8 @@ def record_llm_call(*, provider: str, model: str | None = None,
             "repair_used": bool(repair_used),
             "fallback_reason": str(fallback_reason)[:500] if fallback_reason else None,
         }
+        if user_id:
+            payload["user_id"] = user_id
         if wish_id:
             payload["wish_id"] = wish_id
         if step_key:

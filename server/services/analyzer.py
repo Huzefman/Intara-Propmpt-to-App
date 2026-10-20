@@ -201,6 +201,10 @@ def analyze_prompt(prompt: str) -> dict:
         return data
 
     except Exception as e:
+        if getattr(e, "byok_error", False):
+            # The caller's own key failed. Let the API surface a clear error
+            # instead of pretending the mock plan came from their provider.
+            raise
         if _is_quota(e):
             # Graceful fallback to mock on quota (don't block user, just warn)
             print(f"analyzer quota hit, mock fallback with warning: {e}")

@@ -139,6 +139,8 @@ def plan_build(prompt: str) -> dict:
         return analyze_prompt(prompt)
     except Exception as e:
         # analyzer already handles quota and fallback; if it raises 429, surface
+        if getattr(e, "byok_error", False):
+            raise
         if _is_quota_error(e):
             raise
         print(f"analyzer failed, falling back to legacy plan_build: {e}")
@@ -199,6 +201,9 @@ def plan_build(prompt: str) -> dict:
                 data["_meta"] = {"source": "mock", "reason": "repair_failed"}
                 return data
     except Exception as e:
+        if getattr(e, "byok_error", False):
+            # A bad/expired user key must be visible, not hidden behind a mock.
+            raise
         if _is_quota_error(e):
             # All providers exhausted — degrade to mock with warning (never 500).
             print(f"planner_v2 all-providers exhausted, mock fallback with warning: {e}")

@@ -187,6 +187,10 @@ def clarify_prompt(prompt: str) -> dict:
                 "_meta": {"source": "live"},
             }
     except Exception as e:
+        if getattr(e, "byok_error", False):
+            # The account's own key failed: surface it now instead of walking
+            # the user through heuristic questions and failing at the plan.
+            raise
         print(f"clarify LLM failed, template fallback: {e}")
 
     fallback_qs = _fallback_questions(prompt, scored)

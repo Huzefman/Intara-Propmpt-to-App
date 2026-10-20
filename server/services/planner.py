@@ -266,6 +266,8 @@ def plan_wish(prompt: str) -> dict:
             data["_meta"] = meta
             return data
         except Exception as e:
+            if getattr(e, "byok_error", False):
+                raise
             if _is_quota(e):
                 raise
             raw2, meta2 = call_llm_with_meta(f"Fix this to valid JSON with required keys appName,tagline,tables,pages,apis,auth: {raw}", json_mode=True)
@@ -281,6 +283,10 @@ def plan_wish(prompt: str) -> dict:
                 data["_meta"] = {"source": "mock", "reason": "repair_failed"}
                 return data
     except Exception as e:
+        if getattr(e, "byok_error", False):
+            # The user's own key failed. Surface it instead of silently
+            # producing a mock plan that looks like a real build.
+            raise
         if _is_quota(e):
             # All providers exhausted (chain tried OR→Gemini→Groq→Nvidia→DeepSeek):
             # degrade to mock with warning instead of 500/429 so the app keeps working.

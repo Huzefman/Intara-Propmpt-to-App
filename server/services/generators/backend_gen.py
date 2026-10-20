@@ -49,10 +49,16 @@ def generate_backend_table_llm(table: dict, app_spec: dict, notes: list | None =
                                 if not validate_python(ff["content"]):
                                     f["content"] = ff["content"]
                     except Exception as e:
+                        if getattr(e, "byok_error", False):
+                            raise
                         _note(f"repair failed: {e}"[:200])
                         return None
         return data
     except Exception as e:
+        if getattr(e, "byok_error", False):
+            # Own-key failure: fail the build instead of silently shipping the
+            # deterministic template and calling it a BYOK build.
+            raise
         print(f"LLM backend table {table.get('name')} failed: {e}")
         _note(str(e))
         return None

@@ -184,6 +184,18 @@ async def _run_plan_task(wid: str, prompt: str, answers: dict | None = None, ski
     Blocking LLM work runs in worker threads with a hard timeout so the event
     loop stays responsive (page loads, polls, chat) while planning.
     """
+    # Preserve BYOK identity in the background task (thread/context copies can
+    # lose request ContextVars at scheduling boundaries) and pin the key set
+    # for the whole plan so a mid-build key change cannot switch pools.
+    try:
+        from userkeys import set_current_user, snapshot_for
+        owner = (MEM.get(wid) or {}).get("owner")
+        set_current_user(owner)
+        if owner:
+            snapshot_for(owner)
+    except Exception:
+        pass
+
     def _plan_timeout() -> float:
         try:
             return float(os.getenv("STEP_TIMEOUT_SECONDS", "600"))
@@ -304,6 +316,14 @@ async def _run_staged_build(wid: str):
         from db.wishes import get_wish_with_steps, set_wish_status
         # load from DB (fail-fast if not found or DB down)
         wish = get_wish_with_steps(wid)
+        try:
+            from userkeys import set_current_user, snapshot_for
+            owner = wish.get("owner")
+            set_current_user(owner)
+            if owner:
+                snapshot_for(owner)
+        except Exception:
+            pass
         # update DB status to building (fail-fast)
         set_wish_status(wid, "building", current_step_id=wish.get("prd",{}).get("buildGraph",[{}])[0].get("id") if wish.get("prd",{}).get("buildGraph") else None)
         # also update MEM cache

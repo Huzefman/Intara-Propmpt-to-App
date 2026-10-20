@@ -114,7 +114,7 @@ async def start_run(body: StartIn, user: dict = Depends(require_user)):
             run_id = store.create_run(project_id, "build", inputs)
             store.set_status(run_id, "running")
             _writeback_wish(body.wish_id, {"v2": {"run_id": run_id}})
-            asyncio.create_task(_background_run(run_id, project_id, inputs))
+            asyncio.create_task(_background_run(run_id, project_id, inputs, owner=uid(user)))
             return {"ok": True, "run_id": run_id, "project_id": project_id,
                     "status": "running"}
         # iterate/eval without a base need a full build first
@@ -125,7 +125,14 @@ async def start_run(body: StartIn, user: dict = Depends(require_user)):
         raise HTTPException(500, f"run start failed: {e}")
 
 
-async def _background_run(run_id: str, project_id: str, inputs: dict):
+async def _background_run(run_id: str, project_id: str, inputs: dict, owner: str | None = None):
+    try:
+        from userkeys import set_current_user, snapshot_for
+        set_current_user(owner)
+        if owner:
+            snapshot_for(owner)
+    except Exception:
+        pass
     try:
         eng = _engine()
         report = await eng.run(project_id=project_id, kind="build",

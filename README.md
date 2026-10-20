@@ -40,6 +40,7 @@ The repo contains the whole system: the LLM pipeline, a durable resumable run en
 - **Staged pipeline, fail-closed.** S0 intake → S6 seed with schema-validated outputs at every stage, bounded repair loops (≤2, cooling temperatures), and deterministic fallbacks that are *labelled and counted as failures* — never silent.
 - **Gates, not vibes.** G0 schema (Pydantic/TS generated from one JSON Schema + drift check) · G1 semantic lint R01–R50 (ported from two human review rounds) · G2 requirement coverage · G3 generated engine tests · G4 render smoke.
 - **Durable run engine.** Budgets, content-addressed artifacts, resume-after-crash by run id (proven live: a killed run resumed and finished), quota-aware retries across free-tier providers (Gemini / Groq / OpenRouter / Nvidia), per-call telemetry — 429 live calls analysed in [`notebooks/telemetry.ipynb`](notebooks/telemetry.ipynb) (provider mix, failure causes, latency, truncation).
+- **Accounts + bring-your-own-key.** Every visitor gets a private, owner-scoped workspace. The shared free pool is capped at 3 builds/day; add a key from any supported provider (Gemini, OpenRouter, Groq, NVIDIA, DeepSeek, OpenAI, Anthropic, or a custom OpenAI-compatible endpoint) on the Account page for unlimited builds. Keys are encrypted with Fernet, service-key only, never returned to the browser, and BYOK calls never silently fall back to the shared pool.
 - **Own formula language.** Hand-written parser + evaluator in Python **and** TypeScript — no `eval` — with 135 shared conformance cases plus a 500-input fuzzer. Edits are RFC 6902 JSON patches with invert + version tree (1,175/1,175 randomized round-trips).
 
 ## Measured numbers (free-tier, lab)
@@ -50,7 +51,7 @@ The repo contains the whole system: the LLM pipeline, a durable resumable run en
 | core20 live eval (20 real wishes, end-to-end) | **17/20** (85% accept bar) |
 | Held-out domains never tuned for (invoicing, gym, helpdesk) | **3/5** green |
 | Human-reviewed gold specs in the gallery | **10** |
-| Python tests / Node tests | **201/201** · **206 pass** (+1 env-skip) |
+| Python tests / Node tests | **266/266** · **206 pass** (+1 env-skip) |
 | Formula conformance cases (shared Py/TS) | **135** + fuzzing |
 | Live Supabase adapter contract | **6/6** |
 

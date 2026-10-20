@@ -14,6 +14,10 @@ services:
       - key: DAILY_BUILD_LIMIT
         value: "3"
       # Secrets are entered in the Render dashboard (sync: false).
+      # Generate once with:
+      #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      - key: KEY_ENCRYPTION_SECRET
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_KEY

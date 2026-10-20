@@ -69,9 +69,23 @@ def _is_quota(e: Exception) -> bool:
         return "429" in m or "quota" in m or "resource_exhausted" in m or "exhausted" in m
 
 
+class ByokError(RuntimeError):
+    """The account's own key failed. Do not mask it with mock/template fallbacks."""
+
+    byok_error = True
+
+
+def is_byok_error(exc: BaseException) -> bool:
+    return bool(getattr(exc, "byok_error", False))
+
+
 def has_any_llm() -> bool:
-    """True if ANY allowed chat provider key is configured (respects LLM_ONLY)."""
-    return any(
+    """True if ANY allowed chat provider is configured (respects LLM_ONLY).
+
+    Also true when the current account has a saved BYOK key, so a deployment
+    with no shared pool can still build for users who brought their own key.
+    """
+    if any(
         _allowed(name) and os.getenv(key)
         for name, key in (
             ("openrouter", "OPENROUTER_API_KEY"),
@@ -80,7 +94,13 @@ def has_any_llm() -> bool:
             ("nvidia", "NVIDIA_API_KEY"),
             ("deepseek", "DEEPSEEK_API_KEY"),
         )
-    )
+    ):
+        return True
+    try:
+        from userkeys import using_byok
+        return using_byok()
+    except Exception:
+        return False
 
 
 def _only_set() -> set | None:
@@ -96,8 +116,8 @@ def _allowed(name: str) -> bool:
     only = _only_set()
     return True if only is None else name in only
 
-def _groq_client():
-    key = os.getenv("GROQ_API_KEY", "")
+def _groq_client(key: str | None = None):
+    key = (key or os.getenv("GROQ_API_KEY", "")).strip()
     if not key:
         return None
     try:
@@ -136,8 +156,8 @@ def _maybe_json_kwargs(provider: str, model: str, kwargs: dict, json_mode: bool)
     return False
 
 
-def _call_groq(prompt: str, model: str, temperature: float = 0.2, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None) -> str:
-    client = _groq_client()
+def _call_groq(prompt: str, model: str, temperature: float = 0.2, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None, key: str | None = None) -> str:
+    client = _groq_client(key)
     if not client:
         raise RuntimeError("Missing GROQ_API_KEY")
     kwargs: dict = {
@@ -176,8 +196,8 @@ def _nvidia_timeout() -> float:
         return 120.0
 
 
-def _nvidia_client():
-    key = os.getenv("NVIDIA_API_KEY", "")
+def _nvidia_client(key: str | None = None):
+    key = (key or os.getenv("NVIDIA_API_KEY", "")).strip()
     if not key:
         return None
     try:
@@ -187,8 +207,8 @@ def _nvidia_client():
         print(f"nvidia client init failed: {e}")
         return None
 
-def _call_nvidia(prompt: str, model: str, temperature: float = 0.2, stream: bool = False, image_url: str | None = None, reasoning_effort: str | None = None, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None) -> str:
-    client = _nvidia_client()
+def _call_nvidia(prompt: str, model: str, temperature: float = 0.2, stream: bool = False, image_url: str | None = None, reasoning_effort: str | None = None, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None, key: str | None = None) -> str:
+    client = _nvidia_client(key)
     if not client:
         raise RuntimeError("Missing NVIDIA_API_KEY")
     # Nemotron 3 Ultra requires enable_thinking via chat_template_kwargs
@@ -269,8 +289,8 @@ def call_nvidia_vision(prompt: str, image_url: str, model: str | None = None, re
     # Kimi K3 is vision+reasoning, use max reasoning for image tasks
     return _call_nvidia(prompt, mdl, temperature=1.0, stream=stream, image_url=image_url, reasoning_effort=reasoning_effort)
 
-def _openrouter_client():
-    key = os.getenv("OPENROUTER_API_KEY", "")
+def _openrouter_client(key: str | None = None):
+    key = (key or os.getenv("OPENROUTER_API_KEY", "")).strip()
     if not key:
         return None
     try:
@@ -280,8 +300,8 @@ def _openrouter_client():
         print(f"openrouter client init failed: {e}")
         return None
 
-def _call_openrouter(prompt: str, model: str, temperature: float = 0.2, max_tokens: int | None = None, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None) -> str:
-    client = _openrouter_client()
+def _call_openrouter(prompt: str, model: str, temperature: float = 0.2, max_tokens: int | None = None, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None, key: str | None = None) -> str:
+    client = _openrouter_client(key)
     if not client:
         raise RuntimeError("Missing OPENROUTER_API_KEY")
     try:
@@ -317,8 +337,291 @@ def _call_openrouter(prompt: str, model: str, temperature: float = 0.2, max_toke
     except Exception as e:
         raise
 
+def _call_openai_compatible(prompt: str, model: str, api_key: str, base_url: str,
+                            temperature: float = 0.2, *, json_mode: bool = False,
+                            max_output_tokens: int | None = None,
+                            info: dict | None = None,
+                            provider_name: str = "custom") -> str:
+    """Generic OpenAI-compatible chat call used by BYOK OpenAI/custom keys."""
+    if not api_key:
+        raise RuntimeError(f"Missing {provider_name} API key")
+    if not base_url:
+        raise RuntimeError(f"Missing {provider_name} base URL")
+    from openai import OpenAI
+    client_kwargs: dict = {"base_url": base_url, "api_key": api_key, "timeout": 60.0}
+    if provider_name == "custom":
+        import httpx
+        # The endpoint is user-supplied: never follow redirects, or a public
+        # HTTPS host could bounce the backend to an internal address (SSRF).
+        client_kwargs["http_client"] = httpx.Client(follow_redirects=False, timeout=60.0)
+    client = OpenAI(**client_kwargs)
+    system = ("You are a JSON generator. Return ONLY valid JSON, no markdown, no prose."
+              if json_mode else "You are a precise software planning assistant.")
+    kwargs: dict = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": temperature,
+        "timeout": 60.0,
+    }
+    if max_output_tokens:
+        kwargs["max_tokens"] = max_output_tokens
+    tried_structured = _maybe_json_kwargs(provider_name, model, kwargs, json_mode)
+    try:
+        try:
+            resp = client.chat.completions.create(**kwargs)  # type: ignore
+        except Exception as e:
+            if tried_structured and _structured_unsupported(e):
+                _NO_JSON_MODE.add((provider_name, model))
+                kwargs.pop("response_format", None)
+                resp = client.chat.completions.create(**kwargs)  # type: ignore
+            else:
+                raise
+        if info is not None:
+            info.update({"provider": provider_name, "model": model,
+                         "finish_reason": _finish_reason_openai(resp),
+                         "json_mode": tried_structured})
+            _usage_openai(resp, info)
+        return (resp.choices[0].message.content or "").strip()
+    finally:
+        if provider_name == "custom":
+            client.close()
+
+
+def _call_anthropic(prompt: str, model: str, api_key: str,
+                    temperature: float = 0.2, *, json_mode: bool = False,
+                    max_output_tokens: int | None = None,
+                    info: dict | None = None) -> str:
+    """Native Anthropic Messages API (BYOK only)."""
+    if not api_key:
+        raise RuntimeError("Missing Anthropic API key")
+    import httpx
+    system = ("You are a JSON generator. Return ONLY valid JSON, no markdown, no prose."
+              if json_mode else "You are a precise software planning assistant.")
+    body = {
+        "model": model,
+        "max_tokens": max_output_tokens or 4096,
+        "temperature": temperature,
+        "system": system,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    r = httpx.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={"x-api-key": api_key, "anthropic-version": "2023-06-01",
+                 "content-type": "application/json"},
+        json=body, timeout=60.0,
+    )
+    if r.status_code >= 400:
+        try:
+            detail = (r.json().get("error") or {}).get("message") or r.text[:300]
+        except Exception:
+            detail = r.text[:300]
+        raise RuntimeError(f"Anthropic {r.status_code}: {detail}")
+    data = r.json()
+    blocks = data.get("content") or []
+    text = "".join(b.get("text", "") for b in blocks
+                   if isinstance(b, dict) and b.get("type") == "text").strip()
+    if not text:
+        raise RuntimeError("Anthropic returned an empty response")
+    if info is not None:
+        usage = data.get("usage") or {}
+        info.update({"provider": "anthropic", "model": model,
+                     "finish_reason": data.get("stop_reason"),
+                     "json_mode": json_mode,
+                     "tokens_in": usage.get("input_tokens"),
+                     "tokens_out": usage.get("output_tokens")})
+    return text
+
+
+def _byok_rows() -> list[dict]:
+    """Saved keys for the request's account. Empty when none / table missing.
+
+    Background builds pin a snapshot at task start (see ``userkeys``), which
+    also keeps a build from changing keys midway through.
+    """
+    try:
+        from userkeys import UserKeysUnavailable
+    except Exception:
+        return []
+    try:
+        from userkeys import byok_snapshot, current_user, list_keys
+        snap = byok_snapshot()
+        if snap is not None:
+            return list(snap)
+        return list_keys(current_user())
+    except UserKeysUnavailable:
+        # Migration 013 not applied: no keys can exist yet -> shared pool.
+        return []
+    except Exception as e:
+        msg = str(e)
+        if "013" in msg or "user_llm_keys" in msg:
+            return []
+        print(f"BYOK lookup failed: {msg[:160]}")
+        # We cannot tell whether this account has keys. Fail instead of
+        # silently spending the shared budget on their behalf.
+        raise ByokError(
+            "Could not read your saved LLM key — try again in a moment. "
+            "No shared pool was used."
+        ) from e
+
+
+def _byok_model(provider: str, model: str | None) -> str:
+    if model:
+        return model
+    if provider == "gemini":
+        return os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    if provider == "openrouter":
+        return os.getenv("OPENROUTER_MODEL", "openrouter/free")
+    if provider == "groq":
+        return os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+    if provider == "nvidia":
+        return os.getenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash-0731")
+    if provider == "deepseek":
+        return os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+    if provider == "openai":
+        return os.getenv("BYOK_OPENAI_MODEL", "gpt-4o-mini")
+    if provider == "anthropic":
+        return os.getenv("BYOK_ANTHROPIC_MODEL", "claude-3-5-haiku-latest")
+    return ""
+
+
+def _call_byok(prompt: str, temperature: float = 0.2,
+               max_tokens: int | None = None, *, json_mode: bool = False,
+               max_output_tokens: int | None = None,
+               info: dict | None = None) -> str | None:
+    """Try the account's own keys first. Returns None when the account has none.
+
+    When keys ARE configured, there is deliberately no fallback to the shared
+    app-key chain: a broken key fails loudly instead of quietly spending the
+    shared budget and bypassing the 3/day quota.
+    """
+    rows = _byok_rows()
+    if not rows:
+        return None
+    from userkeys import OPENAI_COMPATIBLE_BASE
+    last: Exception | None = None
+    for row in rows:
+        provider = (row.get("provider") or "").strip()
+        key = row.get("api_key") or ""
+        model = _byok_model(provider, row.get("model"))
+        sub: dict = {}
+        try:
+            if provider == "gemini":
+                from main import call_gemini
+                text = call_gemini(
+                    prompt,
+                    response_mime_type="application/json" if json_mode else None,
+                    max_output_tokens=max_output_tokens,
+                    info=sub, api_key=key, model=model,
+                )
+            elif provider == "anthropic":
+                text = _call_anthropic(
+                    prompt, model, key, temperature, json_mode=json_mode,
+                    max_output_tokens=max_output_tokens, info=sub,
+                )
+            elif provider == "custom":
+                text = _call_openai_compatible(
+                    prompt, model, key, row.get("base_url") or "",
+                    temperature, json_mode=json_mode,
+                    max_output_tokens=max_output_tokens, info=sub,
+                    provider_name="custom",
+                )
+            elif provider == "openrouter":
+                text = _call_openrouter(
+                    prompt, model, temperature, max_tokens, json_mode=json_mode,
+                    max_output_tokens=max_output_tokens, info=sub, key=key,
+                )
+            elif provider == "groq":
+                text = _call_groq(
+                    prompt, model, temperature, json_mode=json_mode,
+                    max_output_tokens=max_output_tokens, info=sub, key=key,
+                )
+            elif provider == "nvidia":
+                text = _call_nvidia(
+                    prompt, model, temperature, json_mode=json_mode,
+                    max_output_tokens=max_output_tokens, info=sub, key=key,
+                )
+            elif provider == "deepseek":
+                text = _call_deepseek(
+                    prompt, model, temperature, json_mode=json_mode,
+                    max_output_tokens=max_output_tokens, info=sub, key=key,
+                )
+            elif provider in OPENAI_COMPATIBLE_BASE:
+                text = _call_openai_compatible(
+                    prompt, model, key, OPENAI_COMPATIBLE_BASE[provider],
+                    temperature, json_mode=json_mode,
+                    max_output_tokens=max_output_tokens, info=sub,
+                    provider_name=provider,
+                )
+            else:
+                raise RuntimeError(f"Unsupported provider {provider!r}")
+            if not (text or "").strip():
+                raise RuntimeError("provider returned an empty response")
+            # Guarantee attribution even if a caller didn't populate `info`.
+            sub.setdefault("provider", provider)
+            sub.setdefault("model", model)
+            sub["byok"] = True
+            if info is not None:
+                info.update(sub)
+            return text
+        except Exception as e:
+            # Provider errors can echo credentials (especially custom
+            # OpenAI-compatible endpoints); never log or return the key.
+            detail = str(e)
+            if key:
+                detail = detail.replace(key, "[redacted]")
+            last = RuntimeError(detail[:300])
+            print(f"BYOK {provider} failed: {detail[:220]}")
+            continue
+    raise ByokError(
+        "Your saved LLM key could not complete this request. "
+        f"{str(last)[:300]} — check the key/model in Account, or remove all "
+        "saved keys to use Intara's shared pool."
+    )
+
+
+def verify_user_key(provider: str, api_key: str, model: str | None = None,
+                    base_url: str | None = None) -> dict:
+    """Cheap live check for the Account 'Test' button (never stores the key)."""
+    from userkeys import OPENAI_COMPATIBLE_BASE, validate_key
+    key, clean_model, clean_base = validate_key(provider, api_key, model, base_url)
+    mdl = _byok_model(provider, clean_model)
+    prompt = "Reply with the single word OK."
+    # A little headroom: reasoning-style models can spend a tiny 16-token cap
+    # before emitting any visible text, which would look like a bad key.
+    test_tokens = 128
+    if provider == "gemini":
+        from main import call_gemini
+        text = call_gemini(prompt, max_output_tokens=test_tokens, api_key=key, model=mdl)
+    elif provider == "anthropic":
+        text = _call_anthropic(prompt, mdl, key, 0.2, max_output_tokens=test_tokens)
+    elif provider == "custom":
+        text = _call_openai_compatible(
+            prompt, mdl, key, clean_base or "", 0.2,
+            max_output_tokens=test_tokens, provider_name="custom",
+        )
+    else:
+        base = OPENAI_COMPATIBLE_BASE.get(provider)
+        if not base:
+            raise RuntimeError(f"Unsupported provider {provider!r}")
+        text = _call_openai_compatible(
+            prompt, mdl, key, base, 0.2,
+            max_output_tokens=test_tokens, provider_name=provider,
+        )
+    if not (text or "").strip():
+        raise RuntimeError("The provider returned an empty response.")
+    return {"ok": True, "provider": provider, "model": mdl,
+            "sample": text.strip()[:40]}
+
+
 def _call_llm_inner(prompt: str, temperature: float = 0.2, max_tokens: int | None = None, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None) -> str:
     """Chain core — see call_llm (public wrapper adds cassettes + telemetry)."""
+    byok = _call_byok(prompt, temperature, max_tokens, json_mode=json_mode,
+                      max_output_tokens=max_output_tokens, info=info)
+    if byok is not None:
+        return byok
     deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
     nvidia_model = os.getenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash-0731")
     groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
@@ -465,6 +768,12 @@ def _call_llm_inner(prompt: str, temperature: float = 0.2, max_tokens: int | Non
 
 def _call_llm_with_meta_inner(prompt: str, temperature: float = 0.2, max_tokens: int | None = None, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None) -> tuple[str, dict]:
     """Chain core — see call_llm_with_meta (public wrapper adds cassettes + telemetry)."""
+    meta_info = info if info is not None else {}
+    byok = _call_byok(prompt, temperature, max_tokens, json_mode=json_mode,
+                      max_output_tokens=max_output_tokens, info=meta_info)
+    if byok is not None:
+        return byok, {"source": meta_info.get("provider") or "byok",
+                      "model": meta_info.get("model")}
     primary = os.getenv("OPENROUTER_MODEL", "openrouter/free")
     fallback = os.getenv("OPENROUTER_FALLBACK", "openrouter/free")
     groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
@@ -601,11 +910,13 @@ def _record_gateway_call(sub: dict | None, elapsed_s: float, telemetry: dict | N
         if os.getenv("LLM_TELEMETRY", "1") != "1":
             return
         from services import telemetry as _tm
+        from userkeys import current_user
         ctx = telemetry or {}
         sub = sub or {}
         _tm.record_llm_call(
             provider=sub.get("provider") or "unknown",
             model=sub.get("model"),
+            user_id=current_user(),
             tokens_in=sub.get("tokens_in"),
             tokens_out=sub.get("tokens_out"),
             latency_ms=int(elapsed_s * 1000),
@@ -759,8 +1070,8 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
         print(f"gemini embed fallback failed: {e}")
         return [[0.0]*3072 for _ in texts]
 
-def _deepseek_client():
-    key = os.getenv("DEEPSEEK_API_KEY", "")
+def _deepseek_client(key: str | None = None):
+    key = (key or os.getenv("DEEPSEEK_API_KEY", "")).strip()
     if not key:
         return None
     try:
@@ -770,8 +1081,8 @@ def _deepseek_client():
         print(f"deepseek client init failed: {e}")
         return None
 
-def _call_deepseek(prompt: str, model: str, temperature: float = 0.2, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None) -> str:
-    client = _deepseek_client()
+def _call_deepseek(prompt: str, model: str, temperature: float = 0.2, *, json_mode: bool = False, max_output_tokens: int | None = None, info: dict | None = None, key: str | None = None) -> str:
+    client = _deepseek_client(key)
     if not client:
         raise RuntimeError("Missing DEEPSEEK_API_KEY")
     kwargs: dict = {

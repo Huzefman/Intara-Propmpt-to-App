@@ -72,6 +72,9 @@ def run_agent(*, stage: str, prompt_version: str, prompt: str, output_model,
             text, meta = caller(prompt_text, temperature=temp, json_mode=True,
                                 info=info, telemetry=tele)
         except Exception as e:
+            if getattr(e, "byok_error", False):
+                # A broken own-key must surface, not silently use the fallback.
+                raise
             if _is_quota(e):
                 raise
             return None, {"error": f"{type(e).__name__}: {e}"}, info
@@ -99,6 +102,8 @@ def run_agent(*, stage: str, prompt_version: str, prompt: str, output_model,
             _attribute(info, "failed")
             for rinfo in repair_rows:
                 _attribute(rinfo, "failed")
+            if getattr(e, "byok_error", False):
+                raise
             return None, {"error": f"parse: {e}"}, info
 
     data, err, info = _call(prompt, temperature)

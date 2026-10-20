@@ -263,10 +263,16 @@ def generate_frontend_page_llm(page: dict, app_spec: dict, notes: list | None = 
                     _note(f"validation failed after repair: {errors[0][:120]}")
                     return None
             except Exception as e:
+                if getattr(e, "byok_error", False):
+                    raise
                 _note(f"repair failed: {e}"[:200])
                 return None
         return {"path": data.get("path", f"src/pages/{page['name']}.tsx"), "content": content}
     except Exception as e:
+        if getattr(e, "byok_error", False):
+            # Own-key failure: fail the build instead of silently mixing in a
+            # template page. The caller surfaces the provider error.
+            raise
         print(f"LLM frontend page {page.get('name')} failed: {e}")
         try:
             if notes is not None:
