@@ -421,6 +421,7 @@
 35. 2026-10-16 · Batch-2 review port: G3 caught a real seed gap the review missed (task row t7 without estimate_hours, needed by a computed formula) · added the missing value (flagged to reviewer); rule of thumb: G3-over-golds is the last reviewer · **FIXED**
 36. 2026-10-17 · Demo pass exposed four presentation-layer defects together: (a) preview shell reused Studio `.intara-shell` (100vh starfield leak), (b) `FilterBar` resolved "empty" from its empty rows list, (c) ref columns/detail/timeline/calendar showed ids or em dashes (no ref hydration; `title` prop misread as a row path; seed computed fields never filled), (d) switching gallery apps kept the first app's RoleSession → empty nav · fixed all four in session 29 (class namespace, ready default, display hydration + computed seeding, keyed remount) · **FIXED**
 37. 2026-10-18 · `docs.embedding` vector(1536) vs `match_docs` vector(3072) — migration 002's ALTER swallowed its own cast error (`exception when others then null`) on a non-empty table; vector RAG silently degraded while the code claimed 3072 · dim-adaptive client + labelled client-cosine fallback (`rag.py`); repair SQL added as migration 011 · **FIXED in code — live DB repair pending user applies 011 (archives fully functional meanwhile, badge discloses the client-cosine path)**
+38. 2026-10-20 · Public deploy still had demo-open RLS on wishes/steps/messages/iterations/artifacts/logs and an unauthenticated API — one shared database meant every visitor could read every wish · added migration 012 (profiles + signup trigger, owner-only RLS, legacy ownerless wishes deleted, `build_events` quota, storage writes require a session), `server/auth.py` JWT gate, owner scoping on every wish/run endpoint, 3 builds/day with an in-memory fallback until 012 lands, instant server-side signup (pre-confirmed admin create), Auth/RequireAuth UI + bearer-token `apiFetch`/fetch-SSE, 6 tenant tests + live two-account isolation proof · **FIXED — user applies 010/011/012; see DEPLOY_ACCOUNTS.md**
 ---
 
 ## 6. Metrics dashboard
@@ -435,7 +436,7 @@
 | Requirement coverage | n/a | — | ≥ 80 % (100 % musts) |
 | LLM calls per build (median) | _pending P0.2_ | — | ≤ 14 (≤ 6 strong) |
 | Time to live preview post-approval | _pending P0.2_ | — | ≤ 30 s |
-| Unit suite | 93/93 (2026-10-11) | 201/201 py + 206/207 node (2026-10-17) | green every session |
+| Unit suite | 93/93 (2026-10-11) | 238/238 py + 206/207 node (2026-10-20) | green every session |
 | Golden eval | 5/5 (2026-10-11) | 5/5 (2026-10-12) | 5/5 + new suites |
 
 **Baseline 2026-10-12, pre-Phase-1** (`evals/reports/baseline-20261012-093539.json`, 20 wishes, plan-stage, no builds):
@@ -461,4 +462,4 @@
 - **LLM spend:** measure first (Phase 0); cache by input hash; cassettes for CI; live evals only on manual dispatch; template gallery costs $0 — use it for demos.
 - **Commits:** code + AGENT.md update together, every session. Never leave the tree red.
 
-*End of AGENT.md v3 — phases 0–9 code-complete; core20 17/20; portfolio packaging 6/6 landed (README + deploy prep + CI + results/ownership docs + telemetry notebook & per-call parse attribution); QA pass 1 landed (archives rebuilt on project docs, session 34); QA pass 2 landed (10-app interaction sweep 360/360, runtime hardening, WCAG AA contrast, live build ready, session 35). User-side: apply migrations 010 + 011, publish repo, deploy to Vercel.*
+*End of AGENT.md v3 — phases 0–9 code-complete; core20 17/20; portfolio packaging 6/6 landed (README + deploy prep + CI + results/ownership docs + telemetry notebook & per-call parse attribution); QA pass 1 landed (archives rebuilt on project docs, session 34); QA pass 2 landed (10-app interaction sweep 360/360, runtime hardening, WCAG AA contrast, live build ready, session 35); account isolation landed (migration 012, JWT gate, per-owner scoping, 3 builds/day, instant signup, auth UI, two-account proof, session 36). User-side: apply migrations 010 + 011 + 012, publish repo, deploy backend to Render + frontend to Vercel (DEPLOY_ACCOUNTS.md).*

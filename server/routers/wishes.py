@@ -6,10 +6,13 @@ GET /api/wishes
 POST /api/wish/:id/regenerate
 """
 import os, uuid, time, json, asyncio
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Request, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
+
+from auth import require_user, uid, assert_owner
+from quotas import consume_build
 
 load_dotenv()
 
@@ -70,13 +73,28 @@ class WishIn(BaseModel):
 
 def get_supabase():
     url = os.getenv("SUPABASE_URL","")
-    key = os.getenv("SUPABASE_KEY","")
+    key = os.getenv("SUPABASE_SERVICE_KEY","") or os.getenv("SUPABASE_KEY","")
     if not url or not key:
         return None
     try:
-        from supabase import create_client
-        return create_client(url, key)
-    except: return None
+        from db.wishes import _client
+        return _client()
+    except Exception:
+        return None
+
+def _load_owned(wid: str, user: dict) -> dict:
+    """Load a wish from DB (MEM fallback) and enforce owner-only access."""
+    try:
+        from db.wishes import get_wish_with_steps
+        wish = get_wish_with_steps(wid)
+        MEM[wid] = wish
+    except Exception as e:
+        if wid in MEM:
+            wish = MEM[wid]
+        else:
+            raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
+    assert_owner(wish, user)
+    return wish
 
 def make_wish(prompt: str, owner=None):
     from services.planner import plan_wish
@@ -94,7 +112,7 @@ def make_wish(prompt: str, owner=None):
         try:
             # try wishes table, fallback to schemas for backward compat
             try:
-                supa.table("wishes").insert({"id": wid, "prompt": prompt, "prd": prd, "artifacts": artifacts, "status": "ready"}).execute()
+                supa.table("wishes").insert({"id": wid, "prompt": prompt, "prd": prd, "artifacts": artifacts, "status": "ready", "owner": owner}).execute()
             except Exception as e:
                 print(f"wishes insert failed, trying schemas: {e}")
                 supa.table("schemas").insert({"prompt": prompt, "tables": prd.get("tables", [])}).execute()
@@ -152,10 +170,10 @@ def _planning_shell(prompt: str, clarify: dict | None = None):
     }
 
 
-def make_plan_shell(prompt: str):
+def make_plan_shell(prompt: str, owner=None):
     """Fast sync half of POST /wish/plan: insert shell row, return it. No LLM."""
     from db.wishes import create_wish_tx
-    wish = create_wish_tx(prompt, _planning_shell(prompt), status="planning")
+    wish = create_wish_tx(prompt, _planning_shell(prompt), status="planning", owner=owner)
     MEM[wish["id"]] = wish
     return wish
 
@@ -250,7 +268,8 @@ async def _run_plan_task(wid: str, prompt: str, answers: dict | None = None, ski
 
 
 @router.post("/wish/plan", status_code=202)
-def create_plan(body: PlanIn, background_tasks: BackgroundTasks):
+def create_plan(body: PlanIn, background_tasks: BackgroundTasks,
+                user: dict = Depends(require_user)):
     """Fast shell + background plan: returns the wish instantly so the client can
     navigate to the chat page immediately; clarify/plan land via polling/SSE."""
     if not body.prompt or len(body.prompt.strip()) < 4:
@@ -259,7 +278,7 @@ def create_plan(body: PlanIn, background_tasks: BackgroundTasks):
         raise HTTPException(400, "prompt too long (max 500)")
     prompt = body.prompt.strip()
     try:
-        wish = make_plan_shell(prompt)
+        wish = make_plan_shell(prompt, owner=uid(user))
     except HTTPException:
         raise
     except Exception as e:
@@ -318,13 +337,9 @@ async def _run_staged_build(wid: str):
             pass
 
 @router.patch("/wish/{wid}/plan")
-def patch_plan(wid: str, body: PatchPlanIn):
-    # Fail-fast: must exist in DB
-    try:
-        from db.wishes import get_wish_with_steps, set_wish_status
-        wish = get_wish_with_steps(wid)
-    except Exception as e:
-        raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
+def patch_plan(wid: str, body: PatchPlanIn, user: dict = Depends(require_user)):
+    # Fail-fast: must exist in DB and belong to the caller
+    wish = _load_owned(wid, user)
     prd = body.prd
     if "appName" not in prd or "tables" not in prd:
         raise HTTPException(400, "prd must have appName and tables")
@@ -355,13 +370,9 @@ def patch_plan(wid: str, body: PatchPlanIn):
         raise HTTPException(500, f"patch plan DB failed: {e}")
 
 @router.post("/wish/{wid}/answer")
-def answer_clarify(wid: str, body: AnswerIn):
+def answer_clarify(wid: str, body: AnswerIn, user: dict = Depends(require_user)):
     """User answered clarifying questions: redraft the wish, build the plan, move to awaiting_approval."""
-    try:
-        from db.wishes import get_wish_with_steps
-        wish = get_wish_with_steps(wid)
-    except Exception as e:
-        raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
+    wish = _load_owned(wid, user)
     if wish.get("status") != "planning":
         raise HTTPException(400, f"cannot answer in status {wish.get('status')}")
     try:
@@ -401,29 +412,20 @@ def answer_clarify(wid: str, body: AnswerIn):
         raise HTTPException(500, f"answer failed: {e}")
 
 @router.get("/wish/{wid}/suggest")
-def suggest_next_steps(wid: str):
+def suggest_next_steps(wid: str, user: dict = Depends(require_user)):
     """Deterministic next-step suggestions from the AppSpec (no LLM cost)."""
-    try:
-        from db.wishes import get_wish_with_steps
-        wish = get_wish_with_steps(wid)
-    except Exception as e:
-        raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
+    wish = _load_owned(wid, user)
     from services.suggest import suggest_next
     return {"suggestions": suggest_next(wish.get("prd") or {})}
 
 @router.get("/wish/{wid}/chat")
-def get_chat(wid: str):
-    try:
-        from db.wishes import get_wish_with_steps
-        get_wish_with_steps(wid)
-    except Exception as e:
-        # MEM fallback for legacy one-shot wishes (same as get_wish); truly unknown ids still 404
-        if wid not in MEM:
-            raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
+def get_chat(wid: str, user: dict = Depends(require_user)):
+    _load_owned(wid, user)
     return {"messages": _chat_history(wid)}
 
 @router.post("/wish/{wid}/chat")
-def post_chat(wid: str, body: ChatIn, request: Request):
+def post_chat(wid: str, body: ChatIn, request: Request,
+              user: dict = Depends(require_user)):
     msg = (body.message or "").strip()
     if len(msg) < 1:
         raise HTTPException(400, "message too short")
@@ -431,15 +433,7 @@ def post_chat(wid: str, body: ChatIn, request: Request):
         raise HTTPException(400, "message too long (max 1000)")
     ip = request.client.host if request.client else "unknown"
     check_chat_rate(ip)
-    try:
-        from db.wishes import get_wish_with_steps
-        wish = get_wish_with_steps(wid)
-    except Exception as e:
-        # MEM fallback for legacy one-shot wishes (same as get_wish); truly unknown ids still 404
-        if wid in MEM:
-            wish = MEM[wid]
-        else:
-            raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
+    wish = _load_owned(wid, user)
     history = _chat_history(wid)
     _chat_store(wid, "user", msg)
     from services.chat import answer_chat
@@ -455,17 +449,12 @@ class IterateIn(BaseModel):
     instruction: str
     stepId: str | None = None
 
-def _load_wish_for_iterate(wid: str):
-    try:
-        from db.wishes import get_wish_with_steps
-        return get_wish_with_steps(wid)
-    except Exception as e:
-        if wid in MEM:
-            return MEM[wid]
-        raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
+def _load_wish_for_iterate(wid: str, user: dict):
+    return _load_owned(wid, user)
 
 @router.post("/wish/{wid}/iterate")
-def preview_iterate(wid: str, body: IterateIn, request: Request):
+def preview_iterate(wid: str, body: IterateIn, request: Request,
+                    user: dict = Depends(require_user)):
     """Diff-first rewrite preview: costs 1 shared-cap unit + 1-4 LLM calls. Persists nothing."""
     ins = (body.instruction or "").strip()
     if len(ins) < 1:
@@ -474,7 +463,7 @@ def preview_iterate(wid: str, body: IterateIn, request: Request):
         raise HTTPException(400, "instruction too long (max 500)")
     ip = request.client.host if request.client else "unknown"
     check_chat_rate(ip)  # shared 20/day cap with chat
-    wish = _load_wish_for_iterate(wid)
+    wish = _load_wish_for_iterate(wid, user)
     from services.iterate import resolve_step, preview_iteration, store_preview, _is_quota_msg
     try:
         node = resolve_step(wish, (body.stepId or "").strip() or None, ins)
@@ -499,15 +488,15 @@ def preview_iterate(wid: str, body: IterateIn, request: Request):
     return {"iteration_id": iid, "step_id": prev["step_id"], "files": prev["files"], "summary": prev["summary"]}
 
 @router.post("/wish/{wid}/iterate/{iid}/apply")
-def apply_iterate(wid: str, iid: str):
+def apply_iterate(wid: str, iid: str, user: dict = Depends(require_user)):
     """Accept a preview: snapshot, patch artifacts, bump step. No LLM cost."""
     from services.iterate import get_iteration, apply_iteration
     it = get_iteration(iid)
     if not it or it.get("wish_id") != wid:
         raise HTTPException(404, "iteration not found")
+    wish = _load_wish_for_iterate(wid, user)
     if it.get("status") == "applied":
-        return _load_wish_for_iterate(wid)
-    wish = _load_wish_for_iterate(wid)
+        return wish
     try:
         fresh = apply_iteration(wish, wid, it)
     except RuntimeError as e:
@@ -519,13 +508,13 @@ def apply_iterate(wid: str, iid: str):
     return fresh
 
 @router.post("/wish/{wid}/iterate/{iid}/revert")
-def revert_iterate(wid: str, iid: str):
+def revert_iterate(wid: str, iid: str, user: dict = Depends(require_user)):
     """One-click undo of an applied iteration. No LLM cost."""
     from services.iterate import get_iteration, revert_iteration
     it = get_iteration(iid)
     if not it or it.get("wish_id") != wid:
         raise HTTPException(404, "iteration not found")
-    wish = _load_wish_for_iterate(wid)
+    wish = _load_wish_for_iterate(wid, user)
     try:
         fresh = revert_iteration(wish, wid, it)
     except RuntimeError as e:
@@ -537,13 +526,15 @@ def revert_iterate(wid: str, iid: str):
     return fresh
 
 @router.post("/wish/{wid}/approve")
-async def approve_plan(wid: str, background_tasks: BackgroundTasks):
-    # Fail-fast: load from DB, check status, set to building in DB before background task
+async def approve_plan(wid: str, background_tasks: BackgroundTasks,
+                       user: dict = Depends(require_user)):
+    # Fail-fast: load from DB, check status, spend one build credit, then start.
+    wish = _load_owned(wid, user)
     try:
-        from db.wishes import get_wish_with_steps, set_wish_status
-        wish = get_wish_with_steps(wid)
+        from db.wishes import set_wish_status
         if wish.get("status") not in ("awaiting_approval", "approved", "failed"):
             raise HTTPException(400, f"cannot approve in status {wish.get('status')}")
+        consume_build(user, wish_id=wid, kind="build")
         set_wish_status(wid, "building", current_step_id=wish.get("prd",{}).get("buildGraph",[{}])[0].get("id") if wish.get("prd",{}).get("buildGraph") else None)
         # update MEM cache
         MEM[wid] = wish
@@ -556,7 +547,8 @@ async def approve_plan(wid: str, background_tasks: BackgroundTasks):
     return {"ok": True, "status": "building", "wid": wid}
 
 @router.get("/wish/{wid}/stream")
-async def stream_build(wid: str):
+async def stream_build(wid: str, user: dict = Depends(require_user)):
+    _load_owned(wid, user)  # auth + ownership before opening the stream
     from services.orchestrator import SSE_QUEUES, BUILD_STATE
     # DB is source of truth; SSE is live, but snapshot comes from DB
     async def event_gen():
@@ -608,14 +600,14 @@ async def stream_build(wid: str):
     return StreamingResponse(event_gen(), media_type="text/event-stream", headers={"Cache-Control":"no-cache","Connection":"keep-alive"})
 
 @router.post("/wish/{wid}/retry")
-async def retry_step(wid: str, body: dict):
+async def retry_step(wid: str, body: dict, user: dict = Depends(require_user)):
     step_id = body.get("stepId")
     if not step_id:
         raise HTTPException(400, "stepId required")
-    # Fail-fast: must exist in DB
+    # Fail-fast: must exist in DB and belong to the caller
+    wish = _load_owned(wid, user)
     try:
-        from db.wishes import get_wish_with_steps, update_step, set_wish_status
-        wish = get_wish_with_steps(wid)
+        from db.wishes import update_step, set_wish_status
         steps = wish.get("artifacts",{}).get("steps",{})
         if step_id not in steps and step_id not in [n["id"] for n in wish.get("prd",{}).get("buildGraph",[])]:
             raise HTTPException(404, f"step {step_id} not found")
@@ -645,13 +637,14 @@ async def retry_step(wid: str, body: dict):
 
 @router.post("/wish")
 @router.post("/wishes")
-def create_wish(body: WishIn):
+def create_wish(body: WishIn, user: dict = Depends(require_user)):
     if not body.prompt or len(body.prompt.strip()) < 4:
         raise HTTPException(400, "prompt too short — wish for something, e.g. 'A task tracker with users and tasks'")
     if len(body.prompt) > 500:
         raise HTTPException(400, "prompt too long (max 500)")
+    consume_build(user, kind="one_shot")
     try:
-        return make_wish(body.prompt.strip())
+        return make_wish(body.prompt.strip(), owner=uid(user))
     except HTTPException:
         raise
     except Exception as e:
@@ -663,73 +656,35 @@ def create_wish(body: WishIn):
 
 @router.get("/wish/{wid}")
 @router.get("/wishes/{wid}")
-def get_wish(wid: str):
-    # DB is source of truth for staged (fail-fast), MEM is cache for one-shot legacy
-    try:
-        from db.wishes import get_wish_with_steps
-        wish = get_wish_with_steps(wid)
-        MEM[wid] = wish  # cache
-        return wish
-    except Exception as e:
-        # Fallback to MEM for legacy one-shot wishes created before migration (no DB row)
-        if wid in MEM:
-            return MEM[wid]
-        # Also try legacy supabase direct for backward compat if DB layer failed due to table missing
-        # but staged should have failed earlier, so surface error for staged
-        msg = str(e).lower()
-        if "not found" in msg or "pgrst" in msg:
-            if wid in MEM:
-                return MEM[wid]
-        print(f"get_wish DB fail-fast: {e}")
-        raise HTTPException(404 if "not found" in msg else 500, str(e))
+def get_wish(wid: str, user: dict = Depends(require_user)):
+    return _load_owned(wid, user)
 
 @router.get("/wishes")
-def list_wishes():
-    # DB source of truth for staged, MEM cache for one-shot legacy
+def list_wishes(user: dict = Depends(require_user)):
+    owner = uid(user)
+    data: list = []
     try:
         from db.wishes import list_wishes_with_steps
-        data = list_wishes_with_steps(limit=50)
-        # merge with MEM for legacy wishes not yet in DB (one-shot created before migration)
-        mem_vals = list(MEM.values())
-        # dedupe
-        seen = set(row["id"] for row in data)
-        for v in mem_vals:
-            if v["id"] not in seen:
-                data.append({"id": v["id"], "prompt": v["prompt"], "prd": v["prd"], "created_at": v["created_at"], "status": v["status"], "build_graph": v.get("prd",{}).get("buildGraph",[])})
-        data.sort(key=lambda x: x.get("created_at",""), reverse=True)
-        return data[:50]
+        data = list_wishes_with_steps(limit=50, owner=owner)
     except Exception as e:
-        print(f"list_wishes DB fail-fast (fallback to MEM+schemas for backward compat): {e}")
-        # Fallback to MEM+schemas for backward compat when DB not migrated yet (staged will have failed earlier, but list should still work)
-        mem_vals = list(MEM.values())
-        supa = get_supabase()
-        if supa:
-            try:
-                r2 = supa.table("schemas").select("id,prompt,tables,created_at").order("created_at", desc=True).limit(20).execute()
-                schemas_rows = [{"id": row["id"], "prompt": row["prompt"], "prd": {"appName": "Legacy", "tables": row["tables"]}, "created_at": row["created_at"], "status":"ready"} for row in (r2.data or [])]
-                seen = set()
-                merged = []
-                for row in schemas_rows + [{"id": v["id"], "prompt": v["prompt"], "prd": v["prd"], "created_at": v["created_at"], "status": v["status"]} for v in mem_vals]:
-                    if row["id"] not in seen:
-                        merged.append(row); seen.add(row["id"])
-                merged.sort(key=lambda x: x.get("created_at",""), reverse=True)
-                return merged[:50]
-            except: pass
-        mem_vals.sort(key=lambda x: x["created_at"], reverse=True)
-        return [{"id": v["id"], "prompt": v["prompt"], "prd": v["prd"], "created_at": v["created_at"], "status": v["status"]} for v in mem_vals[:50]]
+        print(f"list_wishes DB read failed: {e}")
+    # merge MEM (dev / just-created shells) — always owner-filtered
+    seen = set(row["id"] for row in data)
+    for v in MEM.values():
+        if owner and v.get("owner") != owner:
+            continue
+        if v["id"] in seen:
+            continue
+        data.append({"id": v["id"], "prompt": v["prompt"], "prd": v["prd"], "created_at": v["created_at"], "status": v["status"], "build_graph": v.get("prd",{}).get("buildGraph",[])})
+    data.sort(key=lambda x: x.get("created_at",""), reverse=True)
+    return data[:50]
 
 @router.post("/wish/{wid}/regenerate")
-def regenerate(wid: str):
-    # fetch existing prompt
-    supa = get_supabase()
-    prompt = None
-    if supa:
-        try:
-            res = supa.table("wishes").select("prompt").eq("id", wid).single().execute()
-            if res.data: prompt = res.data["prompt"]
-        except: pass
-    if not prompt and wid in MEM:
-        prompt = MEM[wid]["prompt"]
+def regenerate(wid: str, user: dict = Depends(require_user)):
+    # fetch existing prompt (ownership enforced)
+    wish = _load_owned(wid, user)
+    prompt = wish.get("prompt")
     if not prompt:
         raise HTTPException(404, "wish not found")
-    return make_wish(prompt)
+    consume_build(user, kind="regenerate")
+    return make_wish(prompt, owner=uid(user))

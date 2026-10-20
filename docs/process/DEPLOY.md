@@ -1,5 +1,11 @@
 # Deploy the static demo — exact steps (GitHub rename → Vercel)
 
+> **Deploying the account-based app instead?** Follow
+> [`DEPLOY_ACCOUNTS.md`](./DEPLOY_ACCOUNTS.md) (Supabase migrations + Render
+> backend + Vercel frontend). This file covers only the fully-offline static
+> demo (`VITE_DEMO=1`), which remains a useful portfolio fallback and needs no
+> backend, keys, or database.
+
 > Do this once. Everything below is user-side; nothing here needs the backend,
 > keys, or a database. The goal: a public URL that shows the 10 gold apps
 > running fully in the browser (`VITE_DEMO=1`, zero network calls after load).

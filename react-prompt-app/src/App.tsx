@@ -1,10 +1,12 @@
 import { Suspense, lazy } from 'react'
 import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { RequireAuth } from './components/RequireAuth'
 import { Landing } from './pages/Landing'
 import { DEMO } from './demo'
 import './theme/intara.css'
 
+const Auth = lazy(() => import('./pages/Auth').then(m => ({ default: m.Auth })))
 const WishVault = lazy(() => import('./pages/WishVault').then(m => ({ default: m.WishVault })))
 const Constellation = lazy(() => import('./pages/Constellation').then(m => ({ default: m.Constellation })))
 const Archives = lazy(() => import('./pages/Archives').then(m => ({ default: m.Archives })))
@@ -33,11 +35,13 @@ export default function App() {
           ) : (
             <Routes>
               <Route path="/" element={<Landing />} />
-              <Route path="/wish/:id" element={<WishVault />} />
-              <Route path="/runs/:id" element={<RunPage />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/wish/:id" element={<RequireAuth><WishVault /></RequireAuth>} />
+              <Route path="/runs/:id" element={<RequireAuth><RunPage /></RequireAuth>} />
               <Route path="/templates" element={<GalleryPage />} />
-              <Route path="/constellation" element={<Constellation />} />
-              <Route path="/archives" element={<Archives />} />
+              <Route path="/constellation" element={<RequireAuth><Constellation /></RequireAuth>} />
+              <Route path="/archives" element={<RequireAuth><Archives /></RequireAuth>} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           )}
         </Suspense>

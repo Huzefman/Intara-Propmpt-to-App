@@ -11,9 +11,12 @@ from __future__ import annotations
 import asyncio
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+from auth import require_user, is_dev, uid
+from quotas import consume_build
 
 router = APIRouter()
 
@@ -21,6 +24,31 @@ router = APIRouter()
 def _engine():
     from services.run_engine import get_engine
     return get_engine()
+
+
+def _assert_project_owner(store, project_id: str | None, user: dict) -> None:
+    """404 for outsiders — never reveal that another account's project exists."""
+    if is_dev(user):
+        return
+    if not project_id:
+        raise HTTPException(404, "not found")
+    try:
+        if hasattr(store, "supa"):
+            rows = (store.supa.table("projects").select("owner_id")
+                    .eq("id", project_id).limit(1).execute().data or [])
+            owner = rows[0].get("owner_id") if rows else None
+        else:
+            owner = None  # MemoryRunStore is test/dev only
+    except Exception:
+        raise HTTPException(404, "not found")
+    if str(owner or "") != str(uid(user) or ""):
+        raise HTTPException(404, "not found")
+
+
+def _assert_run_owner(store, run: dict, user: dict) -> None:
+    if is_dev(user):
+        return
+    _assert_project_owner(store, (run or {}).get("project_id"), user)
 
 
 def _project_id_for_run(store, run_id: str) -> str:
@@ -48,7 +76,7 @@ class StartIn(BaseModel):
 
 @router.post("/runs")
 @router.post("/api/runs")
-async def start_run(body: StartIn):
+async def start_run(body: StartIn, user: dict = Depends(require_user)):
     if body.kind not in ("build", "iterate", "eval"):
         raise HTTPException(400, f"bad kind {body.kind!r}")
     if body.kind == "build" and (not body.wish or len(body.wish.strip()) < 4):
@@ -57,16 +85,31 @@ async def start_run(body: StartIn):
         eng = _engine()
         store = eng.store
         project_id = body.project_id
+        if project_id:
+            _assert_project_owner(store, project_id, user)
+        if body.wish_id:
+            # A run may write artifacts back into its wish: never let an account
+            # point that at someone else's wish id.
+            if not hasattr(store, "supa"):
+                raise HTTPException(400, "wish_id requires Supabase-backed runs")
+            rows = (store.supa.table("wishes").select("owner")
+                    .eq("id", body.wish_id).limit(1).execute().data or [])
+            if not rows or (not is_dev(user) and
+                            str(rows[0].get("owner") or "") != str(uid(user) or "")):
+                raise HTTPException(404, "wish not found")
+        # Every run start spends the shared LLM pool, whatever its kind.
+        consume_build(user, wish_id=body.wish_id, kind=body.kind)
         if not project_id:
             res = store.supa.table("projects").insert(
                 {"name": (body.wish.strip()[:80] or body.app_name),
-                 "track": "business"}).execute()
+                 "track": "business", "owner_id": uid(user)}).execute()
             if not res.data:
                 raise RuntimeError("projects insert failed")
             project_id = res.data[0]["id"]
         inputs: dict = {"wish": body.wish.strip(), "app_name": body.app_name,
                         "requirements": body.requirements,
-                        "wish_id": body.wish_id, "budgets": {}}
+                        "wish_id": body.wish_id, "budgets": {},
+                        "owner_id": uid(user)}
         if body.kind == "build":
             run_id = store.create_run(project_id, "build", inputs)
             store.set_status(run_id, "running")
@@ -117,10 +160,11 @@ def _writeback_wish(wish_id: str | None, extra_artifacts: dict) -> None:
 
 @router.get("/runs/{run_id}")
 @router.get("/api/runs/{run_id}")
-async def run_status(run_id: str):
+async def run_status(run_id: str, user: dict = Depends(require_user)):
     try:
         eng = _engine()
         run = eng.store.get_run(run_id)
+        _assert_run_owner(eng.store, run, user)
         steps = eng.store.get_steps(run_id)
         out: dict = {"run": run, "steps": steps, "version_id": None, "spec": None,
                      "llm_calls": 0, "degraded_steps": []}
@@ -149,10 +193,13 @@ async def run_status(run_id: str):
 
 @router.get("/runs/{run_id}/events")
 @router.get("/api/runs/{run_id}/events")
-async def run_events(run_id: str):
+async def run_events(run_id: str, user: dict = Depends(require_user)):
     try:
         eng = _engine()
-        eng.store.get_run(run_id)  # 404 fast
+        run = eng.store.get_run(run_id)  # 404 fast
+        _assert_run_owner(eng.store, run, user)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
 
@@ -191,10 +238,10 @@ class ApproveIn(BaseModel):
 
 @router.post("/runs/{run_id}/approve")
 @router.post("/api/runs/{run_id}/approve")
-async def approve_run(run_id: str, body: ApproveIn):
+async def approve_run(run_id: str, body: ApproveIn, user: dict = Depends(require_user)):
     try:
         eng = _engine()
-        eng.store.get_run(run_id)
+        _assert_run_owner(eng.store, eng.store.get_run(run_id), user)
         vid = _current_version(eng.store, run_id)
         if not vid:
             raise HTTPException(409, "nothing to approve yet — run has no version")
@@ -212,11 +259,12 @@ class ChatIn(BaseModel):
 
 @router.post("/runs/{run_id}/chat")
 @router.post("/api/runs/{run_id}/chat")
-async def chat_patch(run_id: str, body: ChatIn):
+async def chat_patch(run_id: str, body: ChatIn, user: dict = Depends(require_user)):
     if not body.instruction or len(body.instruction.strip()) < 4:
         raise HTTPException(400, "instruction too short")
     try:
         eng = _engine()
+        _assert_run_owner(eng.store, eng.store.get_run(run_id), user)
         base_vid = body.base_version or _current_version(eng.store, run_id)
         if not base_vid:
             raise HTTPException(409, "no base version to patch yet")
@@ -244,7 +292,7 @@ class PatchIn(BaseModel):
 
 @router.post("/runs/{run_id}/patch")
 @router.post("/api/runs/{run_id}/patch")
-async def apply_patch(run_id: str, body: PatchIn):
+async def apply_patch(run_id: str, body: PatchIn, user: dict = Depends(require_user)):
     """Deterministic patch (no LLM): UI-built ops validated by G0/G1.
 
     Same versioning path as chat edits — the two iteration modes converge.
@@ -258,6 +306,7 @@ async def apply_patch(run_id: str, body: PatchIn):
         from gates.g0_validate import validate as g0
         from gates.g1_lint import lint as g1
         eng = _engine()
+        _assert_run_owner(eng.store, eng.store.get_run(run_id), user)
         base_vid = body.base_version or _current_version(eng.store, run_id)
         if not base_vid:
             raise HTTPException(409, "no base version to patch yet")
@@ -287,11 +336,12 @@ async def apply_patch(run_id: str, body: PatchIn):
 
 @router.get("/projects/{project_id}/versions")
 @router.get("/api/projects/{project_id}/versions")
-async def list_versions(project_id: str):
+async def list_versions(project_id: str, user: dict = Depends(require_user)):
     """Version timeline data: id/parent/source/time/summary + full specs."""
     try:
         eng = _engine()
         store = eng.store
+        _assert_project_owner(store, project_id, user)
         if hasattr(store, "supa"):
             rows = (store.supa.table("project_versions")
                     .select("id,project_id,parent_id,spec,spec_hash,source,summary,created_at")
@@ -320,7 +370,7 @@ class RevertIn(BaseModel):
 
 @router.post("/versions/{version_id}/revert")
 @router.post("/api/versions/{version_id}/revert")
-async def revert_version(version_id: str, body: RevertIn):
+async def revert_version(version_id: str, body: RevertIn, user: dict = Depends(require_user)):
     """Undo one step: new child version restoring the parent's spec."""
     try:
         eng = _engine()
@@ -330,6 +380,7 @@ async def revert_version(version_id: str, body: RevertIn):
             raise HTTPException(409, "root version has nothing to undo")
         parent = eng.store.get_version(parent_id)
         project_id = ver.get("project_id") or parent.get("project_id")
+        _assert_project_owner(eng.store, project_id, user)
         summary = (body.summary or f"Reverted to {str(parent_id)[:8]}").strip()[:500]
         vid = eng.store.create_version(
             project_id, version_id, parent.get("spec") or {}, "manual",
@@ -344,11 +395,12 @@ async def revert_version(version_id: str, body: RevertIn):
 
 @router.get("/runs/{run_id}/eventlog")
 @router.get("/api/runs/{run_id}/eventlog")
-async def run_eventlog(run_id: str):
+async def run_eventlog(run_id: str, user: dict = Depends(require_user)):
     """Run events as JSON (developer toggle, reports) — same source as SSE."""
     try:
         eng = _engine()
-        eng.store.get_run(run_id)
+        run = eng.store.get_run(run_id)
+        _assert_run_owner(eng.store, run, user)
         return {"ok": True, "events": eng.replay(run_id)}
     except KeyError:
         raise HTTPException(404, f"run {run_id} not found")
@@ -410,13 +462,14 @@ class FeedbackIn(BaseModel):
 
 @router.post("/feedback")
 @router.post("/api/feedback")
-async def post_feedback(body: FeedbackIn):
+async def post_feedback(body: FeedbackIn, user: dict = Depends(require_user)):
     if body.kind not in ("rating", "comment", "correction"):
         raise HTTPException(400, f"bad kind {body.kind!r}")
     try:
         res = (_exemplars().table("feedback").insert({
             "project_id": body.project_id, "version_id": body.version_id,
-            "kind": body.kind, "payload": body.payload or {}}).execute())
+            "kind": body.kind, "payload": body.payload or {},
+            "user_id": uid(user)}).execute())
         if not res.data:
             raise RuntimeError("feedback insert failed")
         return {"ok": True, "id": res.data[0]["id"]}
@@ -426,12 +479,15 @@ async def post_feedback(body: FeedbackIn):
 
 @router.get("/feedback/export")
 @router.get("/api/feedback/export")
-async def export_feedback(format: str = "json"):
+async def export_feedback(format: str = "json", user: dict = Depends(require_user)):
     """Learning-loop dataset export (JSON default, CSV on ?format=csv)."""
     try:
-        rows = (_exemplars().table("feedback")
-                .select("id,project_id,version_id,kind,payload,created_at")
-                .order("created_at").execute().data or [])
+        q = (_exemplars().table("feedback")
+             .select("id,project_id,version_id,kind,payload,created_at")
+             .order("created_at"))
+        if not is_dev(user):
+            q = q.eq("user_id", uid(user))
+        rows = q.execute().data or []
         if format == "csv":
             import csv as _csv
             import io as _io

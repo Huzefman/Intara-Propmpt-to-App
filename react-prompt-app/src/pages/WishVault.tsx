@@ -7,7 +7,7 @@ import { StudioRail } from '../components/StudioRail'
 import { ArtifactVault } from '../components/ArtifactVault'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { streamBuild } from '../api/client'
-import { getWish } from '../api/client'
+import { getWish, apiFetch } from '../api/client'
 import { useEffect, useRef, useState } from 'react'
 
 export function WishVault() {
@@ -273,7 +273,7 @@ function BuildingView({ wish, compact = false, onChanged }: { wish: any; compact
     // polling fallback every 2s (also the source of truth while SSE is down)
     const iv = setInterval(async () => {
       try {
-        const res = await fetch(`/api/wish/${wish.id}`)
+        const res = await apiFetch(`/api/wish/${wish.id}`)
         if (res.ok) {
           const data = await res.json()
           if (data.artifacts?.steps) setSteps(data.artifacts.steps)

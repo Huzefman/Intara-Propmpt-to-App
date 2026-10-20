@@ -1,9 +1,10 @@
 // API helpers — 25 lines, typed, guarded
+import { apiFetch } from './api/client'
 
 export type GenerateRes = { tables: { name: string; fields: { name: string; type: string }[] }[] }
 
 export async function generateSchema(prompt: string): Promise<GenerateRes> {
-  const res = await fetch('/api/generate', {
+  const res = await apiFetch('/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt }),
@@ -13,7 +14,7 @@ export async function generateSchema(prompt: string): Promise<GenerateRes> {
 }
 
 export async function askRag(question: string): Promise<{ answer: string; cites: string[] }> {
-  const res = await fetch('/api/rag', {
+  const res = await apiFetch('/api/rag', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question }),

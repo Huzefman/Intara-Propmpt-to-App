@@ -1,8 +1,74 @@
 // Intara API client — wraps /api/wish + /api/rag + legacy /api/generate
+import { supabase } from '../supabase'
+
+const API_BASE = ((import.meta.env.VITE_API_URL as string | undefined) || '').replace(/\/+$/, '')
+
+/** Absolute API URL when the backend lives on another origin (Render). */
+export function apiUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path
+  return `${API_BASE}${path}`
+}
+
+async function authHeaders(): Promise<Headers> {
+  const headers = new Headers()
+  try {
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+  } catch {
+    /* demo / unconfigured Supabase — requests go out anonymous */
+  }
+  return headers
+}
+
+/** fetch wrapper: API base + Supabase bearer token on every call. */
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers || {})
+  const auth = await authHeaders()
+  auth.forEach((value, key) => headers.set(key, value))
+  return fetch(apiUrl(path), { ...init, headers })
+}
+
+/** Auth-aware SSE over fetch (EventSource cannot send Authorization headers). */
+function streamSse(path: string, onEvent: (ev: any) => void): () => void {
+  const ctrl = new AbortController()
+  ;(async () => {
+    try {
+      const res = await apiFetch(path, { signal: ctrl.signal })
+      if (!res.ok || !res.body) return
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        let idx = buffer.indexOf('\n\n')
+        while (idx >= 0) {
+          const block = buffer.slice(0, idx)
+          buffer = buffer.slice(idx + 2)
+          const data = block
+            .split('\n')
+            .filter((line) => line.startsWith('data:'))
+            .map((line) => line.slice(5).trimStart())
+            .join('\n')
+          if (data) {
+            try { onEvent(JSON.parse(data)) } catch { /* ignore malformed frame */ }
+          }
+          idx = buffer.indexOf('\n\n')
+        }
+      }
+    } catch {
+      /* polling fallback covers stream loss */
+    }
+  })()
+  return () => { try { ctrl.abort() } catch { /* already closed */ } }
+}
+
 export type GenerateRes = { tables: { name: string; fields: { name: string; type: string }[] }[] }
 
 export async function generateSchema(prompt: string): Promise<GenerateRes> {
-  const res = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) })
+  const res = await apiFetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) })
   if (!res.ok) throw new Error(`generate failed ${res.status}`)
   return res.json()
 }
@@ -17,7 +83,7 @@ export type RagAnswer = {
 }
 
 export async function askRag(question: string): Promise<RagAnswer> {
-  const res = await fetch('/api/rag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question }) })
+  const res = await apiFetch('/api/rag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question }) })
   if (!res.ok) throw new Error(`rag failed ${res.status}`)
   return res.json()
 }
@@ -34,7 +100,7 @@ export type Wish = {
 }
 
 export async function createWish(prompt: string): Promise<Wish> {
-  const res = await fetch('/api/wish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) })
+  const res = await apiFetch('/api/wish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) })
   if (!res.ok) {
     const t = await res.text().catch(() => '')
     throw new Error(`wish failed ${res.status} ${t}`)
@@ -57,7 +123,7 @@ export async function createPlan(prompt: string): Promise<Wish> {
   const controller = new AbortController()
   const t = setTimeout(() => controller.abort(), 150000)
   try {
-    const res = await fetch('/api/wish/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }), signal: controller.signal })
+    const res = await apiFetch('/api/wish/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }), signal: controller.signal })
     if (!res.ok) {
       const txt = await res.text().catch(() => '')
       throw new Error(`plan failed ${res.status} ${txt}`)
@@ -88,19 +154,19 @@ export async function reconcileWish(prompt: string): Promise<Wish | null> {
 }
 
 export async function patchPlan(id: string, prd: any): Promise<Wish> {
-  const res = await fetch(`/api/wish/${id}/plan`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prd }) })
+  const res = await apiFetch(`/api/wish/${id}/plan`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prd }) })
   if (!res.ok) throw new Error(`patch plan failed ${res.status}`)
   return res.json()
 }
 
 export async function approvePlan(id: string): Promise<{ok:boolean}> {
-  const res = await fetch(`/api/wish/${id}/approve`, { method: 'POST' })
-  if (!res.ok) throw new Error(`approve failed ${res.status}`)
+  const res = await apiFetch(`/api/wish/${id}/approve`, { method: 'POST' })
+  if (!res.ok) throw apiError('approve', res, await res.text().catch(() => ''))
   return res.json()
 }
 
 export async function answerClarify(id: string, answers: Record<string,string>): Promise<Wish> {
-  const res = await fetch(`/api/wish/${id}/answer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers }) })
+  const res = await apiFetch(`/api/wish/${id}/answer`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers }) })
   if (!res.ok) {
     const t = await res.text().catch(() => '')
     throw new Error(`answer failed ${res.status} ${t}`)
@@ -111,41 +177,36 @@ export async function answerClarify(id: string, answers: Record<string,string>):
 export type Suggestion = { label: string; detail: string; prompt_suffix: string }
 
 export async function getSuggest(id: string): Promise<Suggestion[]> {
-  const res = await fetch(`/api/wish/${id}/suggest`)
+  const res = await apiFetch(`/api/wish/${id}/suggest`)
   if (!res.ok) throw new Error(`suggest failed ${res.status}`)
   const data = await res.json()
   return data.suggestions ?? []
 }
 
 export function streamBuild(id: string, onEvent: (ev:any)=>void): () => void {
-  const es = new EventSource(`/api/wish/${id}/stream`)
-  es.onmessage = (e) => {
-    try { onEvent(JSON.parse(e.data)) } catch { onEvent({event:'message', data:e.data}) }
-  }
-  es.onerror = () => { /* will fallback to polling */ }
-  return () => es.close()
+  return streamSse(`/api/wish/${id}/stream`, onEvent)
 }
 
 export async function retryStep(id: string, stepId: string): Promise<any> {
-  const res = await fetch(`/api/wish/${id}/retry`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({stepId}) })
+  const res = await apiFetch(`/api/wish/${id}/retry`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({stepId}) })
   if (!res.ok) throw new Error(`retry failed ${res.status}`)
   return res.json()
 }
 
 export async function getWish(id: string): Promise<Wish> {
-  const res = await fetch(`/api/wish/${id}`)
+  const res = await apiFetch(`/api/wish/${id}`)
   if (!res.ok) throw new Error(`get wish failed ${res.status}`)
   return res.json()
 }
 
 export async function listWishes(): Promise<Wish[]> {
-  const res = await fetch('/api/wishes')
+  const res = await apiFetch('/api/wishes')
   if (!res.ok) throw new Error(`list wishes failed ${res.status}`)
   return res.json()
 }
 
 export async function regenerateWish(id: string): Promise<Wish> {
-  const res = await fetch(`/api/wish/${id}/regenerate`, { method: 'POST' })
+  const res = await apiFetch(`/api/wish/${id}/regenerate`, { method: 'POST' })
   if (!res.ok) throw new Error(`regenerate failed ${res.status}`)
   return res.json()
 }
@@ -164,14 +225,14 @@ function apiError(path: string, res: Response, body: string): Error {
 }
 
 export async function getChat(id: string): Promise<ChatMessage[]> {
-  const res = await fetch(`/api/wish/${id}/chat`)
+  const res = await apiFetch(`/api/wish/${id}/chat`)
   if (!res.ok) throw apiError('chat history', res, await res.text().catch(() => ''))
   const data = await res.json()
   return data.messages ?? []
 }
 
 export async function postChat(id: string, message: string): Promise<{ reply: string; actions: ChatAction[]; degraded?: boolean }> {
-  const res = await fetch(`/api/wish/${id}/chat`, {
+  const res = await apiFetch(`/api/wish/${id}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message }),
@@ -189,7 +250,7 @@ export type IterFile = { path: string; before: string; after: string; area?: str
 export type IterPreview = { iteration_id: string; step_id: string; files: IterFile[]; summary: string }
 
 export async function previewIterate(id: string, instruction: string, stepId?: string): Promise<IterPreview> {
-  const res = await fetch(`/api/wish/${id}/iterate`, {
+  const res = await apiFetch(`/api/wish/${id}/iterate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ instruction, stepId: stepId ?? null }),
@@ -203,53 +264,48 @@ export async function previewIterate(id: string, instruction: string, stepId?: s
 }
 
 export async function applyIterate(id: string, iterId: string): Promise<Wish> {
-  const res = await fetch(`/api/wish/${id}/iterate/${iterId}/apply`, { method: 'POST' })
+  const res = await apiFetch(`/api/wish/${id}/iterate/${iterId}/apply`, { method: 'POST' })
   if (!res.ok) throw apiError('apply', res, await res.text().catch(() => ''))
   return res.json()
 }
 
 export async function revertIterate(id: string, iterId: string): Promise<Wish> {
-  const res = await fetch(`/api/wish/${id}/iterate/${iterId}/revert`, { method: 'POST' })
+  const res = await apiFetch(`/api/wish/${id}/iterate/${iterId}/revert`, { method: 'POST' })
   if (!res.ok) throw apiError('revert', res, await res.text().catch(() => ''))
   return res.json()
 }
 
 // v2 runs (spec pipeline): start/status/events/approve/chat-patch
 export async function startRun(wish: string, appName?: string, wishId?: string): Promise<{ ok: boolean; run_id: string; project_id: string }> {
-  const res = await fetch('/api/runs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ wish, kind: 'build', app_name: appName || 'App', wish_id: wishId || null }) })
+  const res = await apiFetch('/api/runs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ wish, kind: 'build', app_name: appName || 'App', wish_id: wishId || null }) })
   if (!res.ok) throw new Error(`start run failed ${res.status}`)
   return res.json()
 }
 
 export async function getRun(runId: string): Promise<any> {
-  const res = await fetch(`/api/runs/${runId}`)
+  const res = await apiFetch(`/api/runs/${runId}`)
   if (!res.ok) throw new Error(`get run failed ${res.status}`)
   return res.json()
 }
 
 export function streamRun(runId: string, onEvent: (ev: any) => void): () => void {
-  const es = new EventSource(`/api/runs/${runId}/events`)
-  es.onmessage = (e) => {
-    try { onEvent(JSON.parse(e.data)) } catch { /* heartbeat */ }
-  }
-  es.onerror = () => { /* polling fallback covers */ }
-  return () => es.close()
+  return streamSse(`/api/runs/${runId}/events`, onEvent)
 }
 
 export async function approveRun(runId: string, by?: string): Promise<{ ok: boolean; version_id: string }> {
-  const res = await fetch(`/api/runs/${runId}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ by: by || 'owner' }) })
+  const res = await apiFetch(`/api/runs/${runId}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ by: by || 'owner' }) })
   if (!res.ok) throw new Error(`approve failed ${res.status}`)
   return res.json()
 }
 
 export async function chatRun(runId: string, instruction: string): Promise<{ ok: boolean; version_id: string; summary: string; spec: any }> {
-  const res = await fetch(`/api/runs/${runId}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instruction }) })
+  const res = await apiFetch(`/api/runs/${runId}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instruction }) })
   if (!res.ok) throw new Error(`chat patch failed ${res.status}`)
   return res.json()
 }
 
 export async function patchRun(runId: string, ops: any[], summary: string, baseVersion?: string): Promise<{ ok: boolean; version_id: string; summary: string; spec: any }> {
-  const res = await fetch(`/api/runs/${runId}/patch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ops, summary, base_version: baseVersion || null }) })
+  const res = await apiFetch(`/api/runs/${runId}/patch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ops, summary, base_version: baseVersion || null }) })
   if (!res.ok) {
     const t = await res.text().catch(() => '')
     throw new Error(`patch failed ${res.status} ${t.slice(0, 200)}`)
@@ -258,25 +314,25 @@ export async function patchRun(runId: string, ops: any[], summary: string, baseV
 }
 
 export async function getExemplars(): Promise<any[]> {
-  const res = await fetch('/api/exemplars')
+  const res = await apiFetch('/api/exemplars')
   if (!res.ok) throw new Error(`exemplars failed ${res.status}`)
   return (await res.json()).exemplars ?? []
 }
 
 export async function getExemplar(name: string): Promise<any> {
-  const res = await fetch(`/api/exemplars/${name}`)
+  const res = await apiFetch(`/api/exemplars/${name}`)
   if (!res.ok) throw new Error(`exemplar failed ${res.status}`)
   return (await res.json()).exemplar
 }
 
 export async function getEventlog(runId: string): Promise<any[]> {
-  const res = await fetch(`/api/runs/${runId}/eventlog`)
+  const res = await apiFetch(`/api/runs/${runId}/eventlog`)
   if (!res.ok) throw new Error(`eventlog failed ${res.status}`)
   return (await res.json()).events ?? []
 }
 
 export async function postFeedback(kind: string, payload: any, projectId?: string, versionId?: string): Promise<{ ok: boolean; id: string }> {
-  const res = await fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, payload, project_id: projectId || null, version_id: versionId || null }) })
+  const res = await apiFetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, payload, project_id: projectId || null, version_id: versionId || null }) })
   if (!res.ok) throw new Error(`feedback failed ${res.status}`)
   return res.json()
 }

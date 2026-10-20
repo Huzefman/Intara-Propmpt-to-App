@@ -10,6 +10,7 @@ import { Suspense, lazy, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getExemplar, getExemplars, startRun } from '../api/client'
 import { DEMO } from '../demo'
+import { useAuth } from '../hooks/useAuth'
 import { DEMO_APPS, findDemoApp } from '../demo/exemplars'
 
 const RuntimePreview = lazy(() => import('../runtime/RuntimePreview').then(m => ({ default: m.RuntimePreview })))
@@ -22,6 +23,7 @@ export function GalleryView() {
   const [starting, setStarting] = useState(false)
   const [offline, setOffline] = useState(DEMO)
   const navigate = useNavigate()
+  const { user } = useAuth(!DEMO)
 
   useEffect(() => {
     if (DEMO) { setItems(DEMO_APPS); return }
@@ -49,6 +51,10 @@ export function GalleryView() {
 
   async function buildSimilar() {
     if (!active) return
+    if (!DEMO && !user) {
+      navigate('/auth?mode=signup', { state: { from: '/templates' } })
+      return
+    }
     setStarting(true); setErr(null)
     try {
       const wish = (active.spec?.app?.tagline || `A ${active.domain} app`).slice(0, 500)

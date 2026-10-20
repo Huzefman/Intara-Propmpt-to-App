@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion, useSpring, useTransform } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { PlanetOrb } from '../components/PlanetOrb'
 import { WishInput } from '../components/WishInput'
 import { Pillars, HowItWorks } from '../components/RocketSections'
 import { createWish, createPlan, askRag, reconcileWish, PlanAbortedError } from '../api/client'
-import { supabase } from '../supabase'
 import { DEMO, GITHUB_URL } from '../demo'
+import { useAuth } from '../hooks/useAuth'
 import { useReveal } from '../hooks/useReveal'
 
 const heroContainer = {
@@ -16,14 +16,6 @@ const heroContainer = {
 const heroItem = {
   hidden: { opacity: 0, y: 18, filter: 'blur(6px)' },
   show: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] as const } },
-}
-
-function CountUp({ value }: { value: number }) {
-  const spring = useSpring(0, { stiffness: 60, damping: 20 })
-  const [display, setDisplay] = useState(0)
-  useEffect(() => { spring.set(value) }, [value, spring])
-  useEffect(() => spring.on('change', (v) => setDisplay(Math.round(v))), [spring])
-  return <>{display.toLocaleString()}</>
 }
 
 const EXAMPLES = [
@@ -39,18 +31,13 @@ const EXAMPLES = [
 
 export function Landing() {
   const nav = useNavigate()
+  const { user, loading: authLoading } = useAuth(!DEMO)
   const [prompt, setPrompt] = useState(EXAMPLES[0])
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [weaveNote, setWeaveNote] = useState<string | null>(null)
-  const [count, setCount] = useState<number | null>(null)
   const [q, setQ] = useState('What stack does Intara use?')
   const [ragAns, setRagAns] = useState('')
-
-  useEffect(() => {
-    if (DEMO) return
-    supabase.from('wishes').select('id', { count: 'exact', head: true }).then(({ count }) => setCount(count ?? null)).then(() => {}, () => {})
-  }, [])
 
   const [staged, setStaged] = useState(true)
   const wishRef = useRef<HTMLDivElement>(null)
@@ -60,6 +47,7 @@ export function Landing() {
 
   async function onWeave() {
     if (!prompt.trim()) return
+    if (!DEMO && !user) { nav('/auth?mode=signup'); return }
     setLoading(true); setErr(null)
     const text = prompt.trim()
     try {
@@ -114,9 +102,9 @@ export function Landing() {
           <motion.div variants={heroItem} style={{ marginTop: 14, fontSize: 11, fontWeight: 400, letterSpacing: '0.02em', color: 'var(--intara-dim)' }}>
             {DEMO ? (
               <><span style={{ color: 'var(--intara-nebula-light)', fontWeight: 600 }}>10 gold apps</span> · static demo · runs in your browser <span style={{ opacity: 0.3, margin: '0 8px' }}>·</span> 3.7 light years away</>
-            ) : count !== null ? (
-              <><span style={{ color: 'var(--intara-nebula-light)', fontWeight: 600 }}><CountUp value={count} /></span> wishes granted <span style={{ opacity: 0.3, margin: '0 8px' }}>·</span> 3.7 light years away</>
-            ) : 'Intara listens from 3.7 light years away'}
+            ) : (
+              <><span style={{ color: 'var(--intara-nebula-light)', fontWeight: 600 }}>Private by default</span> · every wish is scoped to your account <span style={{ opacity: 0.3, margin: '0 8px' }}>·</span> 3.7 light years away</>
+            )}
           </motion.div>
           <motion.div variants={heroItem} style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
             {DEMO ? (
@@ -124,10 +112,17 @@ export function Landing() {
                 <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => nav('/templates')} className="btn-primary" style={{ fontSize: 12.5, padding: '11px 20px' }}>Open the 10 live apps</motion.button>
                 <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="btn-ghost" style={{ fontSize: 12.5, padding: '11px 20px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Source on GitHub</a>
               </>
-            ) : (
+            ) : authLoading ? (
+              <button className="btn-ghost" disabled style={{ fontSize: 12.5, padding: '11px 20px', opacity: 0.6 }}>Checking your orbit…</button>
+            ) : user ? (
               <>
                 <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={scrollToWish} className="btn-primary" style={{ fontSize: 12.5, padding: '11px 20px' }}>Start weaving</motion.button>
                 <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => nav('/constellation')} className="btn-ghost" style={{ fontSize: 12.5 }}>View constellation</motion.button>
+              </>
+            ) : (
+              <>
+                <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => nav('/auth?mode=signup')} className="btn-primary" style={{ fontSize: 12.5, padding: '11px 20px' }}>Create an account to weave</motion.button>
+                <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => nav('/auth')} className="btn-ghost" style={{ fontSize: 12.5 }}>Sign in</motion.button>
               </>
             )}
           </motion.div>
@@ -137,7 +132,7 @@ export function Landing() {
         </motion.div>
       </motion.div>
 
-      {!DEMO && (
+      {!DEMO && !authLoading && user && (
         <>
           <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11, fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase', color: staged ? 'var(--intara-nebula-light)' : 'var(--intara-dim)' }}>Build mode</span>
@@ -149,6 +144,19 @@ export function Landing() {
             <WishInput value={prompt} onChange={setPrompt} onSubmit={onWeave} loading={loading} placeholder={staged ? "I wish for a hackathon manager with teams, projects, votes..." : "I wish for a..."} autoFocus />
           </div>
         </>
+      )}
+      {!DEMO && !authLoading && !user && (
+        <div ref={wishRef} className="glass" style={{ padding: 22, borderRadius: 20, display: 'grid', gap: 12, scrollMarginTop: 90 }}>
+          <div style={{ fontFamily: 'Space Grotesk', fontSize: 18, fontWeight: 400, letterSpacing: '-0.03em', color: 'var(--intara-text)' }}>Your own private constellation</div>
+          <div style={{ fontSize: 12.5, fontWeight: 400, color: 'var(--intara-faint)', lineHeight: 1.75, letterSpacing: '-0.01em', maxWidth: 620 }}>
+            Create an account to make wishes, review plans and build runnable apps. Your plans, build history and chats live under your account only — other visitors never see them. The template gallery stays free to explore.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn-primary" onClick={() => nav('/auth?mode=signup')} style={{ fontSize: 12.5 }}>Create my account</button>
+            <button className="btn-ghost" onClick={() => nav('/auth')} style={{ fontSize: 12.5 }}>I already have one</button>
+            <button className="btn-ghost" onClick={() => nav('/templates')} style={{ fontSize: 12.5 }}>Explore the 10 apps</button>
+          </div>
+        </div>
       )}
       {DEMO && (
         <div className="glass" style={{ padding: 18, borderRadius: 18, display: 'grid', gap: 10 }}>
@@ -164,11 +172,11 @@ export function Landing() {
           </div>
         </div>
       )}
-      {err && <div style={{ marginTop: 12, fontSize: 12.5, fontWeight: 450, color: '#FCA5A5', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.14)', padding: '12px 14px', borderRadius: 14, backdropFilter: 'blur(12px)' }}>{err} <button onClick={() => nav('/constellation')} className="btn-ghost btn-sm" style={{ marginLeft: 8 }}>Open Constellation</button></div>}
+      {err && <div style={{ marginTop: 12, fontSize: 12.5, fontWeight: 450, color: '#FCA5A5', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.14)', padding: '12px 14px', borderRadius: 14, backdropFilter: 'blur(12px)' }}>{err} {user && <button onClick={() => nav('/constellation')} className="btn-ghost btn-sm" style={{ marginLeft: 8 }}>Open Constellation</button>}</div>}
       {weaveNote && !err && <div style={{ marginTop: 12, fontSize: 12.5, color: 'var(--intara-nebula-light)' }}>{weaveNote}</div>}
 
       <Pillars />
-      <HowItWorks onStart={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
+      <HowItWorks onStart={() => (!authLoading && !user) ? nav('/auth?mode=signup') : window.scrollTo({ top: 0, behavior: 'smooth' })} />
 
       {/* Lore — scroll reveal */}
       <div ref={loreRef} className="glass reveal" style={{ marginTop: 20, padding: 16, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>

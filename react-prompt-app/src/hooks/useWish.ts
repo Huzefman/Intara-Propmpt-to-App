@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getWish, Wish } from '../api/client'
+import { apiFetch, getWish, Wish } from '../api/client'
 
 export function useWish(id: string | undefined) {
   const [wish, setWish] = useState<Wish | null>(null)
@@ -17,7 +17,7 @@ export function useWish(id: string | undefined) {
     // say so instead of spinning silently. Polling below keeps retrying.
     const ctrl = new AbortController()
     const busyTimer = setTimeout(() => { if (!cancelled) setBusy(true) }, 8000)
-    fetch(`/api/wish/${id}`, { signal: ctrl.signal })
+    apiFetch(`/api/wish/${id}`, { signal: ctrl.signal })
       .then((res) => {
         if (!res.ok) throw new Error(`get wish failed ${res.status}`)
         return res.json()

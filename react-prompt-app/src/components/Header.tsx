@@ -6,16 +6,27 @@ import { DEMO, GITHUB_URL } from '../demo'
 export function Header() {
   const loc = useLocation()
   const nav = useNavigate()
-  const { user } = useAuth(!DEMO)
+  const { user, signOut } = useAuth(!DEMO)
+  const onAuth = loc.pathname === '/auth'
   const isActive = (p: string) => loc.pathname === p || (p !== '/' && loc.pathname.startsWith(p))
   const links = DEMO
     ? [{ to: '/templates', label: 'Live apps' }]
-    : [
-        { to: '/', label: 'Wish' },
-        { to: '/templates', label: 'Templates' },
-        { to: '/constellation', label: 'Constellation' },
-        { to: '/archives', label: 'Archives' },
-      ]
+    : user
+      ? [
+          { to: '/', label: 'Wish' },
+          { to: '/templates', label: 'Templates' },
+          { to: '/constellation', label: 'Constellation' },
+          { to: '/archives', label: 'Archives' },
+        ]
+      : [
+          { to: '/', label: 'Wish' },
+          { to: '/templates', label: 'Templates' },
+        ]
+  const chipStyle: React.CSSProperties = {
+    fontSize: 11, fontWeight: 450, color: 'var(--intara-faint)',
+    border: '1px solid rgba(255,255,255,0.05)', padding: '6px 10px',
+    borderRadius: 999, background: 'rgba(255,255,255,0.02)',
+  }
   return (
     <header style={{
       position: 'sticky', top: 0, zIndex: 20,
@@ -47,18 +58,30 @@ export function Header() {
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           {DEMO ? (
             <>
-              <span style={{ fontSize: 11, fontWeight: 450, color: 'var(--intara-faint)', border: '1px solid rgba(255,255,255,0.05)', padding: '6px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.02)' }}>Static demo · no backend</span>
+              <span style={chipStyle}>Static demo · no backend</span>
               <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="btn-ghost" style={{ fontSize: 12.5, padding: '9px 16px', fontWeight: 500, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>GitHub</a>
+            </>
+          ) : isSupabaseDemo ? (
+            <span style={chipStyle}>Demo · MEM</span>
+          ) : onAuth ? null : user ? (
+            <>
+              <span title={user.email || ''} style={{ ...chipStyle, color: 'var(--intara-muted)', maxWidth: 190, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user.email?.slice(0, 22)}
+              </span>
+              <button
+                onClick={async () => { await signOut(); nav('/') }}
+                className="btn-ghost"
+                style={{ fontSize: 12.5, padding: '9px 16px', fontWeight: 500 }}
+              >Sign out</button>
             </>
           ) : (
             <>
-              {isSupabaseDemo ? (
-                <span style={{ fontSize: 11, fontWeight: 450, color: 'var(--intara-faint)', border: '1px solid rgba(255,255,255,0.05)', padding: '6px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.02)' }}>Demo · MEM</span>
-              ) : user ? (
-                <span style={{ fontSize: 11, color: 'var(--intara-muted)', border: '1px solid rgba(255,255,255,0.06)', padding: '6px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.02)' }}>{user.email?.slice(0, 18)}</span>
-              ) : null}
-              <button onClick={() => nav('/')} className="btn-ghost" style={{ fontSize: 12.5, padding: '9px 16px', fontWeight: 500 }}>New wish ✦</button>
+              <button onClick={() => nav('/auth')} className="btn-ghost" style={{ fontSize: 12.5, padding: '9px 16px', fontWeight: 500 }}>Sign in</button>
+              <button onClick={() => nav('/auth?mode=signup')} className="btn-primary" style={{ fontSize: 12.5, padding: '9px 16px' }}>Create account</button>
             </>
+          )}
+          {!DEMO && !isSupabaseDemo && user && (
+            <button onClick={() => nav('/')} className="btn-ghost" style={{ fontSize: 12.5, padding: '9px 16px', fontWeight: 500 }}>New wish ✦</button>
           )}
         </div>
       </div>

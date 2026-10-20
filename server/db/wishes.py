@@ -3,17 +3,24 @@ Supabase source of truth — fail-fast, no silent MEM fallback.
 All writes must succeed or raise; reads are from DB first.
 """
 import os, json, time
+from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
-def _client():
-    url = os.getenv("SUPABASE_URL", "")
-    key = os.getenv("SUPABASE_KEY", "")
-    if not url or not key:
-        raise RuntimeError("Missing SUPABASE_URL/SUPABASE_KEY — staged builds require Supabase (fail-fast)")
+@lru_cache(maxsize=4)
+def _cached_client(url: str, key: str):
     from supabase import create_client
     return create_client(url, key)
 
-def create_wish_tx(prompt: str, prd: dict, status: str = "awaiting_approval") -> dict:
+def _client():
+    """Service-key Supabase client (bypasses RLS — callers MUST scope by owner)."""
+    url = os.getenv("SUPABASE_URL", "")
+    key = os.getenv("SUPABASE_SERVICE_KEY", "") or os.getenv("SUPABASE_KEY", "")
+    if not url or not key:
+        raise RuntimeError("Missing SUPABASE_URL/SUPABASE_SERVICE_KEY — staged builds require Supabase (fail-fast)")
+    return _cached_client(url, key)
+
+def create_wish_tx(prompt: str, prd: dict, status: str = "awaiting_approval",
+                   owner: Optional[str] = None) -> dict:
     """Insert wishes + wish_steps in one logical transaction. Fail-fast."""
     wid = __import__("uuid").uuid4().__str__()
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -21,7 +28,7 @@ def create_wish_tx(prompt: str, prd: dict, status: str = "awaiting_approval") ->
     build_graph = prd.get("buildGraph", [])
     supa = _client()
     # wishes
-    res = supa.table("wishes").insert({
+    row = {
         "id": wid,
         "prompt": prompt,
         "prd": prd,
@@ -29,7 +36,10 @@ def create_wish_tx(prompt: str, prd: dict, status: str = "awaiting_approval") ->
         "status": status,
         "build_graph": build_graph,
         "current_step_id": None,
-    }).execute()
+    }
+    if owner:
+        row["owner"] = owner
+    res = supa.table("wishes").insert(row).execute()
     if not res.data:
         raise RuntimeError(f"wishes insert returned no data: {res}")
     # wish_steps — one row per DAG node with full prompt history placeholder
@@ -54,7 +64,7 @@ def create_wish_tx(prompt: str, prd: dict, status: str = "awaiting_approval") ->
             raise RuntimeError(f"wish_steps insert failed: {r2}")
     # return canonical wish
     row = res.data[0] if isinstance(res.data, list) else res.data
-    return {"id": row["id"], "prompt": row["prompt"], "prd": row["prd"], "artifacts": row["artifacts"], "status": row["status"], "created_at": row.get("created_at", now), "build_graph": build_graph}
+    return {"id": row["id"], "prompt": row["prompt"], "prd": row["prd"], "artifacts": row["artifacts"], "status": row["status"], "created_at": row.get("created_at", now), "build_graph": build_graph, "owner": row.get("owner")}
 
 def get_wish_with_steps(wid: str) -> Dict[str, Any]:
     supa = _client()
@@ -108,9 +118,14 @@ def set_wish_status(wid: str, status: str, current_step_id: Optional[str] = None
         raise RuntimeError(f"set_wish_status {wid}->{status} failed")
     return res.data
 
-def list_wishes_with_steps(limit: int = 50):
+def list_wishes_with_steps(limit: int = 50, owner: Optional[str] = None):
     supa = _client()
-    res = supa.table("wishes").select("id,prompt,prd,created_at,status,build_graph,current_step_id").order("created_at", desc=True).limit(limit).execute()
+    q = (supa.table("wishes")
+         .select("id,prompt,prd,created_at,status,build_graph,current_step_id")
+         .order("created_at", desc=True).limit(limit))
+    if owner:
+        q = q.eq("owner", owner)
+    res = q.execute()
     return res.data or []
 
 def get_steps(wid: str):

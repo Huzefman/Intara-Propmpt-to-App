@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../supabase'
+import { apiFetch } from '../api/client'
 import { hashString } from '../lib/hash'
 
 type WishRow = { id: string; prompt: string; prd: any; created_at: string }
@@ -14,20 +14,18 @@ export function Constellation() {
     let cancelled = false
     async function load() {
       setLoading(true)
-      let got = false
       try {
-        const { data, error } = await supabase.from('wishes').select('id,prompt,prd,created_at').order('created_at', { ascending: false }).limit(50)
-        if (!cancelled && !error && data && data.length) { setRows(data as any); got = true }
-      } catch {}
-      if (!got && !cancelled) {
-        try {
-          const r = await fetch('/api/wishes')
-          if (r.ok) {
-            const j = await r.json()
-            if (Array.isArray(j) && j.length) setRows(j.map((w: any) => ({ id: w.id, prompt: w.prompt, prd: w.prd, created_at: w.created_at })))
+        // API-only: the backend scopes by the signed-in account. Never read
+        // wishes directly from the browser — RLS is defense-in-depth, not the
+        // only line of isolation.
+        const r = await apiFetch('/api/wishes')
+        if (r.ok) {
+          const j = await r.json()
+          if (!cancelled && Array.isArray(j)) {
+            setRows(j.map((w: any) => ({ id: w.id, prompt: w.prompt, prd: w.prd, created_at: w.created_at })))
           }
-        } catch {}
-      }
+        }
+      } catch { /* leave empty; the page shows the no-wishes state */ }
       if (!cancelled) setLoading(false)
     }
     load()

@@ -2,14 +2,16 @@
 Finished FastAPI — 65 lines you type in 25 min
 Interview: "I guard LLM JSON, retry on 429, and write to Supabase"
 """
-import os, json, re
-from fastapi import FastAPI, HTTPException
+import os, json, re, time
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception
 from google import genai
 from supabase import create_client
+
+from auth import require_user
 
 
 def _gemini_retryable(exc: BaseException) -> bool:
@@ -29,7 +31,7 @@ load_dotenv()
 GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 SUPA_URL = os.getenv("SUPABASE_URL", "")
-SUPA_KEY = os.getenv("SUPABASE_KEY", "")
+SUPA_KEY = os.getenv("SUPABASE_SERVICE_KEY", "") or os.getenv("SUPABASE_KEY", "")
 
 def _make_gemini_client(api_key: str):
     # Bounded HTTP (60s): an unbounded generate_content can wedge the single
@@ -46,6 +48,27 @@ supabase = create_client(SUPA_URL, SUPA_KEY) if SUPA_URL and SUPA_KEY else None
 
 app = FastAPI(title="Intara — Planet of Wishes")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# Public RAG is an LLM-backed endpoint on the landing page; keep it cheap to
+# abuse-proof. 20 questions/hour/IP is far above normal demo use.
+_RAG_HITS: dict[str, list[float]] = {}
+_RAG_LIMIT = 20
+_RAG_WINDOW = 3600.0
+
+
+def _rag_rate_limit(request: Request) -> None:
+    fwd = request.headers.get("x-forwarded-for", "")
+    ip = fwd.split(",")[0].strip() if fwd else (
+        request.client.host if request.client else "unknown"
+    )
+    now = time.time()
+    for key, stamps in list(_RAG_HITS.items()):
+        _RAG_HITS[key] = [t for t in stamps if now - t < _RAG_WINDOW]
+    stamps = _RAG_HITS.get(ip, [])
+    if len(stamps) >= _RAG_LIMIT:
+        raise HTTPException(429, "Question limit reached for this hour — try again soon.")
+    stamps.append(now)
+    _RAG_HITS[ip] = stamps
 
 # NOTE: routers are mounted at the END of this file (after all direct routes)
 # so /api/wishes/health etc. match before the router's /wishes/{wid} pattern.
@@ -103,7 +126,8 @@ def call_gemini(prompt: str, *, response_mime_type: str | None = None, max_outpu
 
 @app.post("/generate")
 @app.post("/api/generate")
-def generate(inp: PromptIn):
+def generate(inp: PromptIn, user: dict = Depends(require_user)):
+    # Legacy schema endpoint — signed-in callers only (it spends LLM quota).
     # OpenRouter-first via call_llm, fallback to Gemini
     try:
         from services.llm import call_llm
@@ -135,7 +159,8 @@ def generate(inp: PromptIn):
 
 @app.post("/rag")
 @app.post("/api/rag")
-def rag(inp: RagIn):
+def rag(inp: RagIn, request: Request):
+    _rag_rate_limit(request)
     # import here to avoid circular
     from rag import answer
     try:
@@ -229,3 +254,8 @@ try:
     app.include_router(wishes_router, prefix="")  # also mount without prefix for /wish
 except Exception as e:
     print(f"wishes router not loaded: {e}")
+try:
+    from routers.accounts import router as accounts_router
+    app.include_router(accounts_router, prefix="/api")
+except Exception as e:
+    print(f"accounts router not loaded: {e}")

@@ -3,6 +3,7 @@
  * parent links, per-version change notes, and one-step undo (revert).
  */
 import { useEffect, useState } from 'react'
+import { apiFetch } from '../api/client'
 
 export interface VersionInfo {
   id: string
@@ -39,7 +40,7 @@ export function VersionTimeline({ projectId, onPick }: {
   async function load() {
     if (!projectId) return
     try {
-      const res = await fetch(`/api/projects/${projectId}/versions`)
+      const res = await apiFetch(`/api/projects/${projectId}/versions`)
       if (!res.ok) throw new Error(`versions failed ${res.status}`)
       const data = await res.json()
       setVersions((data.versions || []).slice().reverse())
@@ -53,7 +54,7 @@ export function VersionTimeline({ projectId, onPick }: {
   async function revert(id: string) {
     setBusy(true); setErr(null)
     try {
-      const res = await fetch(`/api/versions/${id}/revert`, {
+      const res = await apiFetch(`/api/versions/${id}/revert`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
       })
       if (!res.ok) throw new Error(`revert failed ${res.status}`)
