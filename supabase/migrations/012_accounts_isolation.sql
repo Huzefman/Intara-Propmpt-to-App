@@ -132,7 +132,15 @@ create policy "wish components owners full" on wish_components for all
 -- Build internals + telemetry: API-only from now on. `llm_calls` stores no
 -- prompts, but anonymous append/read lets anyone poison the metrics; generated
 -- artifact contents are writable code and must never be world-writable.
-drop policy if exists "allow all logs" on wish_logs;
+-- wish_logs is a legacy table that may not exist on every project; DROP POLICY
+-- requires the table to resolve, so guard it while still clearing the policy
+-- wherever the table is present.
+do $$
+begin
+  if to_regclass('public.wish_logs') is not null then
+    execute 'drop policy if exists "allow all logs" on wish_logs';
+  end if;
+end $$;
 drop policy if exists "llm calls append" on llm_calls;
 drop policy if exists "llm calls public read" on llm_calls;
 drop policy if exists "llm calls attribute outcome" on llm_calls;
@@ -173,11 +181,13 @@ create index if not exists feedback_user_idx
 -- 6. Storage: public reads stay (preview images), writes need a session.
 -- ---------------------------------------------------------------------------
 drop policy if exists "intara open insert" on storage.objects;
+drop policy if exists "intara auth insert" on storage.objects;
 create policy "intara auth insert" on storage.objects for insert
   to authenticated
   with check (bucket_id = 'intara-uploads');
 
 drop policy if exists "intara open delete" on storage.objects;
+drop policy if exists "intara auth delete" on storage.objects;
 create policy "intara auth delete" on storage.objects for delete
   to authenticated
   using (bucket_id = 'intara-uploads');
