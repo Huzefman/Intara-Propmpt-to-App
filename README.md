@@ -2,7 +2,7 @@
 
 **Describe an app in plain English → an LLM pipeline emits a validated JSON App Spec → a tested runtime executes it as a working app in your browser.**
 
-[![CI](https://github.com/Huzefman/intara/actions/workflows/ci.yml/badge.svg)](https://github.com/Huzefman/intara/actions/workflows/ci.yml)
+[![CI](https://github.com/Huzefman/Intara-Propmpt-to-App/actions/workflows/ci.yml/badge.svg)](https://github.com/Huzefman/Intara-Propmpt-to-App/actions/workflows/ci.yml)
 
 > **▶ Live demo:** _deployment pending — static demo steps in [`docs/process/DEPLOY.md`](docs/process/DEPLOY.md); the account-based app (private Studio, public landing + templates) deploys with [`docs/process/DEPLOY_ACCOUNTS.md`](docs/process/DEPLOY_ACCOUNTS.md)_ (10 human-reviewed apps, fully in-browser, no backend)
 > **🎥 2-minute walkthrough:** script in [`docs/process/DEMO_SCRIPT.md`](docs/process/DEMO_SCRIPT.md) — video link lands here once recorded
