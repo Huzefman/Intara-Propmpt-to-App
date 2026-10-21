@@ -62,6 +62,11 @@ def check_fe_build(wish):
                 p.write_text(f["content"])
             # minimal tsconfig
             (tmp / "tsconfig.json").write_text('{"compilerOptions":{"jsx":"react-jsx","esModuleInterop":true,"allowJs":true,"strict":false,"skipLibCheck":true,"target":"ES2020","module":"ESNext"},"include":["src"]}')
+            # The temp app needs the Studio's node_modules for React's JSX runtime
+            # (CI installs deps with --prefix, so there is no root node_modules).
+            node_modules = ROOT / "react-prompt-app" / "node_modules"
+            if node_modules.is_dir() and not (tmp / "node_modules").exists():
+                (tmp / "node_modules").symlink_to(node_modules, target_is_directory=True)
             res = subprocess.run(["npx", "tsc", "--noEmit"], cwd=tmp, capture_output=True, timeout=15)
             if res.returncode == 0:
                 return True, "tsc pass"

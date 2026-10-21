@@ -35,10 +35,10 @@ jobs:
             react-prompt-app/package-lock.json
             packages/runtime/package-lock.json
 
-      - name: Install Python deps (pytest + ruff for the eval gate)
+      - name: Install Python deps (pytest + ruff + generated-app test deps)
         run: |
           python -m pip install --upgrade pip
-          pip install -r server/requirements.txt pytest ruff
+          pip install -r server/requirements.txt pytest 'ruff==0.17.1' sqlalchemy
 
       - name: Install Node deps (pytest shells out to node --test / tsc)
         run: |
@@ -66,13 +66,15 @@ jobs:
             react-prompt-app/package-lock.json
             packages/runtime/package-lock.json
 
+      - name: Install Studio deps (TSX loader resolves React/TypeScript here)
+        run: npm ci --prefix react-prompt-app
+
       - name: Runtime — deps, suite, typecheck
         run: |
           npm ci --prefix packages/runtime
           npm test --prefix packages/runtime
           npm run typecheck --prefix packages/runtime
 
-      - name: Studio — deps, static demo build (tsc + vite)
+      - name: Studio — static demo build (tsc + vite)
         run: |
-          npm ci --prefix react-prompt-app
           VITE_DEMO=1 npm run build --prefix react-prompt-app

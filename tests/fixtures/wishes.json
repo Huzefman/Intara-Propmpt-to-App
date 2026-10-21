@@ -39,8 +39,8 @@
       },
       "backend": {
         "files": [
-          {"path": "server/main.py", "content": "from fastapi import FastAPI\napp = FastAPI()\n@app.get(\"/health\")\ndef health(): return {\"ok\": True}\n"},
-          {"path": "server/models.py", "content": "from pydantic import BaseModel\nclass Task(BaseModel):\n    title: str\n    completed: bool = False\n"}
+          {"path": "server/main.py", "content": "from fastapi import FastAPI\n\napp = FastAPI()\n@app.get(\"/health\")\ndef health(): return {\"ok\": True}\n"},
+          {"path": "server/models.py", "content": "from pydantic import BaseModel\n\n\nclass Task(BaseModel):\n    title: str\n    completed: bool = False\n"}
         ],
         "requirements": "fastapi==0.110.1\nuvicorn==0.29.0\npydantic>=2.9.0\n"
       },
@@ -89,7 +89,7 @@
       },
       "backend": {
         "files": [
-          {"path": "server/main.py", "content": "from fastapi import FastAPI\napp = FastAPI()\n"}
+          {"path": "server/main.py", "content": "from fastapi import FastAPI\n\napp = FastAPI()\n"}
         ],
         "requirements": "fastapi==0.110.1\n"
       },
@@ -131,7 +131,7 @@
         "files": [{"path": "src/pages/Catalog.tsx", "content": "export default function Catalog(){ return <div>Catalog</div> }"}]
       },
       "backend": {
-        "files": [{"path": "server/main.py", "content": "from fastapi import FastAPI\napp = FastAPI()\n"}],
+        "files": [{"path": "server/main.py", "content": "from fastapi import FastAPI\n\napp = FastAPI()\n"}],
         "requirements": "fastapi==0.110.1\n"
       },
       "spec": {
@@ -172,7 +172,7 @@
         "files": [{"path": "src/pages/Services.tsx", "content": "export default function Services(){ return <div>Services</div> }"}]
       },
       "backend": {
-        "files": [{"path": "server/main.py", "content": "from fastapi import FastAPI\napp = FastAPI()\n"}],
+        "files": [{"path": "server/main.py", "content": "from fastapi import FastAPI\n\napp = FastAPI()\n"}],
         "requirements": "fastapi==0.110.1\n"
       },
       "spec": {
@@ -213,7 +213,7 @@
         "files": [{"path": "src/pages/Questions.tsx", "content": "export default function Questions(){ return <div>Questions</div> }"}]
       },
       "backend": {
-        "files": [{"path": "server/main.py", "content": "from fastapi import FastAPI\napp = FastAPI()\n"}],
+        "files": [{"path": "server/main.py", "content": "from fastapi import FastAPI\n\napp = FastAPI()\n"}],
         "requirements": "fastapi==0.110.1\n"
       },
       "spec": {

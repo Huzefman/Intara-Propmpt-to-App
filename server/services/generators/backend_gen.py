@@ -70,7 +70,7 @@ def _template_backend(contract: dict) -> dict:
     tables = contract["tables"]
 
     # models.py — includes FK columns so SQLite/Dexie/PRD agree
-    models = ["from pydantic import BaseModel", "from typing import Optional", "from datetime import datetime", ""]
+    models = ["from pydantic import BaseModel", "from typing import Optional", "from datetime import datetime", "", ""]
     for t in tables:
         cname = t["name"].capitalize().replace("_", "")
         if cname.endswith("s"):
