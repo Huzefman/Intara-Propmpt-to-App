@@ -117,7 +117,7 @@ export function StudioPreview({ wish }: { wish: Wish }) {
       ) : mode === 'app' && specV1 ? (
         <div className="studio-preview-body">
           <Suspense fallback={<div className="glass" style={{ padding: 28, textAlign: 'center' }}>Loading app…</div>}>
-            <RuntimePreview spec={specV1} />
+            <RuntimePreview spec={specV1} storageKey={`intara-preview-wish-${wish.id}`} />
           </Suspense>
         </div>
       ) : mode === 'preview' ? (

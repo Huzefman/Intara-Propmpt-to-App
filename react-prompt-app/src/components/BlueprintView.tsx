@@ -317,7 +317,7 @@ export function BlueprintView({ runId }: { runId: string }) {
         <div className="glass" style={{ padding: '12px 14px', borderRadius: 14 }}>
           <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 8 }}>Live preview (no build step)</div>
           <Suspense fallback={<div style={{ padding: 20, textAlign: 'center' }}>Loading app…</div>}>
-            <RuntimePreview spec={spec} />
+            <RuntimePreview spec={spec} storageKey={`intara-preview-run-${runId}`} />
           </Suspense>
         </div>
       )}

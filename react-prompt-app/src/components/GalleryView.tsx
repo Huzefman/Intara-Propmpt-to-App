@@ -6,7 +6,7 @@
  * unreachable, the same 10 gold specs are served from the bundled
  * packages/spec/exemplars — offline gallery, every app still operable.
  */
-import { Suspense, lazy, useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getExemplar, getExemplars, startRun } from '../api/client'
 import { DEMO } from '../demo'
@@ -14,6 +14,29 @@ import { useAuth } from '../hooks/useAuth'
 import { DEMO_APPS, findDemoApp } from '../demo/exemplars'
 
 const RuntimePreview = lazy(() => import('../runtime/RuntimePreview').then(m => ({ default: m.RuntimePreview })))
+
+/**
+ * Gallery data is deliberately not global. Each browser tab gets a session
+ * id, and the authenticated account (or "guest") gets its own namespace, so
+ * edits are visible only to that account in that session. Closing the tab
+ * therefore abandons the demo database instead of leaving a permanent change.
+ */
+function galleryPreviewSession(): string {
+  const key = 'intara-gallery-preview-session'
+  try {
+    const existing = sessionStorage.getItem(key)
+    if (existing) return existing
+    const id = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    sessionStorage.setItem(key, id)
+    return id
+  } catch {
+    // Storage can be blocked (private mode policies). A per-mount namespace
+    // still keeps the preview ephemeral and isolated.
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  }
+}
 
 export function GalleryView() {
   const [items, setItems] = useState<any[]>([])
@@ -24,6 +47,10 @@ export function GalleryView() {
   const [offline, setOffline] = useState(DEMO)
   const navigate = useNavigate()
   const { user } = useAuth(!DEMO)
+  const previewStorageKey = useMemo(
+    () => `intara-gallery-${user?.id ?? 'guest'}-${galleryPreviewSession()}`,
+    [user?.id],
+  )
 
   useEffect(() => {
     if (DEMO) { setItems(DEMO_APPS); return }
@@ -99,7 +126,7 @@ export function GalleryView() {
             )}
           </div>
           <Suspense fallback={<div style={{ padding: 20, textAlign: 'center' }}>Loading app…</div>}>
-            <RuntimePreview key={spec.app.name} spec={spec} />
+            <RuntimePreview key={`${spec.app.name}:${previewStorageKey}`} spec={spec} storageKey={`${previewStorageKey}-${spec.app.name}`} />
           </Suspense>
         </div>
       )}

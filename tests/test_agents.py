@@ -188,6 +188,29 @@ def test_assemble_spec_g0_clean():
     assert spec["spec_version"] == "1.0"
 
 
+def test_assemble_spec_normalizes_nav_lint_traps():
+    from agents.stages import assemble_spec
+    parts = {
+        "app": {"name": "Notes"},
+        "model": {"entities": []},
+        "ui": {
+            "pages": [
+                {"id": "notes", "route": "/notes", "roles": ["owner"], "blocks": []},
+                {"id": "note_detail", "route": "/notes/:id", "roles": ["owner"], "blocks": []},
+                {"id": "qa", "route": "/qa", "roles": ["owner"], "blocks": []},
+            ],
+            "nav": [
+                {"page": "notes", "roles": ["owner"]},
+                {"page": "note_detail", "roles": ["owner"]},
+                {"page": "qa", "roles": ["reviewer"]},
+            ],
+        },
+    }
+    nav = assemble_spec(parts)["ui"]["nav"]
+    assert [n["page"] for n in nav] == ["notes", "qa"]
+    assert nav[1]["roles"] == []
+
+
 def test_g2_coverage_semantics():
     from gates.g2_coverage import check
     reqs = [{"id": "R1", "priority": "must"}, {"id": "R2", "priority": "should"},

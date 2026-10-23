@@ -112,8 +112,11 @@ function hydrateRefs(spec: AppSpec, rows: Rows): Rows {
   return out;
 }
 
-export function RuntimePreview({ spec }: { spec: AppSpec }) {
-  const adapter = useMemo(() => new DexieAdapter(`intara-preview-${spec.app.name}`), [spec]);
+export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey?: string }) {
+  const adapter = useMemo(
+    () => new DexieAdapter(storageKey || `intara-preview-${spec.app.name}`),
+    [spec, storageKey],
+  );
   const [session, setSession] = useState(() => new RoleSession(spec));
   const [activePage, setActivePage] = useState(spec.ui.pages[0]?.id ?? '');
   const [rows, setRows] = useState<Rows>({});

@@ -243,6 +243,42 @@ def _fb_edit() -> dict:
 
 # ---------- S5 assembler (pure code, no LLM) ----------
 
+def _normalize_ui(parts: dict) -> dict:
+    """Apply deterministic, lint-safe fixes to the UI slice.
+
+    A model sometimes puts a detail page (`/notes/:id`) in the nav. G1 R39
+    rejects that: detail pages are reached through a `row_link`, while nav is
+    only for top-level destinations. Normalizing here keeps a single bad nav
+    entry from failing an otherwise valid build; missing pages and other gate
+    problems are deliberately left in place so G0/G1 still report them.
+    """
+    raw = parts.get("ui")
+    ui = dict(raw) if isinstance(raw, dict) else {"pages": []}
+    pages = {
+        p.get("id"): p
+        for p in (ui.get("pages") or [])
+        if isinstance(p, dict) and isinstance(p.get("id"), str)
+    }
+    nav = []
+    for item in ui.get("nav") or []:
+        if not isinstance(item, dict):
+            continue
+        page = pages.get(item.get("page"))
+        if page is None:
+            nav.append(item)
+            continue
+        route = page.get("route")
+        if isinstance(route, str) and ":id" in route:
+            continue  # detail page: reachable via row_link, never nav
+        clean = dict(item)
+        if "roles" in clean:
+            page_roles = page.get("roles") or []
+            clean["roles"] = [r for r in (clean.get("roles") or []) if r in page_roles]
+        nav.append(clean)
+    ui["nav"] = nav
+    return ui
+
+
 def assemble_spec(parts: dict) -> dict:
     """Merge stage slices into an AppSpec dict (S5 assembler, deterministic)."""
     app = parts.get("app") or {"name": "App"}
@@ -256,7 +292,7 @@ def assemble_spec(parts: dict) -> dict:
         "assumptions": parts.get("assumptions") or [],
         "model": parts.get("model") or {"enums": [], "entities": []},
         "access": parts.get("access") or {"roles": [], "rules": []},
-        "ui": parts.get("ui") or {"pages": []},
+        "ui": _normalize_ui(parts),
         "automations": parts.get("automations") or [],
         "seed": parts.get("seed") or {},
         "integrations": [],

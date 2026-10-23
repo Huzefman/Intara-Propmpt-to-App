@@ -195,12 +195,9 @@ def rag(inp: RagIn, request: Request):
 @app.get("/health")
 @app.get("/api/health")
 def health():
-    try:
-        from services.llm import get_llm_status
-        llm = get_llm_status()
-    except Exception as e:
-        llm = {"error": str(e)[:200]}
-    return {"ok": True, "model": MODEL, "supabase": bool(supabase), "planet": "intara", "llm": llm}
+    # Public liveness only. Provider names, model IDs, cooldowns, quota
+    # details, and account/org identifiers stay server-side.
+    return {"ok": True, "supabase": bool(supabase), "planet": "intara"}
 
 @app.get("/api/wishes/health")
 def wishes_health():
