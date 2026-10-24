@@ -4,7 +4,7 @@ Curated RAG corpus — the Intara Archives.
 Each entry is one self-contained, citable fact block about the Intara project
 (what it is, how it works, measured numbers, limitations). Entries are kept
 short enough to embed whole (no mid-sentence chunking) and factual enough to
-defend in an interview — numbers match docs/RESULTS.md and the test suites.
+check against docs/RESULTS.md and the test suites.
 
 Reseed with: python scripts/seed_rag.py
 """
@@ -15,7 +15,7 @@ PROJECT_DOCS: list[str] = [
     "Intara is a prompt-to-app generator built on one bet: LLMs should not write your app code — they should write small, typed, validated JSON App Specs, and a tested engine should execute them. Code is an export target, not the product.",
     "Intara's spec-first architecture means the language model never runs at runtime: a deterministic TypeScript engine executes the validated App Spec (data, screens, roles, formulas, automations) in the browser, so behavior is reproducible and statically tested.",
     "You use Intara by describing an app in plain English (a wish), e.g. 'a task tracker with roles, deadlines and a board view'. The pipeline turns that wish into a validated App Spec, and the runtime renders it as a working app with seeded sample data.",
-    "Intara was built by Huzefa Mandviwala (B.Tech AI & DS, SCET Surat) as a portfolio project, MIT licensed, at github.com/Huzefman/intara. Architecture, gates, eval methodology and quota strategy were human-specified; AI coding agents wrote most of the code; every number is measured by tests in the repo.",
+    "Intara was built by Huzefa Mandviwala (B.Tech AI & DS, SCET Surat), MIT licensed, at github.com/Huzefman/Intara-Propmpt-to-App. The architecture, gates, eval methodology and quota strategy are documented in the repository, and every number is measured by tests in the repo.",
 
     # — Pipeline ————————————————————————————————————————————————
     "The Intara build pipeline runs staged agents S0 through S6: S0 intake, S1 clarifier (may ask questions), S2 modeler (entities, fields, relations), S3 designer (pages and the role set), S4 logic (transition/automation/formula rules), S5 assembler + critic (gates), S6 seed data.",
@@ -36,8 +36,8 @@ PROJECT_DOCS: list[str] = [
     "Intara's golden-wishes eval (python scripts/eval.py --mocked) checks 5 wishes against 6 binary metrics each: valid JSON, schema completeness, frontend TypeScript build, backend parse plus ruff lint, OpenAPI shape, and citations. It passes 5/5 and runs free in CI.",
     "Intara's core20 live eval runs 20 fixed wishes end-to-end against free-tier providers. Progression: 4/20 → 13/20 → 17/20 (the 85% accept bar), with a median of 9 LLM calls per build (budget ≤14) and median wall time of about 4.4 minutes, throttled by free-tier quota.",
     "Intara reports its tuned number next to a held-out number: on 5 domains never used for tuning (invoicing, gym memberships, helpdesk, restaurant orders, school fees) the result was 3/5 green — honest generalization, not just the tuned 17/20.",
-    "Intara's test suites total roughly 400 automated tests: about 200 Python tests (pytest, including TypeScript-twin formula and runtime suites run through Node) and 206 Node tests passing with 1 environment-skip.",
-    "Intara has 10 human-reviewed gold App Specs in its gallery: BookWell (appointments), PipeDrive Lite (CRM), ClubConnect (school clubs), GardenPlan (gardening), Stockroom (retail inventory), TimeOff (HR leave), TaskFlow (task management), FixIt (repair shop), Page Turners (book club), PawCare (veterinary clinic).",
+    "Intara's test suites total roughly 470 automated tests: 267 Python tests (pytest, including TypeScript-twin formula and runtime suites run through Node) and 206 Node tests passing with 1 environment-skip.",
+    "Intara has 10 curated gold App Specs in its gallery: BookWell (appointments), PipeDrive Lite (CRM), ClubConnect (school clubs), GardenPlan (gardening), Stockroom (retail inventory), TimeOff (HR leave), TaskFlow (task management), FixIt (repair shop), Page Turners (book club), PawCare (veterinary clinic).",
 
     # — Failure stories (the interesting ones) ——————————————————
     "Intara's first baseline eval looked fine from outside — 10 of 20 wishes 'succeeded' — but every one of the 10 full plans had silently fallen back to a mock PRD because the LLM's JSON envelopes were malformed. The true parse rate was 0 of 10 full plans.",
@@ -75,5 +75,5 @@ PROJECT_DOCS: list[str] = [
     # — This archives feature itself (meta) ————————————————————
     "These archives answer questions about the Intara project itself: docs are retrieved from Supabase pgvector (match_docs cosine, top 5) after embedding the question, with a lexical BM25 fallback when embedding providers are unavailable — the retrieval mode is labelled in every answer.",
     "The Intara archives synthesize answers with whichever free provider has quota (the same fallback chain the builds use), grounded strictly in retrieved project documentation, with numbered citations — and say 'not in the archives' instead of inventing facts.",
-    "Intara's stack: FastAPI + Python backend (Pydantic, staged agents), React 18 + TypeScript + Vite frontend, a framework-free TypeScript spec runtime package, Supabase (Postgres + pgvector + RLS) for persistence and telemetry, and a Vercel static demo for the portfolio.",
+    "Intara's stack: FastAPI + Python backend (Pydantic, staged agents), React 18 + TypeScript + Vite frontend, a framework-free TypeScript spec runtime package, Supabase (Postgres + pgvector + RLS) for persistence and telemetry, and Vercel for the frontend and static template demo.",
 ]

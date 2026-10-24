@@ -20,8 +20,8 @@ from typing import Any
 ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 TEMPLATE_VAR_RE = re.compile(r"\{([^{}]+)\}")
 
-# Block catalog: required + optional props per type (guide vocabulary, as
-# normalised by human review). Unknown prop keys are R37; missing required
+# Block catalog: required + optional props per type. Unknown prop keys are
+# R37; missing required
 # is R31. Stability experimental warns (W01), planned is an error (R30).
 BLOCKS: dict = {
     "data.table": {"stability": "stable",

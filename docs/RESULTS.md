@@ -14,7 +14,7 @@
 | core20 rerun 1 (2026-10-14) | after failure-taxonomy fixes | **13/20** |
 | core20 final (2026-10-15) | after fix batch 2/3 | **17/20 (85% — the accept bar)** · median 9 LLM calls (budget ≤14) · median 4.4 min wall (target ≤3 min, quota-throttled) · diversity 12 combos, 0.028 entity overlap |
 | Held-out domains | 5 domains never used for tuning | **3/5 green** (invoicing, gym memberships, helpdesk; restaurant orders and school fees failed) |
-| Unit suites (2026-10-17) | pytest / node | **201/201** · **206 pass** (+1 env-skip) |
+| Unit suites (2026-10-23) | pytest / node | **267/267** · **206 pass** (+1 env-skip) |
 | Adapter contract | memory / Dexie / live Supabase | 12/12 · 12/12 · **6/6 live** (scratch app, zero residue) |
 
 ## The three failures worth talking about
@@ -59,6 +59,6 @@ Regenerate with: `python scripts/export_llm_calls.py` → re-run the notebook.
 
 - **Free-tier quota** shapes roughly half of observed live failures — labelled, retried across providers, still there. A paid key removes this class outright.
 - **Role coherence** mismatches fail closed with specific errors; there is no automatic repair (by design — silent repair would be fail-open).
-- **No human UAT yet.** All numbers above are lab numbers. That's the next real gate, not another benchmark.
+- **Human UAT is the next gate.** All numbers above are lab numbers, not product metrics.
 
-*Full failure register and per-step costs: `docs/process/AGENT.md` (§5, §6). Full limitations, no softening: `docs/process/PROJECT_HANDOFF.md` §6.*
+*Full limitations are listed in the [README](../README.md#limitations). Raw per-run reports live in `evals/reports/`.*

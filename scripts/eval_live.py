@@ -165,7 +165,7 @@ def main() -> int:
         "latency_s": {"min": lat[0] if lat else None,
                       "median": lat[len(lat) // 2] if lat else None,
                       "max": lat[-1] if lat else None},
-        "note": "fallback = mock source; degraded builds count as failures per AGENT.md",
+        "note": "fallback = mock source; degraded builds count as failures",
     }
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     out = args.out or f"evals/reports/baseline-{stamp}.json"

@@ -1,6 +1,6 @@
 """
 Durable builds — Phase 3 tests. No network, no keys, no Supabase.
-Covers AGENT.md P3.1–P3.4 acceptance:
+Covers P3.1–P3.4 acceptance:
 - 006b migration is additive-only
 - artifact store: sha stability/canonicalization, miss → None, oversize/failure → raise
 - sweeper: orphan running → pending (+attempt), building wish → failed, clean tree → no-op, DB down → fail-soft

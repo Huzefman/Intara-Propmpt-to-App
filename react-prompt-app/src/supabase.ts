@@ -1,4 +1,4 @@
-// Supabase client — 15 lines you type first in interview
+// Supabase browser client
 // npm install @supabase/supabase-js
 import { createClient } from '@supabase/supabase-js'
 

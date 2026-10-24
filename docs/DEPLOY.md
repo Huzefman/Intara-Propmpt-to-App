@@ -27,7 +27,7 @@ SQL editor → new query → paste the whole file → run:
    warning)
 
 > **012 deletes legacy owner-null wishes** (`delete from wishes where owner is
-> null`) — that is the approved cleanup of the old public demo rows. It also
+> null`) — that is the intentional cleanup of the old public demo rows. It also
 > drops every public-read / open-write policy on wish content, adds
 > `profiles`, `build_events`, and tightens storage writes.
 >
@@ -127,7 +127,7 @@ runs failed (artifacts already live in Supabase, so no disk is needed).
 
 ---
 
-## 4. Prove two accounts are isolated
+## 4. Verify two accounts are isolated
 
 1. Open the site → **Create account** as `a@…` → make a wish.
 2. Copy the wish URL, then sign out.

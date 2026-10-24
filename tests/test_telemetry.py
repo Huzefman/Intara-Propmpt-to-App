@@ -1,6 +1,6 @@
 """
 LLM telemetry + cassettes tests — no network, no keys needed.
-Covers AGENT.md P2.1/P2.2/P2.3 acceptance:
+Covers P2.1/P2.2/P2.3 acceptance:
 - record_llm_call payload shape (routing/usage/timing/outcome, NO prompt text)
 - fail-soft: missing table disables recorder for the process, never raises
 - gateway wrapper records on success incl. fallback_reason attribution

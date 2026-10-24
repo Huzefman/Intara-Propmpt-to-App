@@ -3,7 +3,7 @@
 -- was left unconstrained pending this migration). No alterations to existing
 -- tables/rows. Data-plane `apps`/`records` are NOT included (later migration).
 --
--- Deviations from the Appendix E sketch (recorded in AGENT.md):
+-- Deviations from the Appendix E sketch:
 -- - `artifacts` table omitted: content-addressing already ships as
 --   006b artifact_contents (step contents); generic build blobs land with export.
 -- - `llm_calls` omitted (ships as 006a); only its run_id FK is added here.

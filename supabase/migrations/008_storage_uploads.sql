@@ -1,6 +1,6 @@
 -- Migration 008 — Storage for app uploads (Phase 8, slice 3).
 -- ADDITIVE ONLY: one bucket + policies on storage.objects, nothing else.
--- Demo-open posture (cf. AGENT.md §5 #7): public reads so preview images
+-- Demo-open posture (cf. wish_iterations): public reads so preview images
 -- render without signed URLs; open inserts scoped to the bucket (filenames
 -- are uuid-prefixed client-side). Harden with auth-scoped policies at
 -- multi-tenant time.

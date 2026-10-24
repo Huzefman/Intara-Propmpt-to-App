@@ -1,8 +1,8 @@
 /**
- * Bundled gold specs for the static demo (VITE_DEMO=1) and for graceful
- * offline fallback in normal builds: the same 10 human-reviewed exemplars
- * that are seeded to the exemplars table, imported straight from
- * packages/spec/exemplars/*.json at build time.
+ * Bundled specs for the static demo (VITE_DEMO=1) and for graceful offline
+ * fallback in normal builds: the same 10 curated exemplars that are seeded to
+ * the exemplars table, imported straight from packages/spec/exemplars/*.json
+ * at build time.
  */
 import type { AppSpec } from '../../../packages/spec/app-spec.ts'
 

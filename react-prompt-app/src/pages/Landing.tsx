@@ -163,7 +163,7 @@ export function Landing() {
           <div style={{ fontSize: 13, fontWeight: 550, fontFamily: 'Space Grotesk', letterSpacing: '-0.02em' }}>This is the static demo — the builder itself runs locally</div>
           <div style={{ fontSize: 12, fontWeight: 400, color: 'var(--intara-faint)', lineHeight: 1.7, letterSpacing: '-0.01em' }}>
             The full pipeline (wish → validated spec → gates → runnable app) needs the FastAPI backend and LLM keys.
-            Here you can open the <span style={{ color: 'var(--intara-muted)' }}>10 human-reviewed gold apps</span> and use every block —
+            Here you can open the <span style={{ color: 'var(--intara-muted)' }}>10 curated gold apps</span> and use every block —
             create rows, filter, drag cards, switch roles, export CSV, print — all executed by the spec runtime in your browser.
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

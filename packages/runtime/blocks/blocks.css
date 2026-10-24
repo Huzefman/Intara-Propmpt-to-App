@@ -1,5 +1,5 @@
 /**
- * Runtime block + shell styles (portfolio demo pass).
+ * Runtime block + shell styles.
  *
  * Every block component emits `blk-*` classes; the AppShell emits
  * `app-shell` / `app-nav` / `app-main` / `app-brand` (namespaced away from

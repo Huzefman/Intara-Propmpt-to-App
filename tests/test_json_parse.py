@@ -1,6 +1,6 @@
 """
 JSON-mode gateway + parse ladder tests — no network, no keys needed.
-Covers AGENT.md P1.1/P1.2 acceptance fixtures: unescaped newlines, tabs in
+Covers P1.1/P1.2 acceptance fixtures: unescaped newlines, tabs in
 strings, trailing commas, fenced+prose, truncated, BOM, smart quotes,
 invalid escapes, empty input, repair-once semantics, truncation gating,
 structured-mode attach/fallback/cache, finish_reason + token plumbing.

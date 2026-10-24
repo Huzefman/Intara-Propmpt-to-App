@@ -100,7 +100,7 @@ export function GalleryView() {
       </div>
       {offline && (
         <div className="glass" style={{ padding: '10px 14px', borderRadius: 14, fontSize: 11.5, color: 'var(--intara-muted)', lineHeight: 1.6 }}>
-          These are the 10 human-reviewed gold specs from the eval suite. Everything below — tables, filters, kanban drag, roles, CSV, print — is executed by the spec runtime with sample data. The LLM build pipeline runs locally in the full Studio.
+          These are the 10 curated gold specs from the eval suite. Everything below — tables, filters, kanban drag, roles, CSV, print — is executed by the spec runtime with sample data. The LLM build pipeline runs locally in the full Studio.
         </div>
       )}
       {err && <div className="glass" style={{ padding: 10, color: '#FDA4AF', fontSize: 12 }}>{err}</div>}

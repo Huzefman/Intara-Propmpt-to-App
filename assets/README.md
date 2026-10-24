@@ -1,8 +1,9 @@
 # Assets — Intara
 
-Place AI-generated assets here as per `ASSET_PROMPTS.md`.
+Static artwork used by the landing page and Studio.
 
-## Folder Structure
+## Folder structure
+
 ```
 assets/
   planet-intara.png       # 1024×1024 transparent
@@ -17,9 +18,10 @@ assets/
     scroll.png
 ```
 
-## Import Map (for code)
+## Import map
 
-FE will import as:
+The frontend imports assets by path:
+
 ```ts
 import planet from '@/assets/planet-intara.png'
 import starfield from '@/assets/starfield.jpg'
@@ -28,26 +30,4 @@ import nebula from '@/assets/nebula-gradient.png'
 import schemaGlyph from '@/assets/glyphs/schema.png'
 ```
 
-Vite handles `assets/` via `public/` or `src/assets/` alias — after placement, run `npm run dev` and check no 404 in console.
-
-## Placeholders
-
-If asset missing, app uses CSS fallback — so you can start with empty folder and add later.
-
-## Checklist
-
-- [ ] planet-intara.png
-- [ ] starfield.jpg
-- [ ] wish-orb.png
-- [ ] constellation.svg
-- [ ] nebula-gradient.png
-- [ ] glyphs/schema.png
-- [ ] glyphs/frontend.png
-- [ ] glyphs/backend.png
-- [ ] glyphs/scroll.png
-
-After placing, run:
-```bash
-ls -lh assets/ assets/glyphs/
-```
-and notify agent.
+Vite serves them from `public/` or through the `src/assets/` alias. If an asset is missing, the app falls back to CSS gradients and inline glyphs, so the UI remains usable.

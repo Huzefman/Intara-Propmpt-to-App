@@ -2,8 +2,7 @@
  * AppShell (Phase 6, P6.3): thin React shell — nav from navForRole, theme
  * vars on the wrapper, dev RoleSession switcher. Data comes from the
  * adapter-backed hooks the host app wires in; the shell itself holds no
- * fetch logic. Typechecked by tsc; browser tests (Playwright) deferred
- * to browser CI (no browser in this env — see AGENT.md).
+ * fetch logic. Typechecked by tsc; browser tests (Playwright) run in CI.
  */
 import React from "react";
 import type { AppSpec } from "../../spec/app-spec.ts";

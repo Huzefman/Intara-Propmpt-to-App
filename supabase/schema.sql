@@ -1,4 +1,4 @@
--- Supabase schema — minimal, interview-ready (18 lines + comments)
+-- Supabase schema — minimal starter (18 lines + comments)
 -- Run in Supabase SQL editor
 
 -- 1. Schemas generated from prompts
@@ -17,7 +17,7 @@ create table if not exists docs (
   embedding vector(1536)
 );
 
--- 3. RLS: user can read own rows (demo: open for anon in interview, tighten later)
+-- 3. RLS: user can read own rows (demo posture: open for anon; tighten later)
 alter table schemas enable row level security;
 create policy "allow all for demo"
   on schemas for all using (true) with check (true);

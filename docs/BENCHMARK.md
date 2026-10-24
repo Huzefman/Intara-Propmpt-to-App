@@ -32,7 +32,7 @@ These are the **benchmark test prompts** (suitable standards, covering CRUD inte
 
 Each prompt is stored in `tests/fixtures/wishes.json` with expected minimal tables (e.g., Blog expects `authors`, `posts`).
 
-**Why these 5:** They cover 80% of CRUD patterns (users+owned items, likes/votes, carts/orders, time slots). They are standard in app-generator demos (Rocket.new, Supabase examples) and interview-ready.
+**Why these 5:** They cover 80% of CRUD patterns (users+owned items, likes/votes, carts/orders, time slots). They are standard in app-generator demos (Rocket.new, Supabase examples) and broad enough to be a useful regression suite.
 
 ## 4. Metrics — Per Wish, 6 Binary Checks (pass = all true)
 

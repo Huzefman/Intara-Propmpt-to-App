@@ -14,7 +14,7 @@
    "median": 15.4,
    "max": 31.0
   },
-  "note": "fallback = mock source; degraded builds count as failures per AGENT.md"
+  "note": "fallback = mock source; degraded builds count as failures"
  },
  "results": [
   {

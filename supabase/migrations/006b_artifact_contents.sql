@@ -12,8 +12,8 @@ create table if not exists artifact_contents (
 create index if not exists artifact_contents_created_idx on artifact_contents (created_at desc);
 
 alter table artifact_contents enable row level security;
--- Demo-open posture (cf. wish_iterations + AGENT.md §5 #7): service-key writes
--- in practice; harden with owner-scoped policies at multi-tenant time.
+-- Demo-open posture (cf. wish_iterations): service-key writes in practice;
+-- harden with owner-scoped policies at multi-tenant time.
 drop policy if exists "artifact contents public read" on artifact_contents;
 create policy "artifact contents public read" on artifact_contents for select using (true);
 drop policy if exists "artifact contents allow writes" on artifact_contents;

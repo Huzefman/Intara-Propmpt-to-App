@@ -8,7 +8,7 @@ return the nearest specs (with tag filters). Vectors are 768-d per guide
 Held-out domains (guide Appendix D #6–10) are NEVER indexed — the builder
 refuses them, so generalisation is measured honestly (P5.3).
 
-Deviation (AGENT.md): vectors live in a versioned JSON index
+Vectors live in a versioned JSON index
 (evals/retrieval_index.json), not in Supabase — the exemplars table pins
 specs; the index file keeps dims flexible and diffs reviewable. DB-backed
 vectors land when retrieval serves production traffic.
