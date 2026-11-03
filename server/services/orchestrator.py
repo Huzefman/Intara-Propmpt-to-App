@@ -61,6 +61,26 @@ def _frag_fallback(frag) -> str | None:
     return str(reason)[:500] if reason else None
 
 
+def _call_template_only(fn, *args, **kwargs):
+    """Run a generator in deterministic template mode.
+
+    Final assembly used to call the LLM-backed generators again after every
+    step had already completed and been validated. That wasted minutes of
+    provider time and turned a completed build into a failed one when the
+    provider or DB connection timed out. Assembly must only fill gaps
+    deterministically; per-step LLM output is already in the artifact store.
+    """
+    prev = os.environ.get("INTARA_TEMPLATE_ONLY")
+    os.environ["INTARA_TEMPLATE_ONLY"] = "1"
+    try:
+        return fn(*args, **kwargs)
+    finally:
+        if prev is None:
+            os.environ.pop("INTARA_TEMPLATE_ONLY", None)
+        else:
+            os.environ["INTARA_TEMPLATE_ONLY"] = prev
+
+
 def _mark_build_failed(wid: str, reason: str, emit_event: bool = True):
     """Flip the wish to failed in DB + MEM (+ SSE unless the caller emits its own richer event).
     A dead build must never leave the wish stuck on 'building' (which bricks retry guards and the UI)."""
@@ -70,6 +90,10 @@ def _mark_build_failed(wid: str, reason: str, emit_event: bool = True):
             wish = get_wish_with_steps(wid)
             artifacts = wish.get("artifacts") or {}
             artifacts["steps"] = BUILD_STATE.get(wid, {}).get("steps", artifacts.get("steps", {}))
+            # Persist the reason. Without this the UI can only show "failed",
+            # which makes an otherwise complete build impossible to diagnose.
+            artifacts["build_error"] = str(reason)[:2000]
+            artifacts["failed_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             set_wish_status(wid, "failed", artifacts=artifacts)
         except Exception:
             try:
@@ -585,9 +609,11 @@ async def run_build_sequential(wid: str, build_plan: dict, prompt: str):
             for f in frag.get("files", []):
                 if f.get("path") and f.get("content"):
                     pool.setdefault(f["path"], f["content"])
-        # gap-fill from fresh full generation (same mode as the build itself)
+        # Gap-fill deterministically. The completed step fragments above are
+        # authoritative; this fresh pass only fills files a resumed/legacy
+        # build never persisted. It must never make a new LLM call.
         from services.generators.frontend_gen import generate_frontend as _gf2
-        _fresh_fe = _gf2(build_plan).get("files", [])
+        _fresh_fe = _call_template_only(_gf2, build_plan).get("files", [])
         for f in _fresh_fe:
             if f.get("path") and f.get("content"):
                 pool.setdefault(f["path"], f["content"])
@@ -664,7 +690,7 @@ export default function App() {{
             if content:
                 be_files.append({"path": path, "content": content})
         from services.generators.backend_gen import generate_backend
-        final_be = generate_backend(build_plan)
+        final_be = _call_template_only(generate_backend, build_plan)
         for f in final_be["files"]:
             if f["path"] not in [x["path"] for x in be_files] and f.get("content"):
                 be_files.append(f)
@@ -753,7 +779,9 @@ Staged sequential build — one prompt per page/component, wired as single app.
         # the build if the worker restarted mid-flight; steps are in DB, artifacts must be too)
         try:
             from db.wishes import set_wish_status
-            set_wish_status(wid, "ready", prd=build_plan, artifacts=final_artifacts)
+            last_step_id = graph[-1]["id"] if graph else None
+            set_wish_status(wid, "ready", current_step_id=last_step_id,
+                            prd=build_plan, artifacts=final_artifacts)
         except Exception as e:
             print(f"final persist failed for {wid}: {e}")
             raise

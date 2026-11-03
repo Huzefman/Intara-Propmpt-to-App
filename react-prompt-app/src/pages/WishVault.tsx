@@ -105,6 +105,7 @@ export function WishVault() {
 
   // Staged Studio: collapsible rail + chat + preview, edge-to-edge
   const appName = wish?.prd?.appName && wish.status !== 'planning' ? wish.prd.appName : 'New wish'
+  const buildError = typeof wish?.artifacts?.build_error === 'string' ? wish.artifacts.build_error : undefined
   return (
     <div
       className={`studio-shell ${railCollapsed ? 'rail-collapsed' : ''} ${chatCollapsed ? 'chat-collapsed' : ''}`}
@@ -121,6 +122,25 @@ export function WishVault() {
             <span className={`pill status-${wish.status}`}>{wish.status.replace('_', ' ')}</span>
             <button className="studio-collapse-btn" onClick={() => setChatCollapsed(true)} title="Collapse chat" aria-label="Collapse chat">‹‹</button>
           </div>
+          {buildError && (
+            <div
+              role="alert"
+              style={{
+                margin: '0 16px 12px',
+                padding: '10px 12px',
+                borderRadius: 12,
+                border: '1px solid rgba(248,113,113,0.28)',
+                background: 'rgba(248,113,113,0.07)',
+                color: '#FCA5A5',
+                fontSize: 11.5,
+                lineHeight: 1.55,
+                letterSpacing: '-0.005em',
+              }}
+            >
+              <strong style={{ fontWeight: 600 }}>Build failed:</strong>{' '}
+              {buildError.slice(0, 500)}
+            </div>
+          )}
           <ErrorBoundary label="agent thread" key={`thread-${wish.id}-${wish.status}`}>
             <AgentThread wish={wish} onChanged={refresh} buildView={building ? <BuildingView wish={wish} compact onChanged={refresh} /> : undefined} />
           </ErrorBoundary>

@@ -248,6 +248,78 @@ def _run_build(orch, wid, plan):
     return asyncio.run(orch.run_build_sequential(wid, plan, "test app"))
 
 
+# ---------- final assembly / failure persistence ----------
+
+def test_final_assembly_gap_fill_is_template_only(monkeypatch):
+    """Final assembly must never make a new LLM call after steps are done."""
+    _scrub_env(monkeypatch)
+    import services.orchestrator as orch
+
+    seen = []
+
+    def fake_generator():
+        seen.append(os.getenv("INTARA_TEMPLATE_ONLY"))
+        return {"files": []}
+
+    assert orch._call_template_only(fake_generator) == {"files": []}
+    assert seen == ["1"]
+    assert "INTARA_TEMPLATE_ONLY" not in os.environ
+
+    monkeypatch.setenv("INTARA_TEMPLATE_ONLY", "0")
+    orch._call_template_only(fake_generator)
+    assert seen[-1] == "1"
+    assert os.environ["INTARA_TEMPLATE_ONLY"] == "0"
+
+
+def test_mark_build_failed_persists_reason(monkeypatch):
+    import services.orchestrator as orch
+    import db.wishes as wishes
+
+    saved = {}
+    monkeypatch.setattr(wishes, "get_wish_with_steps", lambda wid: {"artifacts": {}})
+    monkeypatch.setattr(wishes, "set_wish_status",
+                        lambda wid, status, **kw: saved.update({"wid": wid, "status": status, **kw}))
+    orch.BUILD_STATE.clear()
+    orch.BUILD_STATE["w-debug"] = {"steps": {"validate": {"status": "done"}}}
+    orch._mark_build_failed("w-debug", "assembly refused: empty content", emit_event=False)
+
+    assert saved["status"] == "failed"
+    assert saved["artifacts"]["build_error"] == "assembly refused: empty content"
+    assert saved["artifacts"]["steps"]["validate"]["status"] == "done"
+
+
+def test_set_wish_status_retries_transient_failure(monkeypatch):
+    import db.wishes as wishes
+
+    calls = {"n": 0}
+
+    class Query:
+        def update(self, payload):
+            self.payload = payload
+            return self
+
+        def eq(self, *args):
+            return self
+
+        def execute(self):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("stale connection")
+            return types.SimpleNamespace(data=[{"id": "w", "status": self.payload["status"]}])
+
+    class Supa:
+        def table(self, name):
+            assert name == "wishes"
+            return Query()
+
+    monkeypatch.setattr(wishes, "_client", lambda: Supa())
+    monkeypatch.setattr(wishes.time, "sleep", lambda *_: None)
+
+    out = wishes.set_wish_status("w", "ready", artifacts={"ok": True})
+    assert calls["n"] == 2
+    assert out[0]["status"] == "ready"
+
+
 # ---------- P3.1 store ----------
 
 def test_migration_006b_additive_only():

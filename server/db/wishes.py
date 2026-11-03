@@ -107,16 +107,35 @@ def update_step(wid: str, step_id: str, status: Optional[str] = None, prompt: Op
     return res.data
 
 def set_wish_status(wid: str, status: str, current_step_id: Optional[str] = None, prd: Optional[dict] = None, artifacts: Optional[dict] = None):
-    supa = _client()
+    """Persist a wish status, retrying transient Supabase/HTTP failures.
+
+    A long final-assembly pass can leave the cached Supabase client with a
+    stale connection. Retrying (and clearing the cached client) keeps an
+    otherwise complete build from being flipped to failed by one dead socket.
+    """
     payload: Dict[str, Any] = {"status": status}
     if current_step_id is not None: payload["current_step_id"] = current_step_id
     if prd is not None: payload["prd"] = prd
     if artifacts is not None: payload["artifacts"] = artifacts
     payload["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    res = supa.table("wishes").update(payload).eq("id", wid).execute()
-    if not res.data:
-        raise RuntimeError(f"set_wish_status {wid}->{status} failed")
-    return res.data
+
+    last_err: Optional[Exception] = None
+    for attempt in range(3):
+        try:
+            res = _client().table("wishes").update(payload).eq("id", wid).execute()
+            if res.data:
+                return res.data
+            last_err = RuntimeError(f"set_wish_status {wid}->{status} failed")
+        except Exception as e:
+            last_err = e
+        if attempt < 2:
+            # Drop the stale HTTP connection so the next attempt reconnects.
+            try:
+                _cached_client.cache_clear()
+            except Exception:
+                pass
+            time.sleep(0.5 * (attempt + 1))
+    raise last_err or RuntimeError(f"set_wish_status {wid}->{status} failed")
 
 def list_wishes_with_steps(limit: int = 50, owner: Optional[str] = None):
     supa = _client()
