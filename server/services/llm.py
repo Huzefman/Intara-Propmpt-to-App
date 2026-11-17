@@ -475,7 +475,7 @@ def _byok_model(provider: str, model: str | None) -> str:
     if provider == "openrouter":
         return os.getenv("OPENROUTER_MODEL", "openrouter/free")
     if provider == "groq":
-        return os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+        return os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     if provider == "nvidia":
         return os.getenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash-0731")
     if provider == "deepseek":
@@ -624,7 +624,7 @@ def _call_llm_inner(prompt: str, temperature: float = 0.2, max_tokens: int | Non
         return byok
     deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
     nvidia_model = os.getenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash-0731")
-    groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     or_primary = os.getenv("OPENROUTER_MODEL", "openrouter/free")
     or_fallback = os.getenv("OPENROUTER_FALLBACK", "openrouter/free")
 
@@ -701,22 +701,28 @@ def _call_llm_inner(prompt: str, temperature: float = 0.2, max_tokens: int | Non
     elif _allowed("openrouter") and os.getenv("OPENROUTER_API_KEY"):
         print("openrouter in cooldown — skipping to next provider")
 
-    # 2. Groq (low token budget remaining)
+    # 2. Groq
     if _allowed("groq") and os.getenv("GROQ_API_KEY") and not _in_cooldown("groq"):
         tried_any = True
-        try:
-            sub = {}
-            text = _call_groq(prompt, groq_model, temperature,
-                              json_mode=json_mode, max_output_tokens=max_output_tokens, info=sub)
-            _track(sub)
-            _clear_cooldown("groq")
-            return text
-        except Exception as e:
-            last_err = e
-            if _is_quota(e):
-                saw_quota = True
-                _mark_cooldown("groq")
-            print(f"groq {groq_model} failed: {e} — trying next provider")
+        groq_candidates = [groq_model]
+        for gm in ("openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"):
+            if gm not in groq_candidates:
+                groq_candidates.append(gm)
+        for gm in groq_candidates:
+            try:
+                sub = {}
+                text = _call_groq(prompt, gm, temperature,
+                                  json_mode=json_mode, max_output_tokens=max_output_tokens, info=sub)
+                _track(sub)
+                _clear_cooldown("groq")
+                return text
+            except Exception as e:
+                last_err = e
+                if _is_quota(e):
+                    saw_quota = True
+                    _mark_cooldown("groq")
+                    break
+                print(f"groq {gm} failed: {e} — trying next groq candidate")
     elif _allowed("groq") and os.getenv("GROQ_API_KEY"):
         print("groq in cooldown — skipping to next provider")
 
@@ -776,7 +782,7 @@ def _call_llm_with_meta_inner(prompt: str, temperature: float = 0.2, max_tokens:
                       "model": meta_info.get("model")}
     primary = os.getenv("OPENROUTER_MODEL", "openrouter/free")
     fallback = os.getenv("OPENROUTER_FALLBACK", "openrouter/free")
-    groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
     nvidia_model = os.getenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash-0731")
     deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
     last_err: Exception | None = None
@@ -848,19 +854,25 @@ def _call_llm_with_meta_inner(prompt: str, temperature: float = 0.2, max_tokens:
                 _mark_cooldown("openrouter")
     if _allowed("groq") and os.getenv("GROQ_API_KEY") and not _in_cooldown("groq"):
         tried_any = True
-        try:
-            sub = {}
-            text = _call_groq(prompt, groq_model, temperature,
-                              json_mode=json_mode, max_output_tokens=max_output_tokens, info=sub)
-            _track(sub)
-            _clear_cooldown("groq")
-            return text, {"source": "groq", "model": groq_model}
-        except Exception as e:
-            last_err = e
-            if _is_quota(e):
-                saw_quota = True
-                _mark_cooldown("groq")
-            print(f"groq with_meta {groq_model} failed: {e}, trying nvidia")
+        groq_candidates = [groq_model]
+        for gm in ("openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"):
+            if gm not in groq_candidates:
+                groq_candidates.append(gm)
+        for gm in groq_candidates:
+            try:
+                sub = {}
+                text = _call_groq(prompt, gm, temperature,
+                                  json_mode=json_mode, max_output_tokens=max_output_tokens, info=sub)
+                _track(sub)
+                _clear_cooldown("groq")
+                return text, {"source": "groq", "model": gm}
+            except Exception as e:
+                last_err = e
+                if _is_quota(e):
+                    saw_quota = True
+                    _mark_cooldown("groq")
+                    break
+                print(f"groq with_meta {gm} failed: {e}, trying next groq candidate")
     elif _allowed("groq") and os.getenv("GROQ_API_KEY"):
         print("groq in cooldown — skipping to next provider")
     if _allowed("nvidia") and os.getenv("NVIDIA_API_KEY") and not _in_cooldown("nvidia"):
@@ -1121,7 +1133,7 @@ def get_llm_status() -> dict:
     has_or = bool(os.getenv("OPENROUTER_API_KEY"))
     has_gem = bool(os.getenv("GEMINI_API_KEY"))
     deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat") if has_deepseek else None
-    groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile") if has_groq else None
+    groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b") if has_groq else None
     nvidia_model = os.getenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash-0731") if has_nvidia else None
     primary = os.getenv("OPENROUTER_MODEL", "openrouter/free") if has_or else None
     gem_model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash") if has_gem else None

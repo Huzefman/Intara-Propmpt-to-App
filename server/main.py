@@ -104,7 +104,7 @@ def call_gemini(prompt: str, *, response_mime_type: str | None = None, max_outpu
                 api_key: str | None = None, model: str | None = None):
     if os.getenv("LLM_ONLY") == "groq":
         from services.llm import call_llm
-        return call_llm(prompt, temperature=0.2, max_output_tokens=max_output_tokens, info=info)
+        return call_llm(prompt, temperature=0.2, max_output_tokens=max_output_tokens, info=info, json_mode=(response_mime_type == "application/json"))
     gem = client
     if api_key and api_key != GEMINI_KEY:
         gem = _gemini_client_for(api_key)
