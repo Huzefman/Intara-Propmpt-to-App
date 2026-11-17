@@ -88,7 +88,7 @@ PROVIDERS: dict[str, dict] = {
         "docs_url": "https://console.groq.com/keys",
         "placeholder": "gsk_…",
         "description": "Very fast open models (Llama, GPT-OSS, Qwen).",
-        "default_model": "openai/gpt-oss-20b",
+        "default_model": "llama-3.3-70b-versatile",
         "needs_base_url": False,
     },
     "nvidia": {

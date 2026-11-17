@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { PlanetOrb } from '../components/PlanetOrb'
 import { WishInput } from '../components/WishInput'
 import { Pillars, HowItWorks } from '../components/RocketSections'
-import { createWish, createPlan, askRag, reconcileWish, PlanAbortedError } from '../api/client'
+import { askRag, createWishShell, startRun, clarifyWish, type ClarifyResponse } from '../api/client'
 import { DEMO, GITHUB_URL } from '../demo'
 import { useAuth } from '../hooks/useAuth'
 import { useReveal } from '../hooks/useReveal'
@@ -34,12 +34,14 @@ export function Landing() {
   const { user, loading: authLoading } = useAuth(!DEMO)
   const [prompt, setPrompt] = useState(EXAMPLES[0])
   const [loading, setLoading] = useState(false)
+  const [building, setBuilding] = useState(false)
+  const [clarify, setClarify] = useState<ClarifyResponse | null>(null)
+  const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [appName, setAppName] = useState('')
   const [err, setErr] = useState<string | null>(null)
-  const [weaveNote, setWeaveNote] = useState<string | null>(null)
   const [q, setQ] = useState('What stack does Intara use?')
   const [ragAns, setRagAns] = useState('')
 
-  const [staged, setStaged] = useState(true)
   const wishRef = useRef<HTMLDivElement>(null)
   function scrollToWish() {
     wishRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -48,26 +50,49 @@ export function Landing() {
   async function onWeave() {
     if (!prompt.trim()) return
     if (!DEMO && !user) { nav('/auth?mode=signup'); return }
+    if (DEMO) { nav('/templates'); return }
     setLoading(true); setErr(null)
     const text = prompt.trim()
     try {
-      const w = staged ? await createPlan(text) : await createWish(text)
-      nav(`/wish/${w.id}`)
+      const data = await clarifyWish(text)
+      setClarify(data)
+      setAppName(data.appName || 'App')
+      setAnswers({})
     } catch (e: any) {
-      if (e instanceof PlanAbortedError) {
-        // Slow plan, not a failure: the server keeps working. Reconcile —
-        // land straight in the chat if the wish already exists.
-        setWeaveNote('Still weaving — checking for your wish…')
-        const found = await reconcileWish(text)
-        if (found) {
-          nav(`/wish/${found.id}`)
-          return
-        }
-        setErr(e.message)
-      } else {
-        setErr(e.message || 'weave failed')
+      console.warn('clarify failed, falling back directly to build', e)
+      try {
+        const w = await createWishShell(text)
+        const r = await startRun(text, 'App', w.id)
+        nav(`/runs/${r.run_id}`)
+      } catch (err2: any) {
+        setErr(err2.message || 'weave failed')
       }
-    } finally { setLoading(false); setWeaveNote(null) }
+    } finally { setLoading(false) }
+  }
+
+  async function onStartBuild(skipAnswers = false) {
+    if (!prompt.trim()) return
+    setBuilding(true); setErr(null)
+    const basePrompt = prompt.trim()
+    let refined = basePrompt
+    if (!skipAnswers && clarify?.questions?.length) {
+      const chosen = Object.entries(answers).filter(([, v]) => !!v)
+      if (chosen.length > 0) {
+        const qMap = Object.fromEntries(clarify.questions.map((q) => [q.id, q.q]))
+        const bullets = chosen.map(([qid, ans]) => `${qMap[qid] || qid}: ${ans}`)
+        refined = `${basePrompt}\n\nKey Choices:\n- ` + bullets.join('\n- ')
+      }
+    }
+    try {
+      const chosenName = appName.trim() || clarify?.appName || 'App'
+      const w = await createWishShell(basePrompt)
+      const r = await startRun(refined, chosenName, w.id)
+      nav(`/runs/${r.run_id}`)
+    } catch (e: any) {
+      setErr(e.message || 'build failed')
+    } finally {
+      setBuilding(false)
+    }
   }
 
   async function onAsk() {
@@ -135,13 +160,112 @@ export function Landing() {
       {!DEMO && !authLoading && user && (
         <>
           <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase', color: staged ? 'var(--intara-nebula-light)' : 'var(--intara-dim)' }}>Build mode</span>
-            <button onClick={() => setStaged(true)} style={{ padding: '6px 12px', borderRadius: 999, fontSize: 11.5, fontWeight: staged ? 600 : 450, border: staged ? '1px solid rgba(139,92,246,0.9)' : '1px solid rgba(255,255,255,0.06)', background: staged ? 'rgba(139,92,246,0.12)' : 'transparent', color: staged ? 'var(--intara-nebula-light)' : 'var(--intara-faint)', cursor: 'pointer' }}>Staged · plan → pages (detailed)</button>
-            <button onClick={() => setStaged(false)} style={{ padding: '6px 12px', borderRadius: 999, fontSize: 11.5, fontWeight: !staged ? 600 : 450, border: !staged ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(255,255,255,0.06)', background: !staged ? 'rgba(255,255,255,0.06)' : 'transparent', color: !staged ? 'var(--intara-text)' : 'var(--intara-faint)', cursor: 'pointer' }}>One-shot quick</button>
-            <span style={{ fontSize: 10.5, color: 'var(--intara-dim)', marginLeft: 6 }}>{staged ? 'Clarity check → Q&A → plan approval → sequential build → live trial' : 'Single prompt → artifacts'}</span>
+            <span style={{ fontSize: 11, fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--intara-nebula-light)' }}>Spec build</span>
+            <span style={{ fontSize: 10.5, color: 'var(--intara-dim)' }}>Prompt → typed App Spec → composed from prebuilt blocks → live app</span>
           </div>
           <div ref={wishRef} style={{ scrollMarginTop: 90 }}>
-            <WishInput value={prompt} onChange={setPrompt} onSubmit={onWeave} loading={loading} placeholder={staged ? "I wish for a hackathon manager with teams, projects, votes..." : "I wish for a..."} autoFocus />
+            {!clarify ? (
+              <WishInput value={prompt} onChange={setPrompt} onSubmit={onWeave} loading={loading} placeholder="I wish for a hackathon manager with teams, projects, votes..." autoFocus />
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="glass"
+                style={{ padding: 24, borderRadius: 20, display: 'grid', gap: 16 }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--intara-nebula-light)' }}>
+                      Surface Analysis & Clarification
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                      <input
+                        value={appName}
+                        onChange={(e) => setAppName(e.target.value)}
+                        style={{ fontFamily: 'Space Grotesk', fontSize: 20, fontWeight: 600, background: 'transparent', border: 'none', borderBottom: '1px dashed rgba(255,255,255,0.2)', color: 'var(--intara-text)', padding: '2px 0', minWidth: 200 }}
+                        placeholder="App Name"
+                        title="Click to rename your app"
+                      />
+                      <span style={{ fontSize: 11, color: 'var(--intara-dim)' }}>✎ rename</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span className="pill" style={{ background: 'rgba(139,92,246,0.15)', color: 'var(--intara-nebula-light)', border: '1px solid rgba(139,92,246,0.3)' }}>
+                      Clarity score: {clarify.score}/100
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 13, color: 'var(--intara-muted)', lineHeight: 1.6 }}>
+                  {clarify.tagline}
+                  {clarify.summary && <div style={{ fontSize: 12, color: 'var(--intara-faint)', marginTop: 4 }}>{clarify.summary}</div>}
+                </div>
+
+                {clarify.questions?.length > 0 && (
+                  <div style={{ display: 'grid', gap: 14, marginTop: 4 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--intara-text)' }}>
+                      A few quick choices so Intara composes the right compiler components:
+                    </div>
+                    {clarify.questions.map((q, i) => (
+                      <div key={q.id || i} className="thread-q" style={{ marginTop: 0 }}>
+                        <div className="thread-q-title" style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                          <span className="thread-q-num" style={{ background: 'rgba(139,92,246,0.2)', padding: '2px 6px', borderRadius: 6, fontSize: 11, fontWeight: 600 }}>{String(i + 1).padStart(2, '0')}</span>
+                          <span>{q.q}</span>
+                        </div>
+                        <div className="thread-opts" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
+                          {(q.options || []).map((o) => {
+                            const isSelected = answers[q.id] === o.label
+                            return (
+                              <button
+                                key={o.label}
+                                type="button"
+                                className={`thread-opt ${isSelected ? 'selected' : ''}`}
+                                onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: isSelected ? '' : o.label }))}
+                                style={{ textAlign: 'left', cursor: 'pointer' }}
+                              >
+                                <div style={{ fontWeight: 600, color: isSelected ? 'var(--intara-nebula-light)' : 'var(--intara-text)' }}>
+                                  {isSelected ? '✓ ' : ''}{o.label}
+                                </div>
+                                {o.desc && <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>{o.desc}</div>}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {err && <div className="run-error" role="alert">{err}</div>}
+
+                <div style={{ display: 'flex', gap: 10, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    className="btn-primary"
+                    onClick={() => onStartBuild(false)}
+                    disabled={building}
+                    style={{ padding: '11px 22px' }}
+                  >
+                    {building ? 'Weaving your app…' : `Build App${Object.values(answers).filter(Boolean).length ? ` (${Object.values(answers).filter(Boolean).length} chosen)` : ''} →`}
+                  </button>
+                  <button
+                    className="btn-ghost"
+                    onClick={() => onStartBuild(true)}
+                    disabled={building}
+                    style={{ padding: '11px 18px' }}
+                  >
+                    Build without answering →
+                  </button>
+                  <button
+                    className="btn-ghost"
+                    onClick={() => { setClarify(null); setAnswers({}) }}
+                    disabled={building}
+                    style={{ fontSize: 12, opacity: 0.8 }}
+                  >
+                    ← Edit wish
+                  </button>
+                </div>
+              </motion.div>
+            )}
           </div>
         </>
       )}
@@ -173,7 +297,6 @@ export function Landing() {
         </div>
       )}
       {err && <div style={{ marginTop: 12, fontSize: 12.5, fontWeight: 450, color: '#FCA5A5', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.14)', padding: '12px 14px', borderRadius: 14, backdropFilter: 'blur(12px)' }}>{err} {user && <button onClick={() => nav('/constellation')} className="btn-ghost btn-sm" style={{ marginLeft: 8 }}>Open Constellation</button>}</div>}
-      {weaveNote && !err && <div style={{ marginTop: 12, fontSize: 12.5, color: 'var(--intara-nebula-light)' }}>{weaveNote}</div>}
 
       <Pillars />
       <HowItWorks onStart={() => (!authLoading && !user) ? nav('/auth?mode=signup') : window.scrollTo({ top: 0, behavior: 'smooth' })} />

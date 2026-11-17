@@ -300,6 +300,51 @@ def create_plan(body: PlanIn, background_tasks: BackgroundTasks,
     return wish
 
 
+@router.post("/wish/shell")
+def create_wish_shell(body: WishIn, user: dict = Depends(require_user)):
+    """Create an owner-scoped wish row for the v2 spec pipeline.
+
+    The run engine owns generation; this shell only gives the run a wish id so
+    the app appears in Constellation and can receive spec/status writeback.
+    """
+    if not body.prompt or len(body.prompt.strip()) < 4:
+        raise HTTPException(400, "prompt too short")
+    if len(body.prompt) > 500:
+        raise HTTPException(400, "prompt too long (max 500)")
+    try:
+        return make_plan_shell(body.prompt.strip(), owner=uid(user))
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"create_wish_shell DB fail-fast: {e}")
+        raise HTTPException(500, f"Supabase required for v2 builds: {e}")
+
+
+@router.post("/wish/clarify")
+def clarify_wish(body: WishIn, user: dict = Depends(require_user)):
+    """Analyze a wish prompt with Groq and return surface data + component clarifying questions."""
+    prompt = (body.prompt or "").strip()
+    if len(prompt) < 4:
+        raise HTTPException(400, "prompt too short")
+    from services.prompt_enhance import clarify_prompt
+    try:
+        return clarify_prompt(prompt)
+    except Exception as e:
+        print(f"clarify_wish error: {e}")
+        from services.prompt_enhance import score_prompt, _fallback_questions, derive_app_name
+        scored = score_prompt(prompt)
+        return {
+            "appName": derive_app_name(prompt),
+            "tagline": "Tailored app composed from Intara components.",
+            "summary": prompt[:160],
+            "score": scored["score"],
+            "ready": False,
+            "questions": _fallback_questions(prompt, scored),
+            "redrafted": prompt,
+            "_meta": {"source": "fallback", "error": str(e)},
+        }
+
+
 async def _run_staged_build(wid: str):
     # background task: run orchestrator sequential — DB is source of truth, fail-fast.
     # Single-flight: concurrent tasks for one wish corrupt step state, so bail if taken.

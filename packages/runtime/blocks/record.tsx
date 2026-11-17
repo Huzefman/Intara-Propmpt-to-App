@@ -8,14 +8,23 @@ export function RecordDetail({ block, record, state, error }: BlockHostProps<{
   entity: string; sections?: Array<{ title: string; fields: string[] }>;
 }>) {
   const st = resolveState(undefined, record ?? null, state, error);
+  const rawSections = Array.isArray(block.props.sections) && block.props.sections.length > 0
+    ? block.props.sections
+    : [{ title: "Details", fields: Object.keys(record ?? {}).filter((k) => k !== "id") }];
+  const sections = rawSections.map((s: any, idx: number) => {
+    if (typeof s === "string") return { title: s, fields: [s] };
+    if (!s || typeof s !== "object") return { title: `Section ${idx + 1}`, fields: [] };
+    const fields = Array.isArray(s.fields) ? s.fields : (s.field ? [s.field] : []);
+    return { title: s.title || "Details", fields };
+  });
   return (
     <BlockShell state={st} error={error}>
       {st === "ready" && record ? (
         <div className="blk-detail">
-          {(block.props.sections ?? []).map((s) => (
-            <div key={s.title}>
-              <h4>{s.title}</h4>
-              {s.fields.map((f) => (
+          {sections.map((s, idx) => (
+            <div key={s.title || `section-${idx}`}>
+              <h4>{s.title || "Details"}</h4>
+              {(s.fields ?? []).map((f: string) => (
                 <div key={f} className="blk-kv"><span>{f}</span><strong>{displayPath(record, f)}</strong></div>
               ))}
             </div>
@@ -30,7 +39,9 @@ export function RelatedList({ block, rows, state, error, onAction }: BlockHostPr
   entity: string; via?: string; columns?: string[]; create?: boolean; row_link?: string;
 }>) {
   const st = resolveState(rows, undefined, state, error);
-  const cols = block.props.columns ?? [];
+  const cols = (Array.isArray(block.props.columns) && block.props.columns.length > 0)
+    ? block.props.columns
+    : (rows && rows.length > 0 ? Object.keys(rows[0]).filter((k) => k !== "id") : []);
   const addBtn = block.props.create ? <button onClick={() => onAction?.("create")}>Add</button> : null;
   return (
     <BlockShell state={st} error={error} emptyActions={addBtn ?? undefined}>
@@ -80,15 +91,29 @@ export interface FormFieldDef { id: string; label?: string; type: string; requir
 export function FormRecord({ block, record, state, error, onAction }: BlockHostProps<{
   entity: string; fields?: FormFieldDef[];
 }> & { initial?: Rec }) {
-  const st = resolveState(undefined, record === undefined ? undefined : (record ?? null), state, error);
+  const normFields: FormFieldDef[] = (block.props.fields ?? []).map((f: any, idx: number) => {
+    if (typeof f === "string") {
+      return { id: f, label: f.replace(/_/g, " "), type: "string" };
+    }
+    return {
+      id: f?.id ?? `f_${idx}`,
+      label: f?.label ?? (f?.id ? String(f.id).replace(/_/g, " ") : `Field ${idx + 1}`),
+      type: f?.type ?? "string",
+      required: !!f?.required,
+    };
+  });
+  const st = resolveState(undefined, record ?? {}, state, error);
   const initial = (block as { initial?: Rec }).initial ?? record ?? {};
   const [values, setValues] = React.useState<Rec>(initial);
+  React.useEffect(() => {
+    setValues(initial);
+  }, [record]);
   const set = (k: string, v: unknown) => setValues((prev) => ({ ...prev, [k]: v }));
   return (
     <BlockShell state={st} error={error}>
       {st === "ready" ? (
         <form className="blk-form" onSubmit={(e) => { e.preventDefault(); onAction?.("submit", values); }}>
-          {(block.props.fields ?? []).map((f) => (
+          {normFields.map((f) => (
             <label key={f.id}>{f.label ?? f.id}
               {f.type === "bool" ? (
                 <input type="checkbox" checked={!!values[f.id]}

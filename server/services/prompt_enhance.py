@@ -75,94 +75,89 @@ def score_prompt(prompt: str) -> dict:
     return {"score": score, "aspects": aspects, "missing": missing}
 
 
+def derive_app_name(prompt: str) -> str:
+    """Generate a clean 1-2 word app name from prompt."""
+    p = (prompt or "").lower()
+    words = [w for w in re.findall(r"[a-z0-9]+", p) if w not in _STOPWORDS and len(w) > 2]
+    if not words:
+        return "Intara App"
+    cand = "".join(w.capitalize() for w in words[:2])
+    return cand[:24] or "Intara App"
+
+
 def _fallback_questions(prompt: str, scored: dict) -> list[dict]:
-    """Template questions for aspects the prompt doesn't cover (max 3)."""
+    """Template questions based on compiler components (max 3)."""
     p = prompt.lower()
     questions: list[dict] = []
 
-    if not scored["aspects"].get("audience"):
-        questions.append({
-            "id": "audience",
-            "q": "Who is this for?",
-            "options": [
-                {"label": "Just me", "desc": "Solo maker trying an idea out"},
-                {"label": "Small team", "desc": "Shared workspace with roles"},
-                {"label": "End users", "desc": "Public app with sign-in"},
-            ],
-        })
+    # 1. Primary component view
+    questions.append({
+        "id": "view_layout",
+        "q": "Which primary view layout fits best?",
+        "options": [
+            {"label": "Kanban board", "desc": "Drag-and-drop cards grouped by status (data.kanban)"},
+            {"label": "Data table", "desc": "Spreadsheet grid with sorting, search and CSV export (data.table)"},
+            {"label": "Calendar", "desc": "Month grid for date-driven schedules and deadlines (calendar.month)"},
+        ],
+    })
 
-    # domain-flavored second question
-    if any(w in p for w in ("game", "play", "tic", "chess", "quiz")):
-        questions.append({
-            "id": "opponent",
-            "q": "How should players be able to play against each other?",
-            "options": [
-                {"label": "Solo vs AI", "desc": "Single player challenges a computer opponent"},
-                {"label": "Local 2-player", "desc": "Two people share one screen"},
-                {"label": "Easy / Medium / Hard", "desc": "Pick a challenge level before each game"},
-            ],
-        })
-    elif any(w in p for w in ("shop", "market", "store", "ecommerce", "e-commerce", "product", "spell")):
-        questions.append({
-            "id": "commerce",
-            "q": "What should buyers be able to do?",
-            "options": [
-                {"label": "Browse only", "desc": "Catalog with search and filters"},
-                {"label": "Cart + checkout", "desc": "Full cart and order flow"},
-                {"label": "Wishlist", "desc": "Save items for later"},
-            ],
-        })
-    elif any(w in p for w in ("blog", "forum", "post", "social", "comment", "question")):
-        questions.append({
-            "id": "social",
-            "q": "How should people interact with content?",
-            "options": [
-                {"label": "Read only", "desc": "Publish and browse"},
-                {"label": "Comments", "desc": "Discuss under each post"},
-                {"label": "Votes + tags", "desc": "Rank and organize content"},
-            ],
-        })
-    else:
-        questions.append({
-            "id": "scope",
-            "q": "How much should the first version cover?",
-            "options": [
-                {"label": "Minimal core", "desc": "2–3 screens, essential flows only"},
-                {"label": "Full featured", "desc": "4–6 screens with extras"},
-            ],
-        })
+    # 2. Roles & access
+    questions.append({
+        "id": "audience",
+        "q": "Who is this for and how should roles work?",
+        "options": [
+            {"label": "Solo maker", "desc": "Single user, direct access to all data"},
+            {"label": "Team with roles", "desc": "Shared workspace with admin, editor and viewer roles"},
+            {"label": "Public / Multi-tenant", "desc": "Public app with user accounts and scoped records"},
+        ],
+    })
 
-    if not scored["aspects"].get("data"):
-        questions.append({
-            "id": "data",
-            "q": "Where should data live for the trial?",
-            "options": [
-                {"label": "Browser only", "desc": "Instant trial, no setup"},
-                {"label": "Supabase", "desc": "Real database with auth"},
-            ],
-        })
+    # 3. Workflows & automations
+    questions.append({
+        "id": "workflow",
+        "q": "What workflows and detail features are key?",
+        "options": [
+            {"label": "Lifecycle transitions", "desc": "Stage progression with status guards (lifecycle.pipeline)"},
+            {"label": "Analytics & Metrics", "desc": "Stat cards, bar charts and timelines (metric.stat, chart.bar)"},
+            {"label": "Record details & Sub-items", "desc": "Deep records with related sub-lists (record.detail)"},
+        ],
+    })
 
     return questions[:3]
 
 
 def clarify_prompt(prompt: str) -> dict:
     """
-    Returns {score, ready, questions, redrafted}.
-    LLM-first (single small call); deterministic fallback on any failure.
+    Returns {appName, tagline, summary, score, ready, questions, redrafted}.
+    LLM-first (single small call via Groq); deterministic fallback on any failure.
     """
     scored = score_prompt(prompt)
 
-    # Try one small LLM call for sharper questions
+    # Try Groq LLM call for surface data + component-aware questions
     try:
         from services.llm import call_llm
         from utils.json_parse import parse_json
 
         instruction = (
-            "You refine app ideas. Given the wish below, return ONLY JSON: "
-            '{"score": <0-100 completeness>, "questions": [{"id": "short_id", "q": "question", '
-            '"options": [{"label": "...", "desc": "..."}]}]}. Max 3 questions, max 3 options each. '
-            "Questions should resolve the biggest ambiguities (audience, scope, key features). "
-            "No markdown, JSON only.\n\nWish: " + prompt[:300]
+            "You are an expert app architect for Intara, a declarative component app builder.\n"
+            "Given the user wish, return a JSON object with surface-level app information and 2-3 clarifying questions.\n"
+            "The compiler engine builds apps using these components:\n"
+            "- Views: data.kanban (lifecycle columns), data.table (dense grid with filters/CSV), calendar.month (scheduled dates)\n"
+            "- Stats & Trends: metric.stat (KPI numbers), chart.bar (bar charts), activity.timeline (event log)\n"
+            "- Details: record.detail + record.related_list (record view with related sub-lists), form.record (entry forms), lifecycle.pipeline (stage workflow)\n\n"
+            "Return ONLY JSON:\n"
+            "{\n"
+            '  "appName": "Creative Memorable App Name",\n'
+            '  "tagline": "A crisp one-line description of the app",\n'
+            '  "summary": "1-2 sentence overview of core entities and workflows",\n'
+            '  "score": <number 50-95>,\n'
+            '  "questions": [\n'
+            '    {"id": "view_layout", "q": "Which primary layout fits best?", "options": [{"label": "Kanban board", "desc": "Drag-and-drop cards across workflow stages"}, {"label": "Data table", "desc": "Spreadsheet grid with sorting and CSV export"}, {"label": "Calendar", "desc": "Month grid for date-driven items"}]},\n'
+            '    {"id": "workflow", "q": "...", "options": [{"label": "...", "desc": "..."}]}\n'
+            "  ]\n"
+            "}\n"
+            "Max 3 questions, max 3 options each. Questions should focus on which compiler components or workflows to generate.\n\n"
+            "Wish: " + prompt[:500]
         )
         raw = call_llm(instruction, temperature=0.3, json_mode=True)
         data = parse_json(raw)
@@ -175,11 +170,21 @@ def clarify_prompt(prompt: str) -> dict:
             opts = [o for o in (qq.get("options") or []) if isinstance(o, dict) and "label" in o][:3]
             if not opts:
                 continue
-            clean.append({"id": str(qq.get("id") or f"q{i+1}"), "q": str(qq["q"])[:200], "options": [{"label": str(o["label"])[:80], "desc": str(o.get("desc", ""))[:160]} for o in opts]})
+            clean.append({
+                "id": str(qq.get("id") or f"q{i+1}"),
+                "q": str(qq["q"])[:200],
+                "options": [{"label": str(o["label"])[:80], "desc": str(o.get("desc", ""))[:160]} for o in opts]
+            })
         if clean:
             score = int(data.get("score", scored["score"]))
             score = max(5, min(98, score))
+            app_name = str(data.get("appName") or derive_app_name(prompt)).strip()
+            tagline = str(data.get("tagline") or f"A tailored app composed from Intara components.").strip()
+            summary = str(data.get("summary") or prompt[:160]).strip()
             return {
+                "appName": app_name,
+                "tagline": tagline,
+                "summary": summary,
                 "score": score,
                 "ready": score >= READY_THRESHOLD,
                 "questions": clean,
@@ -188,13 +193,14 @@ def clarify_prompt(prompt: str) -> dict:
             }
     except Exception as e:
         if getattr(e, "byok_error", False):
-            # The account's own key failed: surface it now instead of walking
-            # the user through heuristic questions and failing at the plan.
             raise
         print(f"clarify LLM failed, template fallback: {e}")
 
     fallback_qs = _fallback_questions(prompt, scored)
     return {
+        "appName": derive_app_name(prompt),
+        "tagline": "Tailored app composed from Intara components.",
+        "summary": prompt[:160],
         "score": scored["score"],
         "ready": scored["score"] >= READY_THRESHOLD,
         "questions": fallback_qs,

@@ -8,7 +8,7 @@
  */
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getExemplar, getExemplars, startRun } from '../api/client'
+import { getExemplar, getExemplars, createWishShell, startRun } from '../api/client'
 import { DEMO } from '../demo'
 import { useAuth } from '../hooks/useAuth'
 import { DEMO_APPS, findDemoApp } from '../demo/exemplars'
@@ -85,7 +85,8 @@ export function GalleryView() {
     setStarting(true); setErr(null)
     try {
       const wish = (active.spec?.app?.tagline || `A ${active.domain} app`).slice(0, 500)
-      const r = await startRun(wish, active.spec?.app?.name || 'App')
+      const shell = await createWishShell(wish)
+      const r = await startRun(wish, active.spec?.app?.name || 'App', shell.id)
       navigate(`/runs/${r.run_id}`)
     } catch (e: any) {
       setErr(e.message || 'start failed')

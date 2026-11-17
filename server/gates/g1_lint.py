@@ -17,56 +17,15 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from gates.block_catalog import BLOCKS
+
 ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 TEMPLATE_VAR_RE = re.compile(r"\{([^{}]+)\}")
 
 # Block catalog: required + optional props per type. Unknown prop keys are
-# R37; missing required
-# is R31. Stability experimental warns (W01), planned is an error (R30).
-BLOCKS: dict = {
-    "data.table": {"stability": "stable",
-                   "required_props": ["entity"],
-                   "optional_props": ["columns", "row_link", "create"]},
-    "data.kanban": {"stability": "stable",
-                    "required_props": ["entity", "group_by"],
-                    "optional_props": ["card", "drag_transitions"]},
-    "metric.stat": {"stability": "stable",
-                    "required_props": ["entity", "items"],
-                    "optional_props": []},
-    "filter.bar": {"stability": "stable",
-                   "required_props": ["entity"],
-                   "optional_props": ["fields", "search"]},
-    "record.detail": {"stability": "stable",
-                      "required_props": ["entity"],
-                      "optional_props": ["sections"]},
-    "record.related_list": {"stability": "stable",
-                            "required_props": ["entity", "via"],
-                            "optional_props": ["columns", "row_link", "create"]},
-    "lifecycle.pipeline": {"stability": "stable",
-                           "required_props": ["entity"],
-                           "optional_props": []},
-    "metric.gauge": {"stability": "experimental",
-                     "required_props": ["entity"],
-                     "optional_props": ["field", "max", "label"]},
-    "form.record": {"stability": "stable",
-                    "required_props": ["entity"],
-                    "optional_props": ["fields"]},
-    "chart.bar": {"stability": "stable",
-                  "required_props": ["entity", "x"],
-                  "optional_props": ["title", "y"]},
-    "calendar.month": {"stability": "stable",
-                       "required_props": ["entity", "date_field"],
-                       "optional_props": ["title", "row_link"]},
-    "activity.timeline": {"stability": "stable",
-                          "required_props": ["entity", "date_field"],
-                          "optional_props": ["title"]},
-    "file.list": {"stability": "stable",
-                  "required_props": ["entity"],
-                  "optional_props": ["field", "upload"]},
-    "content.hero": {"stability": "stable",
-                     "required_props": [],
-                     "optional_props": ["title", "subtitle", "cta"]},
-}
+# R37; missing required is R31. Stability experimental warns (W01), planned is
+# an error (R30). The canonical metadata lives in server/data and is loaded by
+# gates.block_catalog so the S3 prompt and this gate share one contract.
 
 AUTO_ACTIONS = {"set_field", "create_record", "send_email", "notify", "webhook", "export_csv"}
 AUTO_TRIGGERS = {"record.created", "record.updated", "lifecycle.transition", "schedule", "manual_button"}

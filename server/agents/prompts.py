@@ -15,7 +15,7 @@ PROMPT_VERSIONS = {
     "s0": "s0-v1",
     "s1": "s1-v1",
     "s2": "s2-v3",
-    "s3": "s3-v3",
+    "s3": "s3-v4",
     "s4": "s4-v3",
     "s5critic": "s5critic-v1",
     "s6": "s6-v1",
@@ -69,10 +69,30 @@ Assumptions: {"; ".join(assumptions) if assumptions else "none"}
 [6] There is no untrusted payload beyond [5]."""
 
 
-def s3_prompt(model_json: str, personas: str, blocks: str = "", requirements: str = "") -> str:
+def _block_types() -> str:
+    """Block list fallback derived from the canonical catalog, never a second list."""
+    try:
+        from gates.block_catalog import BLOCKS
+        return ", ".join(BLOCKS)
+    except Exception:  # pragma: no cover - only when the server package is absent
+        return ("data.table, data.kanban, metric.stat, filter.bar, record.detail, "
+                "record.related_list, lifecycle.pipeline, metric.gauge, form.record, "
+                "chart.bar, calendar.month, activity.timeline, file.list, content.hero")
+
+
+def s3_prompt(model_json: str, personas: str, blocks: str = "",
+              requirements: str = "", block_catalog: str = "") -> str:
     from agents.schemas import S3UiOut
+    if not block_catalog:
+        try:
+            from gates.block_catalog import prompt_catalog
+            block_catalog = prompt_catalog()
+        except Exception:
+            pass
     return f"""[1] You are Intara Experience Designer. Output theme, nav, pages and block instances covering EVERY entity.
-[2] Rules: block types ONLY [{blocks or "data.table, data.kanban, metric.stat, filter.bar, record.detail, record.related_list, lifecycle.pipeline, form.record, chart.bar, calendar.month, activity.timeline, file.list, content.hero"}]; block props use exactly the guide vocabulary (table: columns not fields; row_link is a page id, never a URL; chart: title/x/y with y "count" or a field; calendar: date_field; detail: sections like [{{title, fields}}]); every entity in >=1 block; every page in nav or row_linked; role "owner" on at least one page plus any approval/management roles the requirements imply (each role on >=1 page); JSON only.
+[2] Rules: block types ONLY [{blocks or _block_types()}]; block props use exactly the guide vocabulary (table: columns not fields; row_link is a page id, never a URL; chart: title/x/y with y "count" or a field; calendar: date_field; detail: sections like [{{title, fields}}]); every entity in >=1 block; every page in nav or row_linked; role "owner" on at least one page plus any approval/management roles the requirements imply (each role on >=1 page); JSON only.
+Block catalog and page recipes (required props must be present; compose pages using recipes so apps don't just become tables):
+{block_catalog or "none"}
 [3] Return ONLY JSON matching: {_schema(S3UiOut)}
 [5] Model: {model_json}
 Personas: {personas or "none"}

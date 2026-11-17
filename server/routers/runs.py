@@ -20,6 +20,11 @@ from quotas import consume_build
 
 router = APIRouter()
 
+# Single-process guard for concurrent retry clicks. The production app runs one
+# uvicorn worker; a multi-worker deployment would need a conditional DB claim
+# (update ... where status in ('failed','cancelled')).
+_RETRY_LOCKS: dict[str, asyncio.Lock] = {}
+
 
 def _engine():
     from services.run_engine import get_engine
@@ -113,19 +118,57 @@ async def start_run(body: StartIn, user: dict = Depends(require_user)):
         if body.kind == "build":
             run_id = store.create_run(project_id, "build", inputs)
             store.set_status(run_id, "running")
-            _writeback_wish(body.wish_id, {"v2": {"run_id": run_id}})
+            _writeback_wish(body.wish_id,
+                            {"engine": "v2", "v2": {"run_id": run_id}},
+                            status="building")
             asyncio.create_task(_background_run(run_id, project_id, inputs, owner=uid(user)))
             return {"ok": True, "run_id": run_id, "project_id": project_id,
                     "status": "running"}
         # iterate/eval without a base need a full build first
         raise HTTPException(400, f"start with kind=build; {body.kind} runs from a version (chat endpoint)")
-    except HTTPException:
+    except HTTPException as e:
+        if body.wish_id and e.status_code != 404:
+            _writeback_wish(body.wish_id,
+                            {"build_error": str(e.detail)[:2000],
+                             "v2": {"status": "failed"}},
+                            status="failed")
         raise
     except Exception as e:
+        if body.wish_id:
+            _writeback_wish(body.wish_id,
+                            {"build_error": str(e)[:2000],
+                             "v2": {"status": "failed"}},
+                            status="failed")
         raise HTTPException(500, f"run start failed: {e}")
 
 
-async def _background_run(run_id: str, project_id: str, inputs: dict, owner: str | None = None):
+def _prd_from_spec(spec: dict) -> dict:
+    """Project the typed App Spec into the legacy wish PRD shape.
+
+    Constellation and old links still read `prd.appName` / `prd.tables`; this
+    keeps that surface useful without making the spec the secondary artifact.
+    """
+    app = spec.get("app") or {}
+    entities = (spec.get("model") or {}).get("entities") or []
+    pages = (spec.get("ui") or {}).get("pages") or []
+    return {
+        "appName": app.get("name") or "Untitled app",
+        "tagline": app.get("tagline") or "",
+        "tables": [
+            {"name": e.get("id"),
+             "fields": [{"name": f.get("id"), "type": f.get("type", "text")}
+                        for f in (e.get("fields") or [])]}
+            for e in entities
+        ],
+        "pages": [{"name": p.get("title") or p.get("id"),
+                   "route": p.get("route", "/")} for p in pages],
+        "buildGraph": [],
+        "_meta": {"source": "v2"},
+    }
+
+
+async def _background_run(run_id: str, project_id: str, inputs: dict,
+                         owner: str | None = None, resume: bool = False):
     try:
         from userkeys import set_current_user, snapshot_for
         set_current_user(owner)
@@ -135,24 +178,49 @@ async def _background_run(run_id: str, project_id: str, inputs: dict, owner: str
         pass
     try:
         eng = _engine()
-        report = await eng.run(project_id=project_id, kind="build",
-                               inputs=inputs, run_id=run_id)
+        if resume:
+            report = await eng.resume_run(run_id, force=True)
+        else:
+            report = await eng.run(project_id=project_id, kind="build",
+                                   inputs=inputs, run_id=run_id)
         # Studio loop: finished spec + run link land on the wish (best-effort)
-        if inputs.get("wish_id") and report.get("spec"):
-            _writeback_wish(inputs["wish_id"],
-                             {"v2": {"run_id": run_id,
-                                     "version_id": report.get("version_id")},
-                              "spec_v1": report["spec"]})
+        if inputs.get("wish_id"):
+            reported = report.get("status")
+            final = ("ready" if reported in ("done", "degraded")
+                     else "failed" if reported == "failed" else None)
+            artifacts = {
+                "engine": "v2",
+                "v2": {"run_id": run_id,
+                       "version_id": report.get("version_id"),
+                       "status": reported,
+                       "degraded_steps": report.get("degraded_steps") or [],
+                       "llm_calls": report.get("llm_calls")},
+            }
+            if report.get("spec"):
+                artifacts["spec_v1"] = report["spec"]
+            _writeback_wish(inputs["wish_id"], artifacts, status=final,
+                            prd_patch=_prd_from_spec(report["spec"])
+                            if report.get("spec") else None)
     except Exception as e:
         print(f"v2 background run {run_id} failed: {e}")
         try:
             _engine().store.set_status(run_id, "failed", str(e)[:500])
         except Exception:
             pass
+        try:
+            _writeback_wish(inputs.get("wish_id"),
+                            {"engine": "v2",
+                             "build_error": str(e)[:2000],
+                             "v2": {"run_id": run_id, "status": "failed"}},
+                            status="failed")
+        except Exception:
+            pass
 
 
-def _writeback_wish(wish_id: str | None, extra_artifacts: dict) -> None:
-    """Merge keys into wish artifacts without touching status (best-effort)."""
+def _writeback_wish(wish_id: str | None, extra_artifacts: dict,
+                    status: str | None = None,
+                    prd_patch: dict | None = None) -> None:
+    """Merge keys into wish artifacts/prd and optionally advance its status."""
     if not wish_id:
         return
     try:
@@ -160,7 +228,12 @@ def _writeback_wish(wish_id: str | None, extra_artifacts: dict) -> None:
         wish = get_wish_with_steps(wish_id)
         artifacts = dict(wish.get("artifacts") or {})
         artifacts.update(extra_artifacts)
-        set_wish_status(wish_id, wish.get("status", "planning"), artifacts=artifacts)
+        prd = None
+        if prd_patch is not None:
+            prd = dict(wish.get("prd") or {})
+            prd.update(prd_patch)
+        set_wish_status(wish_id, status or wish.get("status", "planning"),
+                        artifacts=artifacts, prd=prd)
     except Exception as e:
         print(f"v2 wish writeback failed for {wish_id}: {e}")
 
@@ -173,8 +246,17 @@ async def run_status(run_id: str, user: dict = Depends(require_user)):
         run = eng.store.get_run(run_id)
         _assert_run_owner(eng.store, run, user)
         steps = eng.store.get_steps(run_id)
+        inputs = run.get("inputs") or {}
         out: dict = {"run": run, "steps": steps, "version_id": None, "spec": None,
-                     "llm_calls": 0, "degraded_steps": []}
+                     "llm_calls": 0, "degraded_steps": [], "wish": "",
+                     "app_name": inputs.get("app_name") or run.get("app_name") or "App"}
+        try:
+            for ev in eng.store.get_events(run_id):
+                if ev.get("type") == "run_started":
+                    out["wish"] = (ev.get("payload") or {}).get("wish") or ""
+                    break
+        except Exception:
+            pass
         vid = _current_version(eng.store, run_id)
         if vid:
             try:
@@ -258,6 +340,59 @@ async def approve_run(run_id: str, body: ApproveIn, user: dict = Depends(require
         raise
     except Exception as e:
         raise HTTPException(500, f"approve failed: {e}")
+
+
+@router.post("/runs/{run_id}/retry")
+@router.post("/api/runs/{run_id}/retry")
+async def retry_run(run_id: str, user: dict = Depends(require_user)):
+    """Resume a failed build from its persisted inputs.
+
+    Completed steps are restored from the content-addressed artifact store;
+    only the missing/failed steps call the model again. The run id, event
+    history, and project stay the same.
+    """
+    async def _retry():
+        eng = _engine()
+        run = eng.store.get_run(run_id)
+        _assert_run_owner(eng.store, run, user)
+        status = run.get("status")
+        if status in ("queued", "running"):
+            raise HTTPException(409, "run is already in progress")
+        if status not in ("failed", "cancelled"):
+            raise HTTPException(409, f"run is {status}; retry is only for failed runs")
+        if run.get("kind") != "build":
+            raise HTTPException(409, "only build runs can be retried")
+        inputs = run.get("inputs")
+        if not isinstance(inputs, dict):
+            inputs = {}
+        if not str(inputs.get("wish") or "").strip():
+            raise HTTPException(409, "run predates stored inputs; start a new build")
+        consume_build(user, wish_id=inputs.get("wish_id"), kind="build")
+        # Mark running before returning so the first status poll cannot see
+        # the old `failed` row and stop polling while the task starts.
+        eng.store.set_status(run_id, "running")
+        _writeback_wish(inputs.get("wish_id"),
+                        {"engine": "v2",
+                         "v2": {"run_id": run_id, "status": "running"}},
+                        status="building")
+        try:
+            asyncio.create_task(_background_run(
+                run_id, run["project_id"], inputs, owner=uid(user), resume=True))
+        except Exception as e:
+            eng.store.set_status(run_id, "failed", f"could not schedule retry: {e}")
+            raise
+        return {"ok": True, "run_id": run_id, "status": "running"}
+
+    try:
+        async with _RETRY_LOCKS.setdefault(run_id, asyncio.Lock()):
+            return await _retry()
+    except HTTPException:
+        raise
+    except KeyError:
+        raise HTTPException(404, "not found")
+    except Exception as e:
+        raise HTTPException(404 if "not found" in str(e).lower() else 500,
+                            f"retry failed: {e}")
 
 
 class ChatIn(BaseModel):

@@ -20,5 +20,13 @@ export function navForRole(spec: AppSpec, role: string): NavEntry[] {
       (pageRoles.length === 0 || pageRoles.includes(role));
     if (visible) out.push({ pageId: p.id, path: p.route, label: n.label, icon: n.icon });
   }
+  if (out.length === 0 && (!spec.ui.nav || spec.ui.nav.length === 0)) {
+    for (const p of spec.ui.pages ?? []) {
+      const pageRoles = p.roles ?? [];
+      if (pageRoles.length === 0 || pageRoles.includes(role)) {
+        out.push({ pageId: p.id, path: p.route, label: p.title || p.id.replace(/_/g, " ") });
+      }
+    }
+  }
   return out;
 }

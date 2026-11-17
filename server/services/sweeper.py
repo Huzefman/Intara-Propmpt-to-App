@@ -25,11 +25,18 @@ def sweep_v2_orphans(*, limit: int = 500) -> dict:
         summary["error"] = str(e)[:200]
         return summary
     try:
-        runs = store.supa.table("runs").select("id").eq("status", "running").limit(limit).execute().data or []
-    except Exception as e:
-        print(f"startup v2 sweep skipped (list failed): {e}")
-        summary["error"] = str(e)[:200]
-        return summary
+        runs = store.supa.table("runs").select("id,inputs").eq(
+            "status", "running").limit(limit).execute().data or []
+    except Exception:
+        # Deployments that have not applied migration 014 still get the
+        # orphan-run flip; only the wish-status bridge is unavailable.
+        try:
+            runs = store.supa.table("runs").select("id").eq(
+                "status", "running").limit(limit).execute().data or []
+        except Exception as e:
+            print(f"startup v2 sweep skipped (list failed): {e}")
+            summary["error"] = str(e)[:200]
+            return summary
     for r in runs:
         rid = r["id"]
         try:
@@ -55,6 +62,28 @@ def sweep_v2_orphans(*, limit: int = 500) -> dict:
             print(f"v2 sweep {rid}: orphaned run → failed, {requeued} step(s) requeued")
         except Exception as e:
             print(f"v2 sweep {rid}: run flip failed: {e}")
+            continue
+        inputs = r.get("inputs")
+        if not isinstance(inputs, dict):
+            inputs = {}
+        wish_id = inputs.get("wish_id")
+        if wish_id:
+            try:
+                from db.wishes import get_wish_with_steps
+                from routers.runs import _writeback_wish
+                wish = get_wish_with_steps(wish_id)
+                if not wish:
+                    continue
+                current = ((wish.get("artifacts") or {}).get("v2") or {}).get("run_id")
+                if str(current or "") == str(rid):
+                    _writeback_wish(
+                        wish_id,
+                        {"engine": "v2",
+                         "build_error": "Unclean shutdown; press Retry to resume from cached steps.",
+                         "v2": {"run_id": rid, "status": "failed"}},
+                        status="failed")
+            except Exception as e:
+                print(f"v2 sweep {rid}: wish writeback failed: {e}")
     return summary
 
 

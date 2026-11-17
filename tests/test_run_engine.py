@@ -197,6 +197,19 @@ def test_resume_rejects_running(monkeypatch):
         asyncio.run(RunEngine(store).resume_run(rid))
 
 
+def test_resume_force_accepts_retry_claim(monkeypatch):
+    """The retry endpoint marks the row running before scheduling the resume."""
+    _patch_artifacts(monkeypatch)
+    from services.run_engine import RunEngine, MemoryRunStore
+    store = MemoryRunStore()
+    rid = store.create_run("p1", "build", _inputs())
+    store.set_status(rid, "running")
+    rep = asyncio.run(
+        RunEngine(store, agents_override=_overrides([])).resume_run(rid, force=True))
+    assert rep["status"] == "done"
+    assert rep["spec"]["app"]["name"]
+
+
 def test_iterate_chat_patch_round_trip(monkeypatch):
     _patch_artifacts(monkeypatch)
     from services.run_engine import RunEngine, MemoryRunStore
@@ -267,3 +280,81 @@ def test_v2_sweeper_flips_orphans(monkeypatch):
     out = sweep_v2_orphans()
     assert out == {"runs": 1, "steps": 1}
     assert ("s2", "pending") in flips and ("r1", "failed") in flips
+
+
+def test_supabase_store_persists_inputs_and_clears_retry_error():
+    """Migration 014: retry needs the original inputs, not a 200-char event."""
+    from services import run_engine as RE
+
+    class Q:
+        def __init__(self, name):
+            self.name = name
+            self.payload = None
+
+        def insert(self, payload):
+            self.payload = payload
+            return self
+
+        def update(self, payload):
+            self.payload = payload
+            return self
+
+        def eq(self, *a):
+            return self
+
+        def execute(self):
+            return type("R", (), {"data": [{"id": "r1"}]})()
+
+    class FakeSupa:
+        def __init__(self):
+            self.tables = {}
+
+        def table(self, name):
+            return self.tables.setdefault(name, Q(name))
+
+    store = object.__new__(RE.SupabaseRunStore)
+    store.supa = FakeSupa()
+    inputs = {"wish": "track widgets", "wish_id": "w1",
+              "budgets": {"max_llm_calls": 9}}
+    rid = store.create_run("p1", "build", inputs)
+    assert rid == "r1"
+    insert_payload = store.supa.tables["runs"].payload
+    assert insert_payload["inputs"] == inputs
+    assert insert_payload["budget"] == {"max_llm_calls": 9}
+
+    store.set_status(rid, "running")
+    assert store.supa.tables["runs"].payload["error"] is None
+    store.set_status(rid, "failed", "boom")
+    assert store.supa.tables["runs"].payload["error"] == "boom"
+
+
+def test_supabase_store_pre_014_fallback_keeps_builds_running():
+    """Deploy-before-migration must not break new builds; retry stays 409."""
+    from services import run_engine as RE
+
+    class Q:
+        def __init__(self):
+            self.payload = None
+
+        def insert(self, payload):
+            if "inputs" in payload:
+                raise RuntimeError(
+                    "PGRST204 Could not find the 'inputs' column of 'runs' in the schema cache")
+            self.payload = payload
+            return self
+
+        def execute(self):
+            return type("R", (), {"data": [{"id": "r1"}]})()
+
+    class FakeSupa:
+        def __init__(self):
+            self.q = Q()
+
+        def table(self, name):
+            return self.q
+
+    store = object.__new__(RE.SupabaseRunStore)
+    store.supa = FakeSupa()
+    rid = store.create_run("p1", "build", {"wish": "track widgets"})
+    assert rid == "r1"
+    assert "inputs" not in store.supa.q.payload

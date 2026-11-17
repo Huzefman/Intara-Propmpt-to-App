@@ -475,7 +475,7 @@ def _byok_model(provider: str, model: str | None) -> str:
     if provider == "openrouter":
         return os.getenv("OPENROUTER_MODEL", "openrouter/free")
     if provider == "groq":
-        return os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+        return os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     if provider == "nvidia":
         return os.getenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash-0731")
     if provider == "deepseek":
@@ -624,7 +624,7 @@ def _call_llm_inner(prompt: str, temperature: float = 0.2, max_tokens: int | Non
         return byok
     deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
     nvidia_model = os.getenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash-0731")
-    groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+    groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     or_primary = os.getenv("OPENROUTER_MODEL", "openrouter/free")
     or_fallback = os.getenv("OPENROUTER_FALLBACK", "openrouter/free")
 
@@ -776,7 +776,7 @@ def _call_llm_with_meta_inner(prompt: str, temperature: float = 0.2, max_tokens:
                       "model": meta_info.get("model")}
     primary = os.getenv("OPENROUTER_MODEL", "openrouter/free")
     fallback = os.getenv("OPENROUTER_FALLBACK", "openrouter/free")
-    groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+    groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     nvidia_model = os.getenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash-0731")
     deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
     last_err: Exception | None = None
@@ -1121,7 +1121,7 @@ def get_llm_status() -> dict:
     has_or = bool(os.getenv("OPENROUTER_API_KEY"))
     has_gem = bool(os.getenv("GEMINI_API_KEY"))
     deepseek_model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat") if has_deepseek else None
-    groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b") if has_groq else None
+    groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile") if has_groq else None
     nvidia_model = os.getenv("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash-0731") if has_nvidia else None
     primary = os.getenv("OPENROUTER_MODEL", "openrouter/free") if has_or else None
     gem_model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash") if has_gem else None

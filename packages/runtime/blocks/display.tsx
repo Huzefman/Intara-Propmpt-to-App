@@ -19,10 +19,11 @@ export function ChartBar({ block, rows, state, error }: BlockHostProps<{
   entity: string; title?: string; x: string; y?: string;
 }>) {
   const st = resolveState(rows, undefined, state, error);
-  const lf = block.props.x;
+  const lf = block.props.x || (rows && rows.length > 0 ? Object.keys(rows[0]).find(k => k !== "id") || "label" : "label");
   const ymode = block.props.y ?? "count";
   const groups = new Map<string, number>();
   for (const r of rows ?? []) {
+    if (!r || typeof r !== "object") continue;
     const label = displayPath(r, lf);
     const v = ymode === "count" ? 1
       : typeof r[ymode] === "number" ? (r[ymode] as number) : 0;
@@ -50,9 +51,10 @@ export function CalendarMonth({ block, rows, state, error, onAction }: BlockHost
   entity: string; date_field: string; title?: string; row_link?: string;
 }>) {
   const st = resolveState(rows, undefined, state, error);
-  const df = block.props.date_field;
+  const df = block.props.date_field || (rows && rows.length > 0 ? Object.keys(rows[0]).find(k => k.includes("date") || k.includes("at") || k.includes("time")) || "date" : "date");
   const days = new Map<string, Rec[]>();
   for (const r of rows ?? []) {
+    if (!r || typeof r !== "object") continue;
     const day = String(r[df] ?? "").slice(0, 10);
     if (!day) continue;
     if (!days.has(day)) days.set(day, []);
@@ -82,13 +84,14 @@ export function ActivityTimeline({ block, rows, state, error }: BlockHostProps<{
   entity: string; date_field: string; title?: string;
 }>) {
   const st = resolveState(rows, undefined, state, error);
+  const df = block.props.date_field || (rows && rows.length > 0 ? Object.keys(rows[0]).find(k => k.includes("date") || k.includes("at") || k.includes("time")) || "created_at" : "created_at");
   return (
     <BlockShell title={block.props.title} state={st} error={error}>
       {st === "ready" ? (
         <ol className="blk-timeline">
-          {(rows ?? []).map((r, i) => (
+          {(rows ?? []).filter(r => r && typeof r === "object").map((r, i) => (
             <li key={String(r["id"] ?? i)}>
-              <span className="blk-date">{displayPath(r, block.props.date_field)}</span>
+              <span className="blk-date">{displayPath(r, df)}</span>
               {" "}{textOf(r)}
             </li>
           ))}
@@ -109,7 +112,7 @@ export function FileList({ block, rows, state, error, onAction }: BlockHostProps
       {st === "ready" ? (
         <>
           <ul className="blk-files">
-            {(rows ?? []).map((r, i) => {
+            {(rows ?? []).filter(r => r && typeof r === "object").map((r, i) => {
               const href = r[field];
               return (
                 <li key={String(r["id"] ?? i)}>

@@ -98,6 +98,8 @@ class MemoryRunStore(RunStore):
         self.runs[run_id]["status"] = status
         if error is not None:
             self.runs[run_id]["error"] = error
+        elif status in ("queued", "running"):
+            self.runs[run_id]["error"] = None
 
     def get_run(self, run_id):
         return dict(self.runs[run_id])
@@ -144,10 +146,25 @@ class SupabaseRunStore(RunStore):
         from supabase import create_client
         self.supa = create_client(url, key)
 
+    @staticmethod
+    def _missing_inputs_column(exc: BaseException) -> bool:
+        msg = str(exc)
+        return ("inputs" in msg and
+                ("PGRST204" in msg or "schema cache" in msg
+                 or "does not exist" in msg or "Could not find" in msg))
+
     def create_run(self, project_id, kind, inputs):
-        res = self.supa.table("runs").insert(
-            {"project_id": project_id, "kind": kind, "status": "queued",
-             "budget": inputs.get("budgets", {})}).execute()
+        payload = {"project_id": project_id, "kind": kind, "status": "queued",
+                   "budget": inputs.get("budgets", {}), "inputs": inputs}
+        try:
+            res = self.supa.table("runs").insert(payload).execute()
+        except Exception as e:
+            # Deploy-before-migration safety: keep builds running on 006-only
+            # databases. Retry is unavailable until 014 is applied.
+            if not self._missing_inputs_column(e):
+                raise
+            payload.pop("inputs", None)
+            res = self.supa.table("runs").insert(payload).execute()
         if not res.data:
             raise RuntimeError("runs insert failed")
         return res.data[0]["id"]
@@ -156,7 +173,13 @@ class SupabaseRunStore(RunStore):
         payload: dict = {"status": status}
         if error is not None:
             payload["error"] = error[:2000]
-        if status in ("done", "degraded", "failed", "cancelled"):
+        elif status in ("queued", "running"):
+            # A retry starts from a failed row; do not show the stale error
+            # while the resumed run is in flight.
+            payload["error"] = None
+        if status in ("queued", "running"):
+            payload["ended_at"] = None
+        elif status in ("done", "degraded", "failed", "cancelled"):
             payload["ended_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         res = self.supa.table("runs").update(payload).eq("id", run_id).execute()
         if not res.data:
@@ -275,8 +298,9 @@ class RunEngine:
         except Exception as e:
             found["error"] = str(e)[:200]
         try:
-            from gates.g1_lint import BLOCKS
+            from gates.block_catalog import BLOCKS, prompt_catalog
             found["blocks"] = sorted(BLOCKS.keys())
+            found["catalog"] = prompt_catalog()
         except Exception:
             pass
         self.emit(run_id, "retrieval", {"stage": stage, "hint": hint[:120],
@@ -309,6 +333,7 @@ class RunEngine:
             "entity_ids": [e.get("id") for e in entities],
             "personas": json.dumps(spec.get("personas") or []),
             "blocks": ", ".join(retrievals.get("blocks", [])),
+            "block_catalog": retrievals.get("catalog", ""),
             "ui_summary": "; ".join(
                 f"{p.get('id')}" for p in (spec.get("ui") or {}).get("pages", [])),
             "page_roles": ", ".join(page_roles) or "owner",
@@ -529,17 +554,21 @@ class RunEngine:
         ctx = self._fresh_ctx(inputs)
         return await self._execute(run_id, project_id, kind, inputs, ctx)
 
-    async def resume_run(self, run_id: str) -> dict:
+    async def resume_run(self, run_id: str, *, force: bool = False) -> dict:
         """Restart path: pick an existing (failed/orphaned) run back up.
 
         Done steps resolve from the artifact store; only missing steps rerun.
+        ``force`` is for the retry endpoint, which marks the row `running`
+        before scheduling this coroutine so the first status poll is accurate.
         """
         run = self.store.get_run(run_id)
-        if run.get("status") == "running":
+        if run.get("status") == "running" and not force:
             raise RuntimeError(f"run {run_id} is already running")
         project_id = run.get("project_id")
         kind = run.get("kind", "build")
-        inputs = run.get("inputs") or {}
+        inputs = run.get("inputs")
+        if not isinstance(inputs, dict):
+            inputs = {}
         ctx = self._fresh_ctx(inputs)
         return await self._execute(run_id, project_id, kind, inputs, ctx)
 

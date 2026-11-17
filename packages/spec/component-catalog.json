@@ -1,0 +1,377 @@
+{
+  "version": 1,
+  "description": "Canonical component catalog for Intara's v2 App Spec runtime. The LLM may only select these block types; the runtime has one prebuilt component per type. `fits` guides S3 composition; `example` shows a valid props shape.",
+  "recipes": {
+    "Dashboard": "metric.stat + chart.bar + activity.timeline",
+    "Collection": "filter.bar + data.table / data.kanban / calendar.month",
+    "Record": "record.detail + record.related_list + lifecycle.pipeline",
+    "Form": "form.record",
+    "Files": "file.list",
+    "Landing": "content.hero"
+  },
+  "blocks": [
+    {
+      "type": "data.table",
+      "stability": "stable",
+      "required": [
+        "entity"
+      ],
+      "required_props": [
+        "entity"
+      ],
+      "optional": [
+        "columns",
+        "row_link",
+        "create"
+      ],
+      "optional_props": [
+        "columns",
+        "row_link",
+        "create"
+      ],
+      "fits": "Default record browser, admin lists, directories, and any entity that needs a searchable table.",
+      "example": {
+        "entity": "task",
+        "columns": [
+          "title",
+          "status",
+          "due_date"
+        ],
+        "create": true
+      }
+    },
+    {
+      "type": "data.kanban",
+      "stability": "stable",
+      "required": [
+        "entity"
+      ],
+      "required_props": [
+        "entity"
+      ],
+      "optional": [
+        "group_by",
+        "columns",
+        "row_link",
+        "card",
+        "drag_transitions"
+      ],
+      "optional_props": [
+        "group_by",
+        "columns",
+        "row_link",
+        "card",
+        "drag_transitions"
+      ],
+      "fits": "entities with a lifecycle or enum status",
+      "example": {
+        "entity": "task",
+        "group_by": "status"
+      }
+    },
+    {
+      "type": "metric.stat",
+      "stability": "stable",
+      "required": [
+        "entity",
+        "items"
+      ],
+      "required_props": [
+        "entity",
+        "items"
+      ],
+      "optional": [],
+      "optional_props": [],
+      "fits": "Dashboard headline numbers and small KPI strips.",
+      "example": {
+        "entity": "order",
+        "items": [
+          {
+            "label": "Open",
+            "agg": "count",
+            "filter": "status == 'open'"
+          }
+        ]
+      }
+    },
+    {
+      "type": "filter.bar",
+      "stability": "stable",
+      "required": [
+        "entity"
+      ],
+      "required_props": [
+        "entity"
+      ],
+      "optional": [
+        "fields",
+        "search"
+      ],
+      "optional_props": [
+        "fields",
+        "search"
+      ],
+      "fits": "Search and filter controls placed above a list or board.",
+      "example": {
+        "entity": "task",
+        "fields": [
+          "status",
+          "assignee"
+        ],
+        "search": true
+      }
+    },
+    {
+      "type": "record.detail",
+      "stability": "stable",
+      "required": [
+        "entity"
+      ],
+      "required_props": [
+        "entity"
+      ],
+      "optional": [
+        "sections"
+      ],
+      "optional_props": [
+        "sections"
+      ],
+      "fits": "A single-record page reached from a row link.",
+      "example": {
+        "entity": "task",
+        "sections": [
+          {
+            "title": "Details",
+            "fields": [
+              "title",
+              "status",
+              "due_date"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "record.related_list",
+      "stability": "stable",
+      "required": [
+        "entity",
+        "via"
+      ],
+      "required_props": [
+        "entity",
+        "via"
+      ],
+      "optional": [
+        "columns",
+        "row_link",
+        "create"
+      ],
+      "optional_props": [
+        "columns",
+        "row_link",
+        "create"
+      ],
+      "fits": "Child records shown on a parent detail page through a ref relation.",
+      "example": {
+        "entity": "comment",
+        "via": "task",
+        "columns": [
+          "body",
+          "author"
+        ]
+      }
+    },
+    {
+      "type": "lifecycle.pipeline",
+      "stability": "stable",
+      "required": [
+        "entity"
+      ],
+      "required_props": [
+        "entity"
+      ],
+      "optional": [],
+      "optional_props": [],
+      "fits": "Visual state machine, approval stages, or lifecycle progress for one entity.",
+      "example": {
+        "entity": "ticket"
+      }
+    },
+    {
+      "type": "metric.gauge",
+      "stability": "experimental",
+      "required": [
+        "entity"
+      ],
+      "required_props": [
+        "entity"
+      ],
+      "optional": [
+        "field",
+        "max",
+        "label"
+      ],
+      "optional_props": [
+        "field",
+        "max",
+        "label"
+      ],
+      "fits": "Progress toward a target; experimental, so prefer metric.stat unless a gauge matters.",
+      "example": {
+        "entity": "campaign",
+        "field": "raised",
+        "max": 10000,
+        "label": "Funded"
+      }
+    },
+    {
+      "type": "form.record",
+      "stability": "stable",
+      "required": [
+        "entity"
+      ],
+      "required_props": [
+        "entity"
+      ],
+      "optional": [
+        "fields"
+      ],
+      "optional_props": [
+        "fields"
+      ],
+      "fits": "Create and edit forms, especially on a dedicated page.",
+      "example": {
+        "entity": "task",
+        "fields": [
+          "title",
+          "status",
+          "due_date"
+        ]
+      }
+    },
+    {
+      "type": "chart.bar",
+      "stability": "stable",
+      "required": [
+        "entity",
+        "x"
+      ],
+      "required_props": [
+        "entity",
+        "x"
+      ],
+      "optional": [
+        "title",
+        "y"
+      ],
+      "optional_props": [
+        "title",
+        "y"
+      ],
+      "fits": "Simple category comparisons and grouped counts.",
+      "example": {
+        "entity": "order",
+        "x": "status",
+        "y": "count",
+        "title": "Orders by status"
+      }
+    },
+    {
+      "type": "calendar.month",
+      "stability": "stable",
+      "required": [
+        "entity",
+        "date_field"
+      ],
+      "required_props": [
+        "entity",
+        "date_field"
+      ],
+      "optional": [
+        "title",
+        "row_link"
+      ],
+      "optional_props": [
+        "title",
+        "row_link"
+      ],
+      "fits": "Schedules, bookings, and anything organized by a date field.",
+      "example": {
+        "entity": "appointment",
+        "date_field": "starts_at",
+        "title": "Appointments"
+      }
+    },
+    {
+      "type": "activity.timeline",
+      "stability": "stable",
+      "required": [
+        "entity",
+        "date_field"
+      ],
+      "required_props": [
+        "entity",
+        "date_field"
+      ],
+      "optional": [
+        "title"
+      ],
+      "optional_props": [
+        "title"
+      ],
+      "fits": "Chronological history, audit trails, and recent activity.",
+      "example": {
+        "entity": "event",
+        "date_field": "created_at",
+        "title": "Activity"
+      }
+    },
+    {
+      "type": "file.list",
+      "stability": "stable",
+      "required": [
+        "entity"
+      ],
+      "required_props": [
+        "entity"
+      ],
+      "optional": [
+        "field",
+        "upload"
+      ],
+      "optional_props": [
+        "field",
+        "upload"
+      ],
+      "fits": "Uploads, attachments, and file collections.",
+      "example": {
+        "entity": "attachment",
+        "field": "file",
+        "upload": true
+      }
+    },
+    {
+      "type": "content.hero",
+      "stability": "stable",
+      "required": [],
+      "required_props": [],
+      "optional": [
+        "title",
+        "subtitle",
+        "cta"
+      ],
+      "optional_props": [
+        "title",
+        "subtitle",
+        "cta"
+      ],
+      "fits": "Landing page hero, overview header, or empty-state introduction.",
+      "example": {
+        "title": "Welcome",
+        "subtitle": "Track your work",
+        "cta": "Open tasks"
+      }
+    }
+  ]
+}

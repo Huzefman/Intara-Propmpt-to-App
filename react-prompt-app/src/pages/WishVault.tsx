@@ -1,4 +1,4 @@
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, Navigate } from 'react-router-dom'
 import { useCallback } from 'react'
 import { useWish } from '../hooks/useWish'
 import { AgentThread } from '../components/AgentThread'
@@ -71,6 +71,10 @@ export function WishVault() {
   if (err) return <div className="glass" style={{ padding: 20, color: '#FCA5A5', borderRadius: 16 }}>{err} <Link to="/" style={{ color: 'var(--intara-nebula-light)' }}>Make another wish</Link></div>
   if (!wish) return <div className="glass" style={{ padding: 24, textAlign: 'center', color: 'var(--intara-faint)', borderRadius: 16 }}>Wish not found.</div>
 
+  // v2 wishes own a spec run. Send old wish links to the product run view.
+  const v2run = (wish.artifacts as any)?.v2?.run_id
+  if (v2run) return <Navigate to={`/runs/${v2run}`} replace />
+
   const building = wish.status === 'building' || wish.status === 'approved'
   // Legacy one-shot wishes keep the classic vault view
   if (wish.status === 'weaving' || (wish.status === 'ready' && !wish.prd?.buildGraph)) {
@@ -91,6 +95,7 @@ export function WishVault() {
             <Link to="/" style={{ fontSize: 11.5, fontWeight: 450, letterSpacing: '0.01em', color: 'var(--intara-faint)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>← New wish</Link>
             <div style={{ fontFamily: 'Space Grotesk', fontSize: 26, fontWeight: 400, letterSpacing: '-0.03em', marginTop: 8, color: 'var(--intara-text)' }}>
               {wish.prd?.appName || 'Wish granted'}
+              <span className="pill" style={{ marginLeft: 10, fontSize: 11, background: 'rgba(255,255,255,0.06)', color: 'var(--intara-muted)' }}>Legacy</span>
               <span style={{ fontWeight: 300, color: 'var(--intara-faint)', fontSize: 13, marginLeft: 10, letterSpacing: '-0.01em' }}>{new Date(wish.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
             </div>
             <div style={{ color: 'var(--intara-faint)', fontSize: 12.5, fontWeight: 400, marginTop: 6, maxWidth: 640, lineHeight: 1.6, letterSpacing: '-0.01em' }}>{wish.prompt}</div>
@@ -116,7 +121,7 @@ export function WishVault() {
         <div className="studio-thread-col">
           <div className="studio-thread-head">
             <div>
-              <div className="studio-eyebrow">Studio&nbsp;&nbsp;›&nbsp;&nbsp;{wish.status === 'planning' ? 'Clarifying' : wish.status === 'awaiting_approval' ? 'Plan approval' : building ? 'Building' : wish.status.replace('_', ' ')}</div>
+              <div className="studio-eyebrow">Studio (Legacy)&nbsp;&nbsp;›&nbsp;&nbsp;{wish.status === 'planning' ? 'Clarifying' : wish.status === 'awaiting_approval' ? 'Plan approval' : building ? 'Building' : wish.status.replace('_', ' ')}</div>
               <strong>{appName} <span className="studio-title-caret" aria-hidden="true">▾</span></strong>
             </div>
             <span className={`pill status-${wish.status}`}>{wish.status.replace('_', ' ')}</span>

@@ -102,6 +102,9 @@ def _gemini_client_for(api_key: str):
 @retry(wait=wait_exponential(min=1, max=8), stop=stop_after_attempt(3), retry=retry_if_exception(_gemini_retryable))
 def call_gemini(prompt: str, *, response_mime_type: str | None = None, max_output_tokens: int | None = None, info: dict | None = None,
                 api_key: str | None = None, model: str | None = None):
+    if os.getenv("LLM_ONLY") == "groq":
+        from services.llm import call_llm
+        return call_llm(prompt, temperature=0.2, max_output_tokens=max_output_tokens, info=info)
     gem = client
     if api_key and api_key != GEMINI_KEY:
         gem = _gemini_client_for(api_key)

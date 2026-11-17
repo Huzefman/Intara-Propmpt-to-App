@@ -4,7 +4,8 @@
  * no sandbox. Shown in Studio when the wish carries `artifacts.spec_v1`
  * (v2 pipeline output); Sandpack stays for legacy wishes.
  */
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState, Component } from 'react'
+import type { ReactNode } from 'react'
 import type { AppSpec } from '../../../packages/spec/app-spec.ts'
 import '../../../packages/runtime/blocks/blocks.css'
 import { DexieAdapter } from '../../../packages/runtime/adapters/dexie.ts'
@@ -18,11 +19,35 @@ import { allowedTransitions, applyTransition } from '../../../packages/runtime/e
 import { runAutomations } from '../../../packages/runtime/automation/executor.ts'
 import { parseCsv, toCsv } from '../../../packages/runtime/blocks/csv.ts'
 import { uploadBlob, UPLOAD_BUCKET } from '../../../packages/runtime/storage/uploads.ts';
-import { enrollPin, isEnrolled, verifyPin } from '../../../packages/runtime/auth/pin.ts';
 import { isSupabaseDemo, supabase } from '../supabase';
 import { CreateDialog } from './CreateDialog';
 const RolesMatrix = lazy(() => import('./RolesMatrix').then(m => ({ default: m.RolesMatrix })));
-const PinGate = lazy(() => import('../../../packages/runtime/shell/PinGate.tsx').then(m => ({ default: m.PinGate })));
+
+class BlockErrorBoundary extends Component<{ blockType: string; children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, info: any) {
+    console.warn(`[RuntimePreview] Block ${this.props.blockType} render error:`, error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="glass" style={{ padding: '12px 14px', borderRadius: 12, margin: '8px 0', border: '1px solid rgba(248,113,113,0.2)', background: 'rgba(248,113,113,0.04)' }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#F87171' }}>Block notice ({this.props.blockType})</div>
+          <div style={{ fontSize: 11, color: 'var(--intara-faint)', marginTop: 4 }}>
+            {this.state.error?.message || 'Displaying minimal fallback for this block.'}
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 type Rows = Record<string, Array<Record<string, unknown>>>;
 
@@ -112,6 +137,117 @@ function hydrateRefs(spec: AppSpec, rows: Rows): Rows {
   return out;
 }
 
+function RenderBlock({
+  b,
+  spec,
+  rows,
+  viewRows,
+  selected,
+  selectedEntity,
+  session,
+  applyFilters,
+  onAction,
+}: {
+  b: any
+  spec: AppSpec
+  rows: Rows
+  viewRows: Rows
+  selected: Record<string, unknown> | null
+  selectedEntity: string | null
+  session: RoleSession
+  applyFilters: (entity: string, rws: Rows[string]) => Rows[string]
+  onAction: (blockType: string, props: Record<string, unknown>, action: string, payload?: unknown) => Promise<void>
+}) {
+  return (
+    <BlockErrorBoundary blockType={b.type}>
+      {(() => {
+        const C = BLOCK_COMPONENTS[b.type]
+        if (!C) return <div className="glass" style={{ padding: 12 }}>Unknown block {b.type}</div>
+        const props = { ...(b.props as Record<string, unknown>) }
+        const entity = props['entity'] as string | undefined
+        const ent = entity ? spec.model.entities.find((e) => e.id === entity) : undefined
+
+        if (b.type === 'form.record' && entity) {
+          if (!props['fields'] || !Array.isArray(props['fields']) || props['fields'].length === 0) {
+            props['fields'] = (ent?.fields ?? [])
+              .filter((f) => !f.computed)
+              .map((f) => ({ id: f.id, label: f.id.replace(/_/g, ' '), type: f.type, required: f.required }))
+          } else {
+            const entFieldsMap = new Map((ent?.fields ?? []).map((f) => [f.id, f]))
+            props['fields'] = (props['fields'] as any[]).map((f: any, idx: number) => {
+              const fid = typeof f === 'string' ? f : f?.id || `f_${idx}`
+              const modelF = entFieldsMap.get(fid)
+              return {
+                id: fid,
+                label: (typeof f === 'object' && f?.label) || (modelF as any)?.label || fid.replace(/_/g, ' '),
+                type: (typeof f === 'object' && f?.type) || modelF?.type || 'string',
+                required: (typeof f === 'object' && f?.required !== undefined) ? f.required : (modelF?.required ?? false),
+              }
+            })
+          }
+        }
+
+        let blockRows: Rows[string] | undefined = entity ? applyFilters(entity, viewRows[entity] ?? []) : undefined
+        if (b.type === 'record.related_list' && entity) {
+          const linkField = ent?.fields.find((f) => f.id === props['via'] && (f.type === 'ref' || f.type === 'multi_ref'))
+          if (linkField?.target) {
+            const parent = selected && selectedEntity === linkField.target
+              ? selected
+              : ((viewRows[linkField.target] ?? [])[0] ?? null)
+            if (parent) {
+              const relIds = (r: Record<string, unknown>): Array<string> => {
+                const v = r[linkField.id]
+                if (Array.isArray(v)) {
+                  return v.map((x) => (x && typeof x === 'object' ? String((x as Record<string, unknown>)['id'] ?? '') : String(x ?? '')))
+                }
+                return [v && typeof v === 'object' ? String((v as Record<string, unknown>)['id'] ?? '') : String(v ?? '')]
+              }
+              blockRows = (blockRows ?? []).filter((r) => relIds(r).includes(String(parent['id'])))
+            }
+          }
+        }
+
+        let record: Record<string, unknown> | null | undefined
+        let pipe: { transitions: Array<{ id: string; label: string; allowed: boolean }>; current: string } | null = null
+        if (b.type === 'record.detail' || b.type === 'lifecycle.pipeline') {
+          record = selected ?? (entity ? (rows[entity] ?? [])[0] ?? null : null)
+          if (b.type === 'record.detail' && entity && record) {
+            const facing = (viewRows[entity] ?? []).find((r) => String(r['id']) === String(record!['id']))
+            if (facing) record = facing
+          }
+          if (b.type === 'lifecycle.pipeline' && entity && record) {
+            if (ent?.lifecycle) {
+              try {
+                const field = ent.lifecycle.field ?? 'status'
+                pipe = {
+                  transitions: allowedTransitions(spec, entity, record, { role: session.current })
+                    .map((t) => ({ id: t.id, label: t.label, allowed: true })),
+                  current: String(record[field] ?? ''),
+                }
+              } catch (e) {
+                console.warn('lifecycle evaluation skipped', e)
+              }
+            }
+          }
+        }
+        if (b.type === 'form.record' && entity) {
+          record = selected ?? (rows[entity] ?? [])[0] ?? {}
+        }
+
+        return (
+          <C
+            block={{ id: b.id, type: b.type, props }}
+            rows={blockRows}
+            record={record}
+            {...(pipe ?? {})}
+            onAction={(a, p) => { onAction(b.type, props, a, p).catch((e) => console.error(e)) }}
+          />
+        )
+      })()}
+    </BlockErrorBoundary>
+  )
+}
+
 export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey?: string }) {
   const adapter = useMemo(
     () => new DexieAdapter(storageKey || `intara-preview-${spec.app.name}`),
@@ -127,9 +263,6 @@ export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey
   const [filters, setFilters] = useState<Record<string, Record<string, { q?: string; search?: string[]; fields: Record<string, string> }>>>({});
   const [ready, setReady] = useState(false);
   const [notices, setNotices] = useState<string[]>([]);
-  const [pinView, setPinView] = useState<null | 'setup' | 'lock'>(null);
-  const [unlocked, setUnlocked] = useState(false);
-  const [pinError, setPinError] = useState<string | null>(null);
   const viewRows = useMemo(() => hydrateRefs(spec, rows), [rows, spec]);
 
   useEffect(() => {
@@ -161,9 +294,6 @@ export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey
         setRows(all);
         setSelected(null);
         if (!spec.ui.pages.some((p) => p.id === activePage)) setActivePage(spec.ui.pages[0]?.id ?? '');
-        try {
-          if (await isEnrolled(adapter)) setPinView((v) => v ?? 'lock');
-        } catch { /* auth store unavailable: stay open */ }
         setReady(true);
       }
     })().catch((e) => console.error('runtime preview failed', e));
@@ -179,22 +309,6 @@ export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey
 
   const page = spec.ui.pages.find((p) => p.id === activePage) ?? spec.ui.pages[0];
   if (!ready || !page) return <div className="glass" style={{ padding: 28, textAlign: 'center' }}>Loading app…</div>;
-  if (pinView === 'lock' && !unlocked) {
-    return (
-      <Suspense fallback={null}>
-        <PinGate mode="lock" error={pinError} onSubmit={async (pin) => {
-          try {
-            if (!(await verifyPin(adapter, pin))) { setPinError('Wrong PIN — try again.'); return; }
-            setPinError(null);
-            setUnlocked(true);
-            setPinView(null);
-          } catch (e: any) {
-            setPinError(e?.message || 'PIN failed.');
-          }
-        }} />
-      </Suspense>
-    );
-  }
 
   async function fireAutomations(type: 'record.created' | 'record.updated' | 'lifecycle.transition', entity: string, record: Record<string, unknown>, extra?: { transition?: string }) {
     try {
@@ -368,30 +482,7 @@ export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey
       }`}</style>
       <div className="blk-printbar" style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
         <button className="btn-ghost btn-sm" onClick={() => window.print()}>🖨 Print / PDF</button>
-        {unlocked
-          ? <button className="btn-ghost btn-sm" onClick={() => { setUnlocked(false); setPinView('lock'); }}>🔒 Lock</button>
-          : <button className="btn-ghost btn-sm" onClick={() => { setPinError(null); setPinView('setup'); }}>🔑 Set PIN</button>}
       </div>
-      {pinView === 'setup' && (
-        <Suspense fallback={null}>
-          <PinGate mode="setup" error={pinError} onSubmit={async (pin) => {
-            try {
-              await enrollPin(adapter, pin);
-              setNotices((prev) => ['PIN set on this device.'].concat(prev).slice(0, 5));
-              setPinError(null);
-              setUnlocked(true);
-              setPinView(null);
-            } catch (e: any) {
-              setPinError(e?.message || 'PIN failed.');
-            }
-          }} />
-        </Suspense>
-      )}
-      {(!pinView || unlocked) && (
-      <Suspense fallback={null}>
-        <RolesMatrix spec={spec} current={session.current} />
-      </Suspense>
-      )}
       <AppShell
       spec={spec}
       session={session}
@@ -419,70 +510,20 @@ export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey
           {notices.map((n, i) => <div key={i} style={{ fontSize: 12 }}>🔔 {n}</div>)}
         </div>
       )}
-      {(page.blocks ?? []).map((b) => {
-        const C = BLOCK_COMPONENTS[b.type];
-        if (!C) return <div key={b.id} className="glass" style={{ padding: 12 }}>Unknown block {b.type}</div>;
-        const props = { ...(b.props as Record<string, unknown>) };
-        const entity = props['entity'] as string | undefined;
-        // A settings form may omit `fields` (spec registry marks it optional):
-        // fall back to every writable field of the entity.
-        if (b.type === 'form.record' && entity && !props['fields']) {
-          const ent = spec.model.entities.find((e) => e.id === entity);
-          props['fields'] = (ent?.fields ?? [])
-            .filter((f) => !f.computed)
-            .map((f) => ({ id: f.id, label: f.id.replace(/_/g, ' '), type: f.type, required: f.required }));
-        }
-        // Filtered rows for this block; related lists additionally narrow to
-        // the parent record in context (the facing detail / selection).
-        let blockRows: Rows[string] | undefined = entity ? applyFilters(entity, viewRows[entity] ?? []) : undefined;
-        if (b.type === 'record.related_list' && entity) {
-          const childEnt = spec.model.entities.find((e) => e.id === entity);
-          const linkField = childEnt?.fields.find((f) => f.id === props['via'] && (f.type === 'ref' || f.type === 'multi_ref'));
-          if (linkField?.target) {
-            const parent = selected && selectedEntity === linkField.target
-              ? selected
-              : ((viewRows[linkField.target] ?? [])[0] ?? null);
-            if (parent) {
-              const relIds = (r: Record<string, unknown>): Array<string> => {
-                const v = r[linkField.id];
-                if (Array.isArray(v)) {
-                  return v.map((x) => (x && typeof x === 'object' ? String((x as Record<string, unknown>)['id'] ?? '') : String(x ?? '')));
-                }
-                return [v && typeof v === 'object' ? String((v as Record<string, unknown>)['id'] ?? '') : String(v ?? '')];
-              };
-              blockRows = (blockRows ?? []).filter((r) => relIds(r).includes(String(parent['id'])));
-            }
-          }
-        }
-        let record: Record<string, unknown> | null | undefined;
-        let pipe: { transitions: Array<{ id: string; label: string; allowed: boolean }>; current: string } | null = null;
-        if (b.type === 'record.detail' || b.type === 'lifecycle.pipeline') {
-          record = selected ?? (entity ? (rows[entity] ?? [])[0] ?? null : null);
-          if (b.type === 'record.detail' && entity && record) {
-            const facing = (viewRows[entity] ?? []).find((r) => String(r['id']) === String(record!['id']));
-            if (facing) record = facing;
-          }
-          if (b.type === 'lifecycle.pipeline' && entity && record) {
-            const ent = spec.model.entities.find((e) => e.id === entity)!;
-            const field = ent.lifecycle?.field ?? 'status';
-            pipe = {
-              transitions: allowedTransitions(spec, entity, record, { role: session.current })
-                .map((t) => ({ id: t.id, label: t.label, allowed: true })),
-              current: String(record[field] ?? ''),
-            };
-          }
-        }
-        if (b.type === 'form.record' && entity) record = selected ?? (rows[entity] ?? [])[0] ?? undefined;
-        return (
-          <C key={b.id}
-            block={{ id: b.id, type: b.type, props }}
-            rows={blockRows}
-            record={record}
-            {...(pipe ?? {})}
-            onAction={(a, p) => { onAction(b.type, props, a, p).catch((e) => console.error(e)); }}
-          />
-        );
-      })}
+      {(page.blocks ?? []).map((b) => (
+        <RenderBlock
+          key={b.id}
+          b={b}
+          spec={spec}
+          rows={rows}
+          viewRows={viewRows}
+          selected={selected}
+          selectedEntity={selectedEntity}
+          session={session}
+          applyFilters={applyFilters}
+          onAction={onAction}
+        />
+      ))}
     </AppShell>
     {(creating || editing) && (() => {
       const target = creating

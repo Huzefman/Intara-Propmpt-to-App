@@ -323,7 +323,7 @@ STAGES: dict[str, dict[str, Any]] = {
            "gate": lambda o, i: _gate_s2(o) + _gate_formulas(o.model),
            "fallback": lambda i: _fb_s2()},
     "s3": {"agent": "s3-designer", "tier": "strong", "model": S3UiOut,
-           "prompt": lambda i: P.s3_prompt(i["model_json"], i.get("personas", ""), i.get("blocks", ""), i.get("requirements_json", "")),
+           "prompt": lambda i: P.s3_prompt(i["model_json"], i.get("personas", ""), i.get("blocks", ""), i.get("requirements_json", ""), i.get("block_catalog", "")),
            "gate": lambda o, i: _gate_s3(o, set(i.get("entity_ids", []))),
            "fallback": lambda i: _fb_s3(list(i.get("entity_ids", [])))},
     "s4": {"agent": "s4-logic", "tier": "strong", "model": S4LogicOut,

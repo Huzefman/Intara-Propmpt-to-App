@@ -108,6 +108,50 @@ export async function createWish(prompt: string): Promise<Wish> {
   return res.json()
 }
 
+/** v2 build: create an empty owner-scoped wish, then start a spec run on it. */
+export async function createWishShell(prompt: string): Promise<Wish> {
+  const res = await apiFetch('/api/wish/shell', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) })
+  if (!res.ok) {
+    const t = await res.text().catch(() => '')
+    throw new Error(`wish shell failed ${res.status} ${t}`)
+  }
+  return res.json()
+}
+
+export interface ClarifyQuestionOption {
+  label: string
+  desc?: string
+}
+
+export interface ClarifyQuestion {
+  id: string
+  q: string
+  options: ClarifyQuestionOption[]
+}
+
+export interface ClarifyResponse {
+  appName: string
+  tagline: string
+  summary: string
+  score: number
+  ready: boolean
+  questions: ClarifyQuestion[]
+  redrafted?: string
+}
+
+export async function clarifyWish(prompt: string): Promise<ClarifyResponse> {
+  const res = await apiFetch('/api/wish/clarify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt }),
+  })
+  if (!res.ok) {
+    const t = await res.text().catch(() => '')
+    throw new Error(`clarify failed ${res.status} ${t}`)
+  }
+  return res.json()
+}
+
 export class PlanAbortedError extends Error {
   prompt: string
   constructor(prompt: string) {
@@ -278,13 +322,19 @@ export async function revertIterate(id: string, iterId: string): Promise<Wish> {
 // v2 runs (spec pipeline): start/status/events/approve/chat-patch
 export async function startRun(wish: string, appName?: string, wishId?: string): Promise<{ ok: boolean; run_id: string; project_id: string }> {
   const res = await apiFetch('/api/runs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ wish, kind: 'build', app_name: appName || 'App', wish_id: wishId || null }) })
-  if (!res.ok) throw new Error(`start run failed ${res.status}`)
+  if (!res.ok) throw apiError('start run', res, await res.text().catch(() => ''))
   return res.json()
 }
 
 export async function getRun(runId: string): Promise<any> {
   const res = await apiFetch(`/api/runs/${runId}`)
   if (!res.ok) throw new Error(`get run failed ${res.status}`)
+  return res.json()
+}
+
+export async function retryRun(runId: string): Promise<{ ok: boolean; run_id: string; status: string }> {
+  const res = await apiFetch(`/api/runs/${runId}/retry`, { method: 'POST' })
+  if (!res.ok) throw apiError('retry run', res, await res.text().catch(() => ''))
   return res.json()
 }
 
@@ -300,7 +350,7 @@ export async function approveRun(runId: string, by?: string): Promise<{ ok: bool
 
 export async function chatRun(runId: string, instruction: string): Promise<{ ok: boolean; version_id: string; summary: string; spec: any }> {
   const res = await apiFetch(`/api/runs/${runId}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instruction }) })
-  if (!res.ok) throw new Error(`chat patch failed ${res.status}`)
+  if (!res.ok) throw apiError('chat patch', res, await res.text().catch(() => ''))
   return res.json()
 }
 

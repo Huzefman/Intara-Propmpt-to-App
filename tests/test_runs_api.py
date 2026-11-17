@@ -5,11 +5,13 @@ endpoint happy path, rejection paths, chat validation.
 Run: pytest tests/test_runs_api.py -v
 """
 import copy
+import asyncio
 import importlib
 import importlib.util
 import json
 import os
 import sys
+import types
 
 import pytest
 
@@ -108,6 +110,72 @@ def test_chat_validation(monkeypatch):
     assert r.status_code == 200
     body = r.json()
     assert body["run"]["id"] == rid and body["spec"] is None
+
+
+def _failed_run(monkeypatch, inputs=None):
+    mod, RE = _load_main()
+    store = RE.MemoryRunStore()
+    rid = store.create_run(
+        "p1", "build",
+        inputs if inputs is not None else {"wish": "track widgets", "wish_id": "w1"})
+    store.set_status(rid, "failed", "boom")
+    eng = RE.RunEngine(store)
+    monkeypatch.setattr(RE, "_engine", eng)
+    return mod, eng, rid
+
+
+def test_retry_failed_run_schedules_resume(monkeypatch):
+    pytest.importorskip("fastapi")
+    pytest.importorskip("starlette.testclient")
+    from fastapi.testclient import TestClient
+    mod, eng, rid = _failed_run(monkeypatch)
+    import routers.runs as R
+
+    writes = []
+    monkeypatch.setattr(
+        R, "_writeback_wish",
+        lambda wid, art, status=None, prd_patch=None:
+            writes.append((wid, status, art)))
+    scheduled = []
+
+    def fake_create_task(coro):
+        scheduled.append(coro)
+        coro.close()  # never execute the real build in this test
+        return None
+
+    monkeypatch.setattr(R, "asyncio", types.SimpleNamespace(
+        create_task=fake_create_task, Lock=asyncio.Lock))
+    c = TestClient(mod.app)
+    r = c.post(f"/api/runs/{rid}/retry")
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "running"
+    assert eng.store.get_run(rid)["status"] == "running"
+    assert eng.store.get_run(rid)["error"] is None
+    assert writes == [("w1", "building",
+                       {"engine": "v2",
+                        "v2": {"run_id": rid, "status": "running"}})]
+    assert len(scheduled) == 1
+
+
+def test_retry_rejections(monkeypatch):
+    pytest.importorskip("fastapi")
+    pytest.importorskip("starlette.testclient")
+    from fastapi.testclient import TestClient
+    mod, RE = _load_main()
+    store = RE.MemoryRunStore()
+    done = store.create_run("p1", "build", {"wish": "x"})
+    store.set_status(done, "done")
+    no_inputs = store.create_run("p1", "build", {})
+    store.set_status(no_inputs, "failed", "boom")
+    running = store.create_run("p1", "build", {"wish": "x"})
+    store.set_status(running, "running")
+    eng = RE.RunEngine(store)
+    monkeypatch.setattr(RE, "_engine", eng)
+    c = TestClient(mod.app)
+    assert c.post(f"/api/runs/{done}/retry").status_code == 409
+    assert c.post(f"/api/runs/{no_inputs}/retry").status_code == 409
+    assert c.post(f"/api/runs/{running}/retry").status_code == 409
+    assert c.post("/api/runs/nope/retry").status_code == 404
 
 
 def test_versions_list_revert_and_summary(monkeypatch):
