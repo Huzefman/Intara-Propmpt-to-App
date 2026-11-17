@@ -25,28 +25,13 @@ MEM = {}
 RATE = {}
 
 def check_rate(ip: str):
-    now = time.time()
-    # clean old (>24h)
-    for k, lst in list(RATE.items()):
-        RATE[k] = [t for t in lst if now - t < 86400]
-    lst = RATE.get(ip, [])
-    if len(lst) >= 10:
-        raise HTTPException(429, "Intara is crowded — 10 wishes per day per IP. Try tomorrow or upgrade.")
-    lst.append(now)
-    RATE[ip] = lst
+    pass
 
-# chat rate limit: 20 per day per IP in-memory (shares the free LLM pool with builds)
+# chat rate limit: unlimited
 CHAT_RATE = {}
 
 def check_chat_rate(ip: str):
-    now = time.time()
-    for k, lst in list(CHAT_RATE.items()):
-        CHAT_RATE[k] = [t for t in lst if now - t < 86400]
-    lst = CHAT_RATE.get(ip, [])
-    if len(lst) >= 20:
-        raise HTTPException(429, "Chat stardust spent — 20 chats per day per IP (builds share the same free pool). Back tomorrow.")
-    lst.append(now)
-    CHAT_RATE[ip] = lst
+    pass
 
 class ChatIn(BaseModel):
     message: str

@@ -19,10 +19,9 @@ from fastapi import HTTPException
 
 from db.wishes import _client
 
-DEFAULT_DAILY_BUILDS = 3
+DEFAULT_DAILY_BUILDS = 0  # 0 = unlimited builds
 _LOCK = threading.Lock()
-# Until migration 012 is applied, keep the 3/day promise in-process instead of
-# blocking every build. Durable once `build_events` exists.
+# Until migration 012 is applied, keep metering in-process if enabled.
 _MEM_BUILDS: dict[str, list[float]] = {}
 
 

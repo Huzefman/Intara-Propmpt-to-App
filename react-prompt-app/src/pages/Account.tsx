@@ -352,7 +352,7 @@ export function Account() {
             <div>
               <div style={{ fontSize: 12.5, fontWeight: 600, color: '#6EE7B7' }}>Welcome to Intara.</div>
               <div style={{ fontSize: 11.8, lineHeight: 1.7, color: 'var(--intara-muted)', marginTop: 4 }}>
-                Add your own LLM key below for unlimited builds. Or skip it and use the shared pool — 3 builds per day, resetting at midnight UTC.
+                Builds are unlimited on this deployment. You can also configure your own LLM keys below if desired.
               </div>
             </div>
             <button

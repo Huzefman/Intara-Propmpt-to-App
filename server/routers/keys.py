@@ -45,6 +45,8 @@ def _quota(owner: str | None, byok: bool) -> dict:
     if byok:
         return {"mode": "byok", "limit": None, "used": 0, "remaining": None}
     limit = daily_limit()
+    if limit <= 0:
+        return {"mode": "unlimited", "limit": 0, "used": 0, "remaining": None}
     if not owner:
         return {"mode": "shared", "limit": limit, "used": 0,
                 "remaining": max(limit, 0) if limit > 0 else None}
