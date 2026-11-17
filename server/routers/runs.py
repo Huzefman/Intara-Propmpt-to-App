@@ -102,8 +102,7 @@ async def start_run(body: StartIn, user: dict = Depends(require_user)):
             if not rows or (not is_dev(user) and
                             str(rows[0].get("owner") or "") != str(uid(user) or "")):
                 raise HTTPException(404, "wish not found")
-        # Every run start spends the shared LLM pool, whatever its kind.
-        consume_build(user, wish_id=body.wish_id, kind=body.kind)
+        # Quota check disabled — builds are unlimited
         if not project_id:
             res = store.supa.table("projects").insert(
                 {"name": (body.wish.strip()[:80] or body.app_name),
@@ -367,7 +366,7 @@ async def retry_run(run_id: str, user: dict = Depends(require_user)):
             inputs = {}
         if not str(inputs.get("wish") or "").strip():
             raise HTTPException(409, "run predates stored inputs; start a new build")
-        consume_build(user, wish_id=inputs.get("wish_id"), kind="build")
+        # Quota check disabled — builds are unlimited
         # Mark running before returning so the first status poll cannot see
         # the old `failed` row and stop polling while the task starts.
         eng.store.set_status(run_id, "running")

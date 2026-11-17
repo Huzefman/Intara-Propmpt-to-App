@@ -584,7 +584,7 @@ async def approve_plan(wid: str, background_tasks: BackgroundTasks,
         from db.wishes import set_wish_status
         if wish.get("status") not in ("awaiting_approval", "approved", "failed"):
             raise HTTPException(400, f"cannot approve in status {wish.get('status')}")
-        consume_build(user, wish_id=wid, kind="build")
+        # consume_build removed (unlimited)
         set_wish_status(wid, "building", current_step_id=wish.get("prd",{}).get("buildGraph",[{}])[0].get("id") if wish.get("prd",{}).get("buildGraph") else None)
         # update MEM cache
         MEM[wid] = wish
@@ -692,7 +692,7 @@ def create_wish(body: WishIn, user: dict = Depends(require_user)):
         raise HTTPException(400, "prompt too short — wish for something, e.g. 'A task tracker with users and tasks'")
     if len(body.prompt) > 500:
         raise HTTPException(400, "prompt too long (max 500)")
-    consume_build(user, kind="one_shot")
+    # consume_build removed (unlimited)
     try:
         return make_wish(body.prompt.strip(), owner=uid(user))
     except HTTPException:
@@ -736,5 +736,5 @@ def regenerate(wid: str, user: dict = Depends(require_user)):
     prompt = wish.get("prompt")
     if not prompt:
         raise HTTPException(404, "wish not found")
-    consume_build(user, kind="regenerate")
+    # consume_build removed (unlimited)
     return make_wish(prompt, owner=uid(user))
