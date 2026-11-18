@@ -23,71 +23,109 @@ export function Header() {
           { to: '/', label: 'Wish' },
           { to: '/templates', label: 'Templates' },
         ]
-  const chipStyle: React.CSSProperties = {
-    fontSize: 11, fontWeight: 450, color: 'var(--intara-faint)',
-    border: '1px solid rgba(255,255,255,0.05)', padding: '6px 10px',
-    borderRadius: 999, background: 'rgba(255,255,255,0.02)',
-  }
+
+  const userInitial = (user?.email?.[0] || 'U').toUpperCase()
+  const username = user?.email ? user.email.split('@')[0] : 'Account'
+
   return (
-    <header style={{
-      position: 'sticky', top: 0, zIndex: 20,
-      backdropFilter: 'blur(24px) saturate(1.2)', WebkitBackdropFilter: 'blur(24px) saturate(1.2)',
-      background: 'rgba(7,7,11,0.72)', borderBottom: '1px solid rgba(255,255,255,0.05)',
-    }}>
-      <div style={{ maxWidth: 1080, margin: '0 auto', padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 20 }}>
-        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', flexShrink: 0 }}>
-          <img src="/assets/planet-intara.png" alt="" width={26} height={26} style={{ borderRadius: '50%', objectFit: 'cover', boxShadow: '0 0 16px rgba(139,92,246,0.32)' }} onError={(e) => (e.currentTarget.style.display = 'none')} />
-          <span className="text-display" style={{ fontWeight: 500, letterSpacing: '-0.03em', color: 'var(--intara-text)', fontSize: 15 }}>INTARA</span>
-          <span className="header-tagline" style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', border: '1px solid rgba(255,255,255,0.06)', padding: '3px 8px', borderRadius: 999, background: 'rgba(255,255,255,0.02)' }}>Planet of Wishes</span>
-        </Link>
-        <nav className="header-nav" style={{ display: 'flex', gap: 2, marginLeft: 16 }}>
+    <header className="site-header">
+      <div className="header-container">
+        <div className="header-brand-wrap">
+          <Link to="/" className="header-brand">
+            <img
+              src="/assets/planet-intara.png"
+              alt=""
+              width={26}
+              height={26}
+              className="header-brand-logo"
+              onError={(e) => (e.currentTarget.style.display = 'none')}
+            />
+            <span className="text-display header-brand-title">INTARA</span>
+            <span className="header-tagline">Planet of Wishes</span>
+          </Link>
+        </div>
+
+        <nav className="header-nav" aria-label="Main Navigation">
           {links.map((l) => (
             <Link
               key={l.to}
               to={l.to}
-              style={{
-                padding: '8px 14px', borderRadius: 999, fontSize: 12.5, fontWeight: isActive(l.to) ? 600 : 450, textDecoration: 'none',
-                letterSpacing: '-0.01em',
-                whiteSpace: 'nowrap',
-                color: isActive(l.to) ? 'var(--intara-text)' : 'var(--intara-faint)',
-                background: isActive(l.to) ? 'rgba(255,255,255,0.08)' : 'transparent',
-                border: `1px solid ${isActive(l.to) ? 'rgba(255,255,255,0.08)' : 'transparent'}`,
-                transition: 'all 0.35s var(--ease-premium)',
-              }}
-            >{l.label}</Link>
+              className={`header-nav-link ${isActive(l.to) ? 'active' : ''}`}
+            >
+              {l.label}
+            </Link>
           ))}
         </nav>
-        <div className="header-actions" style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+
+        <div className="header-actions">
           {DEMO ? (
             <>
-              <span style={chipStyle}>Static demo · no backend</span>
-              <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="btn-ghost" style={{ fontSize: 12.5, padding: '9px 16px', fontWeight: 500, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>GitHub</a>
+              <span className="header-badge">Static demo · no backend</span>
+              <a
+                href={GITHUB_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-ghost btn-sm"
+                style={{ fontSize: 12, padding: '5px 13px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', height: 32 }}
+              >
+                GitHub
+              </a>
             </>
           ) : isSupabaseDemo ? (
-            <span style={chipStyle}>Demo · MEM</span>
+            <span className="header-badge">Demo · MEM</span>
           ) : onAuth ? null : user ? (
             <>
-              <Link
-                to="/account"
-                title="Account & API keys"
-                style={{ ...chipStyle, color: 'var(--intara-muted)', maxWidth: 190, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'none' }}
-              >
-                {user.email?.slice(0, 22)}
-              </Link>
               <button
-                onClick={async () => { await signOut(); nav('/') }}
-                className="btn-ghost"
-                style={{ fontSize: 12.5, padding: '9px 16px', fontWeight: 500 }}
-              >Sign out</button>
+                onClick={() => nav('/')}
+                className="header-new-wish-btn"
+                title="Create a new app with a wish"
+              >
+                <span className="header-wish-star">✦</span>
+                <span className="header-wish-text">New wish</span>
+              </button>
+
+              <div className="header-user-capsule">
+                <Link
+                  to="/account"
+                  className="header-user-profile"
+                  title={`Signed in as ${user.email} · Account & Keys`}
+                >
+                  <span className="header-user-avatar">{userInitial}</span>
+                  <span className="header-user-name">{username}</span>
+                </Link>
+                <span className="header-user-divider" aria-hidden="true" />
+                <button
+                  onClick={async () => { await signOut(); nav('/') }}
+                  className="header-signout-btn"
+                  title="Sign out of your account"
+                  aria-label="Sign out"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
+                  <span className="header-signout-label">Sign out</span>
+                </button>
+              </div>
             </>
           ) : (
             <>
-              <button onClick={() => nav('/auth')} className="btn-ghost" style={{ fontSize: 12.5, padding: '9px 16px', fontWeight: 500 }}>Sign in</button>
-              <button onClick={() => nav('/auth?mode=signup')} className="btn-primary" style={{ fontSize: 12.5, padding: '9px 16px' }}>Create account</button>
+              <button
+                onClick={() => nav('/auth')}
+                className="btn-ghost btn-sm"
+                style={{ fontSize: 12, padding: '6px 14px', height: 32 }}
+              >
+                Sign in
+              </button>
+              <button
+                onClick={() => nav('/auth?mode=signup')}
+                className="btn-primary btn-sm"
+                style={{ fontSize: 12, padding: '6px 14px', height: 32 }}
+              >
+                Create account
+              </button>
             </>
-          )}
-          {!DEMO && !isSupabaseDemo && user && (
-            <button onClick={() => nav('/')} className="btn-ghost" style={{ fontSize: 12.5, padding: '9px 16px', fontWeight: 500 }}>New wish ✦</button>
           )}
         </div>
       </div>
