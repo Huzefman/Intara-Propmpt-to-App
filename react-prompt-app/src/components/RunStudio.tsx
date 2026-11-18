@@ -7,6 +7,7 @@
  */
 import { Suspense, lazy, useEffect, useState } from 'react'
 import { approveRun, chatRun, getEventlog, getRun, retryRun, streamRun } from '../api/client'
+import { buildAppProjectZip, downloadBlob } from '../lib/zip'
 
 const RuntimePreview = lazy(() => import('../runtime/RuntimePreview').then(m => ({ default: m.RuntimePreview })))
 const VersionTimeline = lazy(() => import('./VersionTimeline').then(m => ({ default: m.VersionTimeline })))
@@ -65,6 +66,7 @@ export function RunStudio({ runId }: { runId: string }) {
   const [instruction, setInstruction] = useState('')
   const [summary, setSummary] = useState('')
   const [approved, setApproved] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const [events, setEvents] = useState<any[] | null>(null)
   const [pollKey, setPollKey] = useState(0)
 
@@ -138,7 +140,9 @@ export function RunStudio({ runId }: { runId: string }) {
   async function retry() {
     setBusy(true); setErr(null); setSummary('')
     try {
-      await retryRun(runId)
+      const wish = data?.wish || data?.run?.inputs?.wish
+      const appName = data?.app_name || data?.run?.inputs?.app_name
+      await retryRun(runId, { wish, app_name: appName })
       setData((d: any) => ({
         ...(d || {}),
         run: { ...(d?.run || {}), status: 'running', error: null },
@@ -148,6 +152,19 @@ export function RunStudio({ runId }: { runId: string }) {
     } catch (e: any) {
       setErr(e.message || 'retry failed')
     } finally { setBusy(false) }
+  }
+
+  async function handleDownloadCode() {
+    if (!spec) return
+    setDownloading(true)
+    try {
+      const { blob, filename } = await buildAppProjectZip(spec)
+      downloadBlob(blob, filename)
+    } catch (e: any) {
+      alert('Could not download project code: ' + (e?.message || e))
+    } finally {
+      setDownloading(false)
+    }
   }
 
   async function patch() {
@@ -204,9 +221,21 @@ export function RunStudio({ runId }: { runId: string }) {
                 {busy ? 'Retrying…' : 'Retry build'}
               </button>
             ) : spec ? (
-              <button className="btn-primary btn-sm" onClick={approve} disabled={busy || !versionId || approved}>
-                {approved ? 'Approved' : 'Approve version'}
-              </button>
+              <>
+                <button
+                  className="btn-secondary btn-sm"
+                  onClick={handleDownloadCode}
+                  disabled={downloading}
+                  title="Download runnable React project with all code, schema & seed (.zip)"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <span>↓</span>
+                  <span>{downloading ? 'Packing…' : 'Download Code'}</span>
+                </button>
+                <button className="btn-primary btn-sm" onClick={approve} disabled={busy || !versionId || approved}>
+                  {approved ? 'Approved' : 'Approve version'}
+                </button>
+              </>
             ) : null}
           </div>
         </div>
@@ -240,10 +269,21 @@ export function RunStudio({ runId }: { runId: string }) {
         <>
           {spec ? (
             <section className="run-app-frame">
-              <div className="studio-browserbar glass" aria-hidden="true">
-                <span className="studio-browser-dots"><i /><i /><i /></span>
-                <span className="studio-browser-addr">{(spec?.app?.name || 'app').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.intara.app</span>
-                <span className="studio-browser-refresh">↻</span>
+              <div className="studio-browserbar glass" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="studio-browser-dots"><i /><i /><i /></span>
+                  <span className="studio-browser-addr">{(spec?.app?.name || 'app').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.intara.app</span>
+                  <span className="studio-browser-refresh">↻</span>
+                </div>
+                <button
+                  className="btn-ghost btn-sm"
+                  onClick={handleDownloadCode}
+                  disabled={downloading}
+                  title="Download complete standalone app project (.zip)"
+                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, color: '#93C5FD', cursor: 'pointer', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.2)' }}
+                >
+                  ↓ {downloading ? 'Packing…' : 'Download Code (.zip)'}
+                </button>
               </div>
               <div className="run-app-canvas">
                 <Suspense fallback={<div className="glass" style={{ padding: 48, textAlign: 'center' }}>Loading app…</div>}>
@@ -321,7 +361,17 @@ export function RunStudio({ runId }: { runId: string }) {
                   {(spec?.assumptions || []).length === 0 && <div className="run-small">None recorded.</div>}
                 </Card>
               </div>
-              <Card title="App Spec JSON">
+              <Card title="App Spec JSON & Code Export">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span className="run-small">The declarative blueprint and downloadable code project.</span>
+                  <button
+                    className="btn-primary btn-sm"
+                    onClick={handleDownloadCode}
+                    disabled={downloading}
+                  >
+                    ↓ {downloading ? 'Packing…' : 'Download Complete Code (.zip)'}
+                  </button>
+                </div>
                 <pre className="mono run-pre">{JSON.stringify(spec, null, 2)}</pre>
               </Card>
               <Suspense fallback={null}>

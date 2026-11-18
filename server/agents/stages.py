@@ -218,10 +218,14 @@ def _fb_s3(entity_ids: list) -> dict:
         {"page": "home", "label": "Home"}] if pages else [], "pages": pages}}
 
 
-def _fb_s4() -> dict:
-    return {"access": {"roles": [{"id": "owner", "label": "Owner"}],
-                                 "rules": [{"entity": "*", "role": "owner",
-                                            "ops": ["read", "create", "update", "delete"]}]},
+def _fb_s4(page_roles: list[str] | None = None) -> dict:
+    roles = [{"id": "owner", "label": "Owner"}]
+    for r in (page_roles or []):
+        if r and r != "owner" and not any(x["id"] == r for x in roles):
+            roles.append({"id": r, "label": r.replace("_", " ").title()})
+    rules = [{"entity": "*", "role": r["id"],
+              "ops": ["read", "create", "update", "delete"]} for r in roles]
+    return {"access": {"roles": roles, "rules": rules},
             "automations": []}
 
 
@@ -329,7 +333,7 @@ STAGES: dict[str, dict[str, Any]] = {
     "s4": {"agent": "s4-logic", "tier": "strong", "model": S4LogicOut,
            "prompt": lambda i: P.s4_prompt(i["model_json"], i.get("ui_summary", ""), i.get("actions", ""), i.get("page_roles", "")),
            "gate": lambda o, i: _gate_s4(o, set(i.get("entity_ids", [])), set(i.get("page_roles_list", [])), i.get("entity_fields", {})),
-           "fallback": lambda i: _fb_s4()},
+           "fallback": lambda i: _fb_s4(list(i.get("page_roles_list", [])))},
     "s5critic": {"agent": "s5-critic", "tier": "strong", "model": S5CriticOut,
                  "prompt": lambda i: P.s5critic_prompt(i["requirements_json"], i.get("spec_summary", "")),
                  "fallback": lambda i: _fb_critic(i.get("requirement_ids", []))},

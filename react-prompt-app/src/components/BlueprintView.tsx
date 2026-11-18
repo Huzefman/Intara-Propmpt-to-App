@@ -315,7 +315,24 @@ export function BlueprintView({ runId }: { runId: string }) {
 
       {spec && (
         <div className="glass" style={{ padding: '12px 14px', borderRadius: 14 }}>
-          <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 8 }}>Live preview (no build step)</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)' }}>Live preview (no build step)</div>
+            <button
+              className="btn-secondary btn-sm"
+              onClick={async () => {
+                try {
+                  const { buildAppProjectZip, downloadBlob } = await import('../lib/zip')
+                  const { blob, filename } = await buildAppProjectZip(spec)
+                  downloadBlob(blob, filename)
+                } catch (e: any) {
+                  alert('Download failed: ' + (e.message || e))
+                }
+              }}
+              style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            >
+              <span>↓</span> Download Code (.zip)
+            </button>
+          </div>
           <Suspense fallback={<div style={{ padding: 20, textAlign: 'center' }}>Loading app…</div>}>
             <RuntimePreview spec={spec} storageKey={`intara-preview-run-${runId}`} />
           </Suspense>

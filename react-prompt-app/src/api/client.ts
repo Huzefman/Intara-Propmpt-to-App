@@ -332,8 +332,12 @@ export async function getRun(runId: string): Promise<any> {
   return res.json()
 }
 
-export async function retryRun(runId: string): Promise<{ ok: boolean; run_id: string; status: string }> {
-  const res = await apiFetch(`/api/runs/${runId}/retry`, { method: 'POST' })
+export async function retryRun(runId: string, payload?: { wish?: string; app_name?: string }): Promise<{ ok: boolean; run_id: string; status: string }> {
+  const res = await apiFetch(`/api/runs/${runId}/retry`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload || {}),
+  })
   if (!res.ok) throw apiError('retry run', res, await res.text().catch(() => ''))
   return res.json()
 }

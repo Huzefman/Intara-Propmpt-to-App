@@ -15,11 +15,18 @@ import re
 
 def _strip_wrappers(text: str) -> str:
     text = text.strip().lstrip("\ufeff")
-    if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?\s*", "", text)
-        text = re.sub(r"\s*```$", "", text)
+    # Strip reasoning tags from models (DeepSeek / Qwen / etc.)
+    text = re.sub(r"<think>[\s\S]*?</think>", "", text).strip()
+    if "```" in text:
+        # Match fenced code blocks
+        m_block = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
+        if m_block:
+            text = m_block.group(1).strip()
+        else:
+            text = re.sub(r"^```(?:json)?\s*", "", text)
+            text = re.sub(r"\s*```$", "", text)
     # Find outermost JSON object
-    m = re.search(r"\{.*\}", text, re.S)
+    m = re.search(r"\{[\s\S]*\}", text)
     if m:
         text = m.group(0)
     # Repair common LLM JSON issues: trailing commas

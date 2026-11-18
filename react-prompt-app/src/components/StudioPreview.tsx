@@ -66,6 +66,12 @@ export function StudioPreview({ wish }: { wish: Wish }) {
   const logs = useMemo(() => stepLogLines(wish), [wish.id, wish.status, JSON.stringify(wish.artifacts?.steps || {})])
 
   async function onZip() {
+    if (specV1) {
+      const { buildAppProjectZip, downloadBlob } = await import('../lib/zip')
+      const { blob, filename } = await buildAppProjectZip(specV1)
+      downloadBlob(blob, filename)
+      return
+    }
     if (!artifacts.schema) return
     const { buildWishZip, downloadBlob } = await import('../lib/zip')
     const { blob, filename } = await buildWishZip(artifacts as Artifacts, prd.appName || 'Intara Wish')
@@ -100,12 +106,12 @@ export function StudioPreview({ wish }: { wish: Wish }) {
           {menuOpen && (
             <div className="studio-menu glass" role="menu">
               <button role="menuitem" onClick={() => { navigator.clipboard.writeText(window.location.href); setMenuOpen(false) }}>Copy link</button>
-              <button role="menuitem" onClick={() => { onZip(); setMenuOpen(false) }} disabled={!artifacts.schema}>Download zip</button>
+              <button role="menuitem" onClick={() => { onZip(); setMenuOpen(false) }} disabled={!specV1 && !artifacts.schema}>Download zip</button>
             </div>
           )}
         </div>
         <span style={{ flex: 1 }} />
-        <button className="btn-primary btn-sm" onClick={onZip} disabled={!artifacts.schema}>Download zip</button>
+        <button className="btn-primary btn-sm" onClick={onZip} disabled={!specV1 && !artifacts.schema}>Download zip</button>
       </header>
 
       {mode === 'blueprint' && v2run ? (

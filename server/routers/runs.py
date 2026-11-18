@@ -9,10 +9,13 @@ as SSE v2 (history first, then live tail until the run is terminal).
 from __future__ import annotations
 
 import asyncio
+import io
 import json
+import re
+import zipfile
 
 from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
 
 from auth import require_user, is_dev, uid
@@ -341,10 +344,16 @@ async def approve_run(run_id: str, body: ApproveIn, user: dict = Depends(require
         raise HTTPException(500, f"approve failed: {e}")
 
 
+class RetryIn(BaseModel):
+    wish: str | None = None
+    app_name: str | None = None
+    wish_id: str | None = None
+
+
 @router.post("/runs/{run_id}/retry")
 @router.post("/api/runs/{run_id}/retry")
-async def retry_run(run_id: str, user: dict = Depends(require_user)):
-    """Resume a failed build from its persisted inputs.
+async def retry_run(run_id: str, body: RetryIn | None = None, user: dict = Depends(require_user)):
+    """Resume a failed build from its persisted inputs or recovered context.
 
     Completed steps are restored from the content-addressed artifact store;
     only the missing/failed steps call the model again. The run id, event
@@ -364,8 +373,71 @@ async def retry_run(run_id: str, user: dict = Depends(require_user)):
         inputs = run.get("inputs")
         if not isinstance(inputs, dict):
             inputs = {}
+
+        # If inputs or wish is missing, recover from all available sources
         if not str(inputs.get("wish") or "").strip():
-            raise HTTPException(409, "run predates stored inputs; start a new build")
+            # 1. From client body payload
+            if body and body.wish and body.wish.strip():
+                inputs["wish"] = body.wish.strip()
+                if body.app_name:
+                    inputs["app_name"] = body.app_name
+                if body.wish_id:
+                    inputs["wish_id"] = body.wish_id
+
+            # 2. From run events log (run_started payload)
+            if not inputs.get("wish"):
+                try:
+                    for ev in eng.store.get_events(run_id):
+                        if ev.get("type") == "run_started":
+                            p = ev.get("payload") or {}
+                            if p.get("wish"):
+                                inputs["wish"] = p["wish"]
+                            if p.get("inputs") and isinstance(p["inputs"], dict):
+                                for k, v in p["inputs"].items():
+                                    inputs.setdefault(k, v)
+                            break
+                except Exception:
+                    pass
+
+            # 3. From Supabase wishes table (linked via artifacts.v2.run_id)
+            if not inputs.get("wish"):
+                try:
+                    from db.wishes import _client
+                    supa = _client()
+                    res = supa.table("wishes").select("id, prompt, prd").filter("artifacts->v2->>run_id", "eq", run_id).execute()
+                    if res.data:
+                        w = res.data[0]
+                        inputs["wish"] = w.get("prompt") or ""
+                        inputs["wish_id"] = w.get("id")
+                        inputs["app_name"] = (w.get("prd") or {}).get("appName") or "App"
+                except Exception:
+                    pass
+
+            # 4. From Supabase projects table (project name fallback)
+            if not inputs.get("wish") and run.get("project_id"):
+                try:
+                    from db.wishes import _client
+                    supa = _client()
+                    res = supa.table("projects").select("name").eq("id", run["project_id"]).execute()
+                    if res.data and res.data[0].get("name"):
+                        inputs["wish"] = res.data[0]["name"]
+                        inputs["app_name"] = res.data[0]["name"]
+                except Exception:
+                    pass
+
+            # Persist recovered inputs back into runs table so future retries are safe
+            if inputs.get("wish"):
+                try:
+                    if hasattr(eng.store, "supa"):
+                        eng.store.supa.table("runs").update({"inputs": inputs}).eq("id", run_id).execute()
+                    elif hasattr(eng.store, "runs") and run_id in eng.store.runs:
+                        eng.store.runs[run_id]["inputs"] = inputs
+                except Exception as e:
+                    print(f"Could not persist recovered inputs for run {run_id}: {e}")
+
+        if not str(inputs.get("wish") or "").strip():
+            raise HTTPException(409, "run predates stored inputs and no wish could be recovered; start a new build")
+
         # Quota check disabled — builds are unlimited
         # Mark running before returning so the first status poll cannot see
         # the old `failed` row and stop polling while the task starts.
@@ -392,6 +464,283 @@ async def retry_run(run_id: str, user: dict = Depends(require_user)):
     except Exception as e:
         raise HTTPException(404 if "not found" in str(e).lower() else 500,
                             f"retry failed: {e}")
+
+
+def _generate_sql(spec: dict) -> str:
+    app_name = (spec.get("app") or {}).get("name") or "App"
+    lines = [
+        "-- ==========================================================",
+        f"-- SQL Schema for {app_name}",
+        "-- Generated by Intara Prompt-to-App",
+        "-- Compatible with PostgreSQL, Supabase, and SQLite",
+        "-- ==========================================================\n"
+    ]
+    entities = (spec.get("model") or {}).get("entities") or []
+    for ent in entities:
+        table_name = ent.get("id", "item")
+        lines.append(f"-- Table: {ent.get('label') or table_name}")
+        lines.append(f'CREATE TABLE IF NOT EXISTS "{table_name}" (')
+        col_defs = ['  "id" TEXT PRIMARY KEY']
+        for f in ent.get("fields") or []:
+            fid = f.get("id")
+            if fid == "id":
+                continue
+            ftype = f.get("type", "text")
+            col_type = "TEXT"
+            if ftype in ("int", "integer"):
+                col_type = "INTEGER"
+            elif ftype in ("money", "number", "float"):
+                col_type = "NUMERIC(10, 2)"
+            elif ftype == "boolean":
+                col_type = "BOOLEAN"
+            elif ftype in ("datetime", "timestamp"):
+                col_type = "TIMESTAMP WITH TIME ZONE"
+            elif ftype == "date":
+                col_type = "DATE"
+
+            def_str = f'  "{fid}" {col_type}'
+            if f.get("required"):
+                def_str += " NOT NULL"
+            dval = f.get("default")
+            if dval is not None:
+                if str(dval).lower() == "now()":
+                    def_str += " DEFAULT CURRENT_TIMESTAMP"
+                elif isinstance(dval, str):
+                    def_str += f" DEFAULT '{dval.replace(chr(39), chr(39)*2)}'"
+                elif isinstance(dval, (int, float, bool)):
+                    def_str += f" DEFAULT {dval}"
+            if ftype == "ref" and f.get("target"):
+                on_del = "CASCADE" if f.get("onDelete") == "cascade" else "SET NULL"
+                def_str += f' REFERENCES "{f.get("target")}"("id") ON DELETE {on_del}'
+            col_defs.append(def_str)
+        col_defs.append('  "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP')
+        lines.append(",\n".join(col_defs))
+        lines.append(");\n")
+        for f in ent.get("fields") or []:
+            if f.get("type") in ("ref", "enum") or f.get("index"):
+                lines.append(f'CREATE INDEX IF NOT EXISTS "idx_{table_name}_{f.get("id")}" ON "{table_name}" ("{f.get("id")}");')
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _create_app_zip(spec: dict) -> bytes:
+    buf = io.BytesIO()
+    raw_name = (spec.get("app") or {}).get("name") or "app"
+    slug = re.sub(r"[^a-z0-9]+", "-", raw_name.lower()).strip("-") or "intara-app"
+    tagline = (spec.get("app") or {}).get("tagline") or "Built with Intara Prompt-to-App"
+    entities = (spec.get("model") or {}).get("entities") or []
+    pages = (spec.get("ui") or {}).get("pages") or []
+    seed = spec.get("seed") or {}
+
+    pkg_json = {
+        "name": slug,
+        "private": True,
+        "version": "0.1.0",
+        "type": "module",
+        "scripts": {
+            "dev": "vite",
+            "build": "tsc && vite build",
+            "preview": "vite preview"
+        },
+        "dependencies": {
+            "react": "^18.3.1",
+            "react-dom": "^18.3.1",
+            "dexie": "^4.0.10"
+        },
+        "devDependencies": {
+            "@types/react": "^18.3.12",
+            "@types/react-dom": "^18.3.1",
+            "@vitejs/plugin-react": "^4.3.4",
+            "typescript": "^5.6.3",
+            "vite": "^5.4.11"
+        }
+    }
+
+    index_html = f"""<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{raw_name} - {tagline}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>"""
+
+    vite_config = """import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+})"""
+
+    tsconfig = {
+        "compilerOptions": {
+            "target": "ES2020",
+            "useDefineForClassFields": True,
+            "lib": ["ES2020", "DOM", "DOM.Iterable"],
+            "module": "ESNext",
+            "skipLibCheck": True,
+            "moduleResolution": "bundler",
+            "allowImportingTsExtensions": True,
+            "resolveJsonModule": True,
+            "isolatedModules": True,
+            "noEmit": True,
+            "jsx": "react-jsx",
+            "strict": False
+        },
+        "include": ["src"]
+    }
+
+    readme = f"""# {raw_name}
+
+> {tagline}
+
+Generated by **Intara Prompt-to-App**. This is a complete, self-contained, and runnable React application.
+
+---
+
+## ⚡ Quickstart
+
+Install dependencies and start the local development server:
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Start the dev server
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+---
+
+## 📦 What's Included
+
+- **Frontend**: React 18 + TypeScript + Vite.
+- **Client Database**: Dexie (IndexedDB) with persistent local storage.
+- **Data Model**: {len(entities)} entities ({', '.join(e.get('label') or e.get('id') for e in entities)}).
+- **Pages**: {len(pages)} interactive pages ({', '.join(p.get('title') or p.get('id') for p in pages)}).
+- **Features**: Tables with Search, Filter & CSV Export, Kanban Board with Status Lanes, KPI Stat Cards, Bar Charts, Add/Edit Record Modals.
+- **Data Blueprint**: Complete declarative App Spec in `src/spec.json`.
+- **Database Schema**: Production PostgreSQL / SQLite / Supabase DDL in `src/schema.sql`.
+- **Seed Data**: Initial realistic demo records in `src/seed.json`.
+"""
+
+    main_tsx = """import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App'
+import './index.css'
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+)
+"""
+
+    dexie_stores = ",\n".join(
+        f"    {e.get('id')}: 'id, {', '.join(f.get('id') for f in e.get('fields', []) if f.get('id') != 'id')[:60]}'"
+        for e in entities
+    )
+    if not dexie_stores:
+        dexie_stores = "    items: 'id'"
+
+    tables_decl = "\n".join(f"  {e.get('id')}!: Table<any>;" for e in entities)
+
+    db_ts = f"""import Dexie, {{ type Table }} from 'dexie'
+import seedData from './seed.json'
+
+export class AppDatabase extends Dexie {{
+{tables_decl}
+
+  constructor() {{
+    super('{slug}_db')
+    this.version(1).stores({{
+{dexie_stores}
+    }})
+
+    this.on('populate', () => {{
+      const s = seedData as Record<string, any[]>
+      for (const [table, rows] of Object.entries(s)) {{
+        if (Array.isArray(rows) && (this as any)[table]) {{
+          const clean = rows.map((r, i) => ({{
+            id: r.id || r._key || `${{table}}_${{i + 1}}`,
+            ...r,
+            created_at: r.created_at || new Date().toISOString()
+          }}))
+          ;(this as any)[table].bulkAdd(clean).catch(() => {{}})
+        }}
+      }}
+    }})
+  }}
+}}
+
+export const db = new AppDatabase()
+"""
+
+    from services.app_export_template import APP_TSX_TEMPLATE, INDEX_CSS_TEMPLATE
+
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        prefix = f"{slug}/"
+        z.writestr(prefix + "package.json", json.dumps(pkg_json, indent=2))
+        z.writestr(prefix + "index.html", index_html)
+        z.writestr(prefix + "vite.config.ts", vite_config)
+        z.writestr(prefix + "tsconfig.json", json.dumps(tsconfig, indent=2))
+        z.writestr(prefix + "README.md", readme)
+        z.writestr(prefix + "src/main.tsx", main_tsx)
+        z.writestr(prefix + "src/spec.json", json.dumps(spec, indent=2))
+        z.writestr(prefix + "src/seed.json", json.dumps(seed, indent=2))
+        z.writestr(prefix + "src/schema.sql", _generate_sql(spec))
+        z.writestr(prefix + "src/db.ts", db_ts)
+        z.writestr(prefix + "src/App.tsx", APP_TSX_TEMPLATE)
+        z.writestr(prefix + "src/index.css", INDEX_CSS_TEMPLATE)
+
+    return buf.getvalue()
+
+
+@router.get("/runs/{run_id}/download")
+@router.get("/api/runs/{run_id}/download")
+@router.get("/runs/{run_id}/zip")
+@router.get("/api/runs/{run_id}/zip")
+async def download_run_code(run_id: str, user: dict = Depends(require_user)):
+    """Generate and download the complete runnable code zip for a run."""
+    try:
+        eng = _engine()
+        run = eng.store.get_run(run_id)
+        _assert_run_owner(eng.store, run, user)
+        vid = _current_version(eng.store, run_id)
+        spec = None
+        if vid:
+            try:
+                ver = eng.store.get_version(vid)
+                spec = ver.get("spec")
+            except Exception:
+                pass
+        if not spec:
+            raise HTTPException(404, "no completed spec available for this run yet")
+
+        raw_name = (spec.get("app") or {}).get("name") or "app"
+        slug = re.sub(r"[^a-z0-9]+", "-", raw_name.lower()).strip("-") or "intara-app"
+        zip_bytes = _create_app_zip(spec)
+
+        return Response(
+            content=zip_bytes,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{slug}-app.zip"'}
+        )
+    except HTTPException:
+        raise
+    except KeyError:
+        raise HTTPException(404, "run not found")
+    except Exception as e:
+        raise HTTPException(500, f"download failed: {e}")
 
 
 class ChatIn(BaseModel):
