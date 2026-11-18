@@ -1834,4 +1834,11 @@ body {
   justify-content: flex-end;
   gap: 10px;
 }
+
+@media (max-width: 768px) {
+  .app-shell { flex-direction: column; }
+  .app-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); padding: 16px; }
+  .page-header { padding: 16px; flex-direction: column; align-items: flex-start; gap: 10px; }
+  .page-content { padding: 16px; }
+}
 """

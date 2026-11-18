@@ -40,8 +40,9 @@ The repo contains the whole system: the LLM pipeline, a durable resumable run en
 - **Spec-first runtime.** LLM stages emit small typed App Specs; the runtime engine (validation, defaults, computed fields, refs, permissions, guards, formulas) executes them. No LLM at runtime — the engine is deterministic and statically tested.
 - **Staged pipeline, fail-closed.** S0 intake → S6 seed with schema-validated outputs at every stage, bounded repair loops (≤2, cooling temperatures), and deterministic fallbacks that are labelled and counted as failures — never silent.
 - **Gates, not guesses.** G0 schema (Pydantic/TS generated from one JSON Schema plus a drift check) · G1 semantic lint R01–R50 · G2 requirement coverage · G3 generated engine tests · G4 render smoke.
-- **Durable run engine.** Budgets, content-addressed artifacts, resume-after-crash by run id (proven by an integration test that kills a run mid-build), quota-aware retries across free-tier providers, and per-call telemetry.
-- **Accounts and bring-your-own-key.** Every visitor gets a private, owner-scoped workspace. The shared free pool is capped at 3 builds/day; add a key from any supported provider (Gemini, OpenRouter, Groq, NVIDIA, DeepSeek, OpenAI, Anthropic, or a custom OpenAI-compatible endpoint) on the Account page for unlimited builds. Keys are encrypted with Fernet, service-key only, never returned to the browser, and BYOK calls never silently fall back to the shared pool.
+- **Durable run engine.** Budgets, content-addressed artifacts, resume-after-crash by run id (proven by an integration test that kills a run mid-build), and per-call telemetry. Retry reuses the same run id and persisted inputs.
+- **Groq builds, Gemini archives.** The shared app-build gateway is pinned to Groq in the public deployment (`LLM_ONLY=groq`); the Archives use Gemini for synthesis and embeddings. Provider fallbacks remain available for other deployments.
+- **Accounts and bring-your-own-key.** Every visitor gets a private, owner-scoped workspace. Build quotas are off by default while the demo is in development; `BUILD_QUOTA_ENABLED=1` restores a per-account daily cap after migration 012. Add a key from any supported provider (Gemini, OpenRouter, Groq, NVIDIA, DeepSeek, OpenAI, Anthropic, or a custom OpenAI-compatible endpoint) on the Account page. Keys are encrypted with Fernet, service-key only, never returned to the browser, and BYOK calls never silently fall back to the shared pool.
 - **Own formula language.** Hand-written parser and evaluator in Python **and** TypeScript — no `eval` — with 135 shared conformance cases plus a 500-input fuzzer. Edits are RFC 6902 JSON patches with invert and a version tree (1,175/1,175 randomized round-trips).
 
 ## Measured numbers (free-tier lab runs)
@@ -52,7 +53,7 @@ The repo contains the whole system: the LLM pipeline, a durable resumable run en
 | core20 live eval (20 real wishes, end-to-end) | **17/20** (85% accept bar) |
 | Held-out domains never tuned for (invoicing, gym, helpdesk) | **3/5** green |
 | Curated gold specs in the gallery | **10** |
-| Python tests / Node tests | **267/267** · **206 pass** (+1 environment skip) |
+| Python tests / Node tests | **285/285** · **207 pass** (+1 environment skip) |
 | Formula conformance cases (shared Python/TypeScript) | **135** + fuzzing |
 | Live Supabase adapter contract | **6/6** |
 
@@ -91,7 +92,7 @@ Without provider keys the planner uses a deterministic mock and the deterministi
 
 - Email/password signup is instant; each account is single-owner with no teams or sharing.
 - Public: landing page, template gallery and Archives. Gated: wishes, Constellation, builds, runs and statistics.
-- Shared pool: 3 builds per account per UTC day. A BYOK account bypasses the shared meter.
+- Quotas are **off by default** during development. To enable the shared-pool limiter, apply migration 012 (`build_events`) and set `BUILD_QUOTA_ENABLED=1`; `DAILY_BUILD_LIMIT` (default 3) then caps builds per account per UTC day. A BYOK account bypasses the shared meter.
 - Saved keys are tried first. If a BYOK call fails, the build fails with an explicit error — it never silently spends the shared pool.
 - Deployment details for Supabase, Render and Vercel are in [`docs/DEPLOY.md`](docs/DEPLOY.md).
 

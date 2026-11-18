@@ -11,6 +11,12 @@ services:
         value: "3.12.8"
       - key: AUTH_REQUIRED
         value: "1"
+      # Shared build specs use Groq only; Archives use Gemini directly.
+      - key: LLM_ONLY
+        value: "groq"
+      # Off until migration 012 (build_events) is applied and dev testing is done.
+      - key: BUILD_QUOTA_ENABLED
+        value: "0"
       - key: DAILY_BUILD_LIMIT
         value: "3"
       # Secrets are entered in the Render dashboard (sync: false).

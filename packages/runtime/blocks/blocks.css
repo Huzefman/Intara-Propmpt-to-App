@@ -201,6 +201,12 @@
 
 /* ---------- table ---------- */
 
+.blk-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .blk-table {
   width: 100%;
   border-collapse: collapse;

@@ -119,6 +119,7 @@ def test_signup_validates_input(monkeypatch):
 
 
 def test_build_quota_blocks_fourth_build(monkeypatch):
+    monkeypatch.setenv("BUILD_QUOTA_ENABLED", "1")
     monkeypatch.setenv("DAILY_BUILD_LIMIT", "3")
     import quotas
 
@@ -152,8 +153,10 @@ def test_build_quota_blocks_fourth_build(monkeypatch):
 
 
 def test_build_quota_records_under_limit(monkeypatch):
+    monkeypatch.setenv("BUILD_QUOTA_ENABLED", "1")
     monkeypatch.setenv("DAILY_BUILD_LIMIT", "3")
     import quotas
+    monkeypatch.setattr(quotas, "_byok", lambda owner: False)
 
     inserted = []
 
@@ -192,3 +195,15 @@ def test_build_quota_records_under_limit(monkeypatch):
     quotas.consume_build({"id": "user-a"}, wish_id="w1", kind="build")
     assert inserted and inserted[0]["owner"] == "user-a"
     assert inserted[0]["wish_id"] == "w1"
+
+
+def test_build_quota_is_disabled_by_default(monkeypatch):
+    monkeypatch.delenv("BUILD_QUOTA_ENABLED", raising=False)
+    import quotas
+
+    def no_db():
+        raise AssertionError("disabled quota must not touch Supabase")
+
+    monkeypatch.setattr(quotas, "_client", no_db)
+    quotas.consume_build({"id": "user-a"}, wish_id="w1", kind="build")
+    assert quotas.daily_limit() == 0

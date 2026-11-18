@@ -25,11 +25,14 @@ SQL editor → new query → paste the whole file → run:
 4. `supabase/migrations/013_user_llm_keys.sql` (required for BYOK; without it
    accounts still work on the shared pool and the Account page shows a setup
    warning)
+5. `supabase/migrations/014_run_inputs.sql` (persists retry inputs; without it,
+   retry still tries the legacy artifact/step fallback)
 
 > **012 deletes legacy owner-null wishes** (`delete from wishes where owner is
 > null`) — that is the intentional cleanup of the old public demo rows. It also
 > drops every public-read / open-write policy on wish content, adds
-> `profiles`, `build_events`, and tightens storage writes.
+> `profiles`, `build_events`, and tightens storage writes. The build quota
+> stays disabled by default; enable it only after 012 is applied.
 >
 > **013 is service-key only.** It stores encrypted per-account LLM keys, enables
 > RLS with no policies, and never exposes the table to the browser.
@@ -86,9 +89,14 @@ The backend cannot live on Vercel: builds are long-running background tasks.
      `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
      If omitted, the server derives a key from `SUPABASE_SERVICE_KEY`; saved
      user keys then become unreadable if that service key is rotated.
-   - one or more of `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `GROQ_API_KEY`,
-     `NVIDIA_API_KEY`, `DEEPSEEK_API_KEY` (the shared free pool)
-   - `AUTH_REQUIRED=1`, `DAILY_BUILD_LIMIT=3` (already in the blueprint)
+   - `GROQ_API_KEY` for the shared build gateway (the public deployment sets
+     `LLM_ONLY=groq`), and `GEMINI_API_KEY` for Archives synthesis/embeddings.
+     `OPENROUTER_API_KEY`, `NVIDIA_API_KEY` and `DEEPSEEK_API_KEY` are optional
+     fallbacks for other deployments.
+   - `AUTH_REQUIRED=1`, `LLM_ONLY=groq` (already in the blueprint)
+   - `BUILD_QUOTA_ENABLED=0` and `DAILY_BUILD_LIMIT=3` (already in the
+     blueprint). Set the flag to `1` only after migration 012 is applied and
+     development testing is done.
    - optional BYOK defaults: `BYOK_OPENAI_MODEL`, `BYOK_ANTHROPIC_MODEL`
 
 ### Manual web service (alternative)
@@ -135,16 +143,18 @@ runs failed (artifacts already live in Supabase, so no disk is needed).
 4. Paste A's wish URL while signed in as B → **404** (not 403 — the API does
    not reveal that another account's row exists).
 5. Sign back in as A → the wish is still there.
-6. Approve 3 builds in a day; the 4th returns **429** with a reset notice.
+6. Quotas are off by default. If you have applied migration 012 and set
+   `BUILD_QUOTA_ENABLED=1`, approve 3 builds in a day; the 4th returns **429**
+   with a reset notice. With the default `0`, builds do not consume a meter.
 7. Open **Account** as A → add a provider key → **Test before saving** →
    **Save**. The saved key is shown masked and the mode flips to **Your own
    key**.
 8. Sign in as B → **Account**: zero saved keys and the shared pool. A's key is
    invisible (service-key table, RLS with no policies).
-9. With A's key saved, start a build. It runs on A's key and does not increment
-   the shared 3/day meter. If the key is bad, the build must fail with
-   “Your saved LLM key could not complete this request” — it must never
-   quietly fall back to Intara's shared pool.
+9. With A's key saved, start a build. It runs on A's key and, when quotas are
+   enabled, does not increment the shared meter. If the key is bad, the build
+   must fail with “Your saved LLM key could not complete this request” — it
+   must never quietly fall back to Intara's shared pool.
 
 API-level check (optional):
 
@@ -161,9 +171,11 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 
 ## 5. BYOK — accounts bring their own LLM keys
 
-The shared free pool remains the default (3 builds/day). A signed-in account
-can add its own provider key on **Account** (`/account`) and build on it
-without the shared quota.
+The shared free pool remains the default. Build quotas are off by default while
+the demo is in development; when the operator enables `BUILD_QUOTA_ENABLED` and
+applies migration 012, the shared pool is capped at `DAILY_BUILD_LIMIT` (3 by
+default). A signed-in account can add its own provider key on **Account**
+(`/account`) and build on it without the shared quota.
 
 ### Supported providers
 
@@ -192,8 +204,8 @@ Model is optional except for Custom; blank uses the default above.
 - **There is no fallback to the shared pool while a user key exists.** This
   prevents a dummy key from bypassing the quota and then spending Intara's
   budget. Remove all keys to return to shared mode.
-- BYOK builds skip the 3/day shared meter. `build_events` is only written for
-  shared-pool builds.
+- BYOK builds skip the shared meter when quotas are enabled. `build_events` is
+  only written for shared-pool builds.
 - Background tasks pin the key set at build/plan start, so changing or deleting
   a key mid-build does not switch pools halfway through.
 - Embeddings for Archives still use the app's embedding key; BYOK covers the
@@ -207,7 +219,7 @@ Model is optional except for Custom; blank uses the default above.
 3. **Test before saving** makes a tiny live call. Then **Save key**.
 4. The key appears masked with **Test** and **Remove** actions. **Test** on a
    saved key runs server-side; the plaintext never returns to the browser.
-5. Remove the last key to return the account to the shared 3/day pool.
+5. Remove the last key to return the account to the shared pool.
 
 Endpoints (all require the account bearer token):
 
@@ -250,9 +262,11 @@ guard, not a full egress proxy; keep the endpoint under your control.
 - **Public surface:** `/health`, `/api/exemplars*` (template gallery),
   `/api/rag` (project docs) and `/api/auth/signup`. Everything else requires a
   session.
-- **Build quota:** 3 builds per account per UTC day, metered in
-  `build_events`; before 012 is applied an in-memory fallback still enforces
-  3/day per process. Accounts with a saved BYOK key bypass this meter.
+- **Build quota:** off by default (`BUILD_QUOTA_ENABLED=0`). When enabled after
+  migration 012, the shared pool allows `DAILY_BUILD_LIMIT` builds per account
+  per UTC day, metered in `build_events`; before 012 is applied an in-memory
+  fallback enforces the limit per process. Accounts with a saved BYOK key
+  bypass this meter.
 - **BYOK storage:** keys are encrypted with Fernet before reaching Postgres
   (`user_llm_keys`), accessible only through the backend's service role, with
   RLS enabled and zero policies. The API returns masked hints only.
@@ -273,9 +287,9 @@ guard, not a full egress proxy; keep the endpoint under your control.
 | Symptom | Likely cause |
 |---|---|
 | `401 Sign in to continue` | missing/mismatched `VITE_SUPABASE_URL`/`ANON_KEY`, or expired session; sign out/in |
-| `503 Build metering is unavailable` | 012 not applied and the DB error isn't the missing-table fallback |
+| `503 Build metering is unavailable` | quota flag is on but 012 is not applied; apply 012 or set `BUILD_QUOTA_ENABLED=0` |
 | `503 Could not record build usage` | same as above |
-| `429 Daily build limit reached` | 3 shared builds used today (UTC); resets at midnight UTC |
+| `429 Daily build limit reached` | only when `BUILD_QUOTA_ENABLED=1`: `DAILY_BUILD_LIMIT` shared builds used today (UTC); resets at midnight UTC |
 | Account shows “Key storage is not set up” or save returns `503 … migration 013` | apply `013_user_llm_keys.sql` in the Supabase SQL editor, then restart Render |
 | `Your saved LLM key could not complete this request` | provider rejected the key, the model id is wrong, or the provider is down. Open **Account → Test**, or remove the key to use the shared pool |
 | “Could not load saved keys — try again” | transient DB/service-role error or `KEY_ENCRYPTION_SECRET` problem; check Render logs |

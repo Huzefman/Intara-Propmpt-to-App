@@ -271,6 +271,9 @@ def test_call_llm_forwards_json_mode_and_info(monkeypatch):
 
 
 def test_call_gemini_structured_config(monkeypatch):
+    # Direct Gemini calls stay Gemini even when shared build calls are pinned
+    # to Groq (Archives and BYOK rely on this).
+    monkeypatch.setenv("LLM_ONLY", "groq")
     # Real main module (deps installed); fake only the genai client object.
     sys.modules.pop("main", None)
     import main as main_mod

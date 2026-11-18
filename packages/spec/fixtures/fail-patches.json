@@ -29,7 +29,7 @@
   {"id": "r28-set-field", "rules": ["R28"], "ops": [{"op": "add", "path": "/automations/-", "value": {"id": "a1", "trigger": {"type": "record.updated", "entity": "widget"}, "steps": [{"action": "set_field", "params": {"field": "nope"}}]}}]},
   {"id": "r29-unknown-block", "rules": ["R29"], "ops": [{"op": "add", "path": "/ui/pages/0/blocks/-", "value": {"id": "bx", "type": "fancy.chart", "props": {}}}]},
   {"id": "r30-planned-block", "rules": ["R30"], "ops": [{"op": "add", "path": "/ui/pages/0/blocks/-", "value": {"id": "bx", "type": "planned.ai", "props": {}}}]},
-  {"id": "r31-missing-prop", "rules": ["R31"], "ops": [{"op": "add", "path": "/ui/pages/0/blocks/-", "value": {"id": "bk", "type": "data.kanban", "props": {"entity": "widget"}}}]},
+  {"id": "r31-missing-prop", "rules": ["R31"], "ops": [{"op": "add", "path": "/ui/pages/0/blocks/-", "value": {"id": "bk", "type": "data.kanban", "props": {"group_by": "status"}}}]},
   {"id": "r32-default-fit", "rules": ["R32"], "ops": [{"op": "add", "path": "/model/entities/0/fields/-", "value": {"id": "n", "type": "int", "default": "x"}}]},
   {"id": "r33-display", "rules": ["R33"], "ops": [{"op": "replace", "path": "/model/entities/0/display/title", "value": "{nope}"}]},
   {"id": "r34-seed-entity", "rules": ["R34"], "ops": [{"op": "add", "path": "/seed/nope", "value": []}]},

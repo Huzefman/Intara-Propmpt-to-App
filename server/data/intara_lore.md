@@ -12,7 +12,7 @@ When a maker whispers "I wish for a task tracker...", the wish travels as a phot
 
 ## Stack
 
-Intara forges only with a locked stack to stay free and runnable: Vite + React 18 + TypeScript + Tailwind (frontend), FastAPI + Pydantic (backend), Supabase Postgres + pgvector + RLS (database), Prisma (schema). Deployed on Vercel hobby, Gemini free tier.
+Intara forges only with a locked stack to stay free and runnable: Vite + React 18 + TypeScript + Tailwind (frontend), FastAPI + Pydantic (backend), Supabase Postgres + pgvector + RLS (database), Prisma (schema). Deployed on Vercel hobby: shared app-build specs use Groq, while the Archives use Gemini.
 
 ## Constellation
 
@@ -26,4 +26,4 @@ The archives are RAG over docs: chunk 400 chars + 50 overlap, embed with gemini-
 
 Intara does not deploy in v1 — it grants artifacts, not hosting. The maker runs `npm install && npm run dev` and `uvicorn main:app --reload`. v2 will add WebContainers preview, chat to refine, GitHub push, Vercel deploy.
 
-Wishes are rate-limited 10 per IP per day to stay on Gemini free 1500/day.
+Build quotas are off by default in the current demo. The backend keeps the limiter behind `BUILD_QUOTA_ENABLED`; enabling it after migration 012 restores a per-account daily cap on the shared pool.

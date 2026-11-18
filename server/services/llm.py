@@ -1,10 +1,15 @@
 """
-LLM provider — Gemini → OpenRouter → Groq → Nvidia → DeepSeek.
-Structured output: json_mode requests response_format/response_mime_type where
-supported, with per-(provider, model) cached fallback to plain mode.
-Fallback chain: if one provider's quota is exhausted, the next is tried automatically
-until all are exhausted; per-provider 60s cooldown avoids hammering, expired entries
-are retried so refreshed quota is reused. Embeddings: Gemini (others have no stable free embeddings)
+Shared LLM gateway for app-build specs.
+
+The public deployment sets LLM_ONLY=groq, so shared build calls use Groq only.
+The provider chain below (Gemini → OpenRouter → Groq → Nvidia → DeepSeek) is
+the optional fallback order for other deployments; per-provider 60s cooldown
+avoids hammering, and expired entries are retried so refreshed quota is reused.
+Archives are intentionally separate: RAG calls Gemini directly for synthesis
+(and Gemini embeddings) even when builds are pinned to Groq.
+BYOK keys take precedence for an account's builds and never fall back silently.
+Structured output requests json_mode where supported, with a cached plain-mode
+fallback per (provider, model).
 """
 import os
 import time
@@ -115,6 +120,11 @@ def _only_set() -> set | None:
 def _allowed(name: str) -> bool:
     only = _only_set()
     return True if only is None else name in only
+
+
+def provider_allowed(name: str) -> bool:
+    """Public provider-policy check (used by legacy direct-call paths)."""
+    return _allowed(name)
 
 def _groq_client(key: str | None = None):
     key = (key or os.getenv("GROQ_API_KEY", "")).strip()
@@ -495,7 +505,7 @@ def _call_byok(prompt: str, temperature: float = 0.2,
 
     When keys ARE configured, there is deliberately no fallback to the shared
     app-key chain: a broken key fails loudly instead of quietly spending the
-    shared budget and bypassing the 3/day quota.
+    shared budget and bypassing the shared quota when it is enabled.
     """
     rows = _byok_rows()
     if not rows:
@@ -1016,71 +1026,90 @@ def call_llm_with_meta(prompt: str, temperature: float = 0.2, max_tokens: int | 
     return text, meta
 
 
-def embed_texts(texts: list[str]) -> list[list[float]]:
-    """OpenRouter embeddings first, then Gemini. Returns list of vectors (3072d padded/truncated for pgvector)."""
-    # Try OpenRouter embeddings only if explicitly configured and model exists
-    # Default embed model is empty to avoid calling non-existent qwen/qwen3-embedding:free
-    embed_model = os.getenv("OPENROUTER_EMBED_MODEL", "")
-    if os.getenv("OPENROUTER_API_KEY") and embed_model and embed_model.strip():
-        try:
-            client = _openrouter_client()
-            if client:
-                resp = client.embeddings.create(model=embed_model, input=texts)
-                out = []
-                for item in resp.data:
-                    vals = getattr(item, 'embedding', None) or getattr(item, 'values', None) or []
-                    if isinstance(item, dict):
-                        vals = item.get('embedding') or item.get('values') or []
-                    if len(vals) > 3072: vals = vals[:3072]
-                    elif len(vals) < 3072: vals = vals + [0.0]*(3072-len(vals))
-                    out.append(vals)
-                if out:
-                    return out
-        except Exception as e:
-            print(f"openrouter embed {embed_model} failed, fallback to gemini: {e}")
-    # Fallback to Gemini direct (avoid circular import via rag)
+def _fit_embedding(vals) -> list[float]:
+    vals = [float(x) for x in (vals or [])]
+    if len(vals) > 3072:
+        vals = vals[:3072]
+    elif len(vals) < 3072:
+        vals = vals + [0.0] * (3072 - len(vals))
+    return vals
+
+
+def _embed_gemini_texts(texts: list[str]) -> list[list[float]] | None:
+    """Gemini embeddings for the Archives. None when no Gemini key is set."""
+    key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not key:
+        return None
+    from google import genai
     try:
-        from google import genai
-        key = os.getenv("GEMINI_API_KEY", "")
-        if not key:
-            return [[0.0]*3072 for _ in texts]
+        client = genai.Client(api_key=key, http_options={"timeout": 60000})
+    except Exception:
+        client = genai.Client(api_key=key)
+    # One batched request when available (fewer quota units for seeding),
+    # per-text loop as fallback — same normalization either way.
+    if len(texts) > 1:
         try:
-            client = genai.Client(api_key=key, http_options={"timeout": 60000})
-        except Exception:
-            client = genai.Client(api_key=key)
-        # One batched request when available (fewer quota units for seeding),
-        # per-text loop as fallback — same normalization either way.
-        if len(texts) > 1:
-            try:
-                rb = client.models.embed_content(model="gemini-embedding-001", contents=list(texts))
-                embs = list(getattr(rb, "embeddings", None) or [])
-                if len(embs) == len(texts):
-                    batched = []
-                    for e in embs:
-                        vals = getattr(e, 'values', None)
-                        if vals is None and isinstance(e, dict):
-                            vals = e.get('values')
-                        vals = [float(x) for x in (vals or [])]
-                        if len(vals) > 3072: vals = vals[:3072]
-                        elif len(vals) < 3072: vals = vals + [0.0]*(3072-len(vals))
-                        batched.append(vals)
-                    if batched and all(any(x != 0.0 for x in v) for v in batched):
-                        return batched
-                    print("gemini embed batch returned zero vectors, per-text fallback")
-            except Exception as e:
-                print(f"gemini embed batch failed, per-text fallback: {e}")
-        out = []
-        for t in texts:
-            r = client.models.embed_content(model="gemini-embedding-001", contents=t)
-            vals = getattr(r, 'embeddings', [{}])[0]
-            vals = getattr(vals, 'values', [0]*3072) if hasattr(vals,'values') else vals.get('values',[0]*3072) if isinstance(vals, dict) else [0]*3072
-            if len(vals) > 3072: vals = vals[:3072]
-            elif len(vals) < 3072: vals = vals + [0.0]*(3072-len(vals))
-            out.append(vals)
-        return out
-    except Exception as e:
-        print(f"gemini embed fallback failed: {e}")
-        return [[0.0]*3072 for _ in texts]
+            rb = client.models.embed_content(model="gemini-embedding-001", contents=list(texts))
+            embs = list(getattr(rb, "embeddings", None) or [])
+            if len(embs) == len(texts):
+                batched = []
+                for e in embs:
+                    vals = getattr(e, "values", None)
+                    if vals is None and isinstance(e, dict):
+                        vals = e.get("values")
+                    batched.append(_fit_embedding(vals))
+                if batched and all(any(x != 0.0 for x in v) for v in batched):
+                    return batched
+                print("gemini embed batch returned zero vectors, per-text fallback")
+        except Exception as e:
+            print(f"gemini embed batch failed, per-text fallback: {e}")
+    out = []
+    for t in texts:
+        r = client.models.embed_content(model="gemini-embedding-001", contents=t)
+        vals = getattr(r, "embeddings", [{}])[0]
+        if hasattr(vals, "values"):
+            vals = vals.values
+        elif isinstance(vals, dict):
+            vals = vals.get("values", [])
+        else:
+            vals = []
+        out.append(_fit_embedding(vals))
+    return out
+
+
+def _embed_openrouter_texts(texts: list[str]) -> list[list[float]] | None:
+    """Optional OpenRouter embeddings, only when explicitly configured."""
+    embed_model = os.getenv("OPENROUTER_EMBED_MODEL", "").strip()
+    if not os.getenv("OPENROUTER_API_KEY") or not embed_model:
+        return None
+    client = _openrouter_client()
+    if not client:
+        return None
+    resp = client.embeddings.create(model=embed_model, input=texts)
+    out = []
+    for item in resp.data:
+        vals = getattr(item, "embedding", None) or getattr(item, "values", None) or []
+        if isinstance(item, dict):
+            vals = item.get("embedding") or item.get("values") or []
+        out.append(_fit_embedding(vals))
+    return out or None
+
+
+def embed_texts(texts: list[str]) -> list[list[float]]:
+    """Gemini-first embeddings for Archives, OpenRouter only as configured fallback.
+
+    Returns 3072-d vectors padded/truncated for pgvector. A missing key or
+    provider failure falls through to the next configured option; RAG labels a
+    zero-vector result as lexical rather than pretending it is a vector match.
+    """
+    for name, fn in (("gemini", _embed_gemini_texts), ("openrouter", _embed_openrouter_texts)):
+        try:
+            out = fn(texts)
+            if out:
+                return out
+        except Exception as e:
+            print(f"{name} embed failed: {e}")
+    return [[0.0] * 3072 for _ in texts]
 
 def _deepseek_client(key: str | None = None):
     key = (key or os.getenv("DEEPSEEK_API_KEY", "")).strip()

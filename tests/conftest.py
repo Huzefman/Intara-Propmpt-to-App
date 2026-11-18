@@ -8,3 +8,5 @@ a developer's shell env still wins if they deliberately set it.
 import os
 
 os.environ.setdefault("AUTH_REQUIRED", "0")
+# Quotas are off by default; quota tests opt in explicitly with monkeypatch.
+os.environ.setdefault("BUILD_QUOTA_ENABLED", "0")

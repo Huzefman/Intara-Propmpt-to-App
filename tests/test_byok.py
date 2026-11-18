@@ -337,6 +337,7 @@ def test_verify_user_key_rejects_bad_provider():
 def test_consume_build_skips_quota_for_byok(monkeypatch):
     import quotas
 
+    monkeypatch.setenv("BUILD_QUOTA_ENABLED", "1")
     calls = []
     monkeypatch.setattr(quotas, "_byok", lambda owner: True)
     monkeypatch.setattr(quotas, "check_build_quota", lambda user: calls.append("check"))
@@ -349,6 +350,7 @@ def test_consume_build_skips_quota_for_byok(monkeypatch):
 def test_consume_build_meters_without_byok(monkeypatch):
     import quotas
 
+    monkeypatch.setenv("BUILD_QUOTA_ENABLED", "1")
     calls = []
     monkeypatch.setattr(quotas, "_byok", lambda owner: False)
     monkeypatch.setattr(quotas, "check_build_quota", lambda user: calls.append("check"))
@@ -356,6 +358,20 @@ def test_consume_build_meters_without_byok(monkeypatch):
 
     quotas.consume_build({"id": "user-1"}, wish_id="w1", kind="build")
     assert calls == ["check", "record"]
+
+
+def test_consume_build_is_noop_when_quota_flag_is_off(monkeypatch):
+    import quotas
+
+    monkeypatch.delenv("BUILD_QUOTA_ENABLED", raising=False)
+    calls = []
+    monkeypatch.setattr(quotas, "_byok", lambda owner: calls.append("byok"))
+    monkeypatch.setattr(quotas, "check_build_quota", lambda user: calls.append("check"))
+    monkeypatch.setattr(quotas, "record_build", lambda *a, **k: calls.append("record"))
+
+    quotas.consume_build({"id": "user-1"}, wish_id="w1", kind="build")
+    assert calls == []
+    assert quotas.daily_limit() == 0
 
 
 def test_byok_quota_bypass_disabled_in_dev(monkeypatch):

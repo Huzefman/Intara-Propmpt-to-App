@@ -135,16 +135,15 @@ def clarify_prompt(prompt: str) -> dict:
 
     # Try Groq LLM call for surface data + component-aware questions
     try:
+        from gates.block_catalog import prompt_catalog
         from services.llm import call_llm
         from utils.json_parse import parse_json
 
         instruction = (
             "You are an expert app architect for Intara, a declarative component app builder.\n"
             "Given the user wish, return a JSON object with surface-level app information and 2-3 clarifying questions.\n"
-            "The compiler engine builds apps using these components:\n"
-            "- Views: data.kanban (lifecycle columns), data.table (dense grid with filters/CSV), calendar.month (scheduled dates)\n"
-            "- Stats & Trends: metric.stat (KPI numbers), chart.bar (bar charts), activity.timeline (event log)\n"
-            "- Details: record.detail + record.related_list (record view with related sub-lists), form.record (entry forms), lifecycle.pipeline (stage workflow)\n\n"
+            "The compiler engine builds apps using only this canonical component catalog:\n"
+            + prompt_catalog() + "\n"
             "Return ONLY JSON:\n"
             "{\n"
             '  "appName": "Creative Memorable App Name",\n'

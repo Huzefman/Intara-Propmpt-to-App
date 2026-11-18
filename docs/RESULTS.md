@@ -14,8 +14,14 @@
 | core20 rerun 1 (2026-10-14) | after failure-taxonomy fixes | **13/20** |
 | core20 final (2026-10-15) | after fix batch 2/3 | **17/20 (85% — the accept bar)** · median 9 LLM calls (budget ≤14) · median 4.4 min wall (target ≤3 min, quota-throttled) · diversity 12 combos, 0.028 entity overlap |
 | Held-out domains | 5 domains never used for tuning | **3/5 green** (invoicing, gym memberships, helpdesk; restaurant orders and school fees failed) |
-| Unit suites (2026-10-23) | pytest / node | **267/267** · **206 pass** (+1 env-skip) |
+| Unit suites (2026-11-18) | pytest / node | **285/285** · **207 pass** (+1 env-skip) |
 | Adapter contract | memory / Dexie / live Supabase | 12/12 · 12/12 · **6/6 live** (scratch app, zero residue) |
+
+**Current deployment policy (2026-11-18):** shared app-build specs are pinned to
+Groq (`LLM_ONLY=groq`); the Archives use Gemini for synthesis and embeddings.
+Build quotas are off by default and sit behind `BUILD_QUOTA_ENABLED`, enabled
+only after migration 012. The provider-mix telemetry below is historical, from
+the earlier multi-provider chain.
 
 ## The three failures worth talking about
 

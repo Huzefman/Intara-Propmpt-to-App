@@ -137,12 +137,12 @@ export function Auth() {
           Your wishes.<br /><span style={{ color: 'var(--intara-muted)', fontWeight: 300 }}>Only yours.</span>
         </div>
         <p style={{ fontSize: 13.5, lineHeight: 1.75, color: 'var(--intara-faint)', maxWidth: 440, letterSpacing: '-0.01em', margin: 0 }}>
-          Every account gets a private workspace in the same Intara database — your plans, builds and chat history are scoped to you and invisible to everyone else. Add your own model key for unlimited builds, or use the shared free pool. The public landing and the ten template apps stay open to all.
+          Every account gets a private workspace in the same Intara database — your plans, builds and chat history are scoped to you and invisible to everyone else. Use the shared build pool or add your own model key. The public landing and the ten template apps stay open to all.
         </p>
         <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 4 }}>
           {[
             ['Private by default', 'Owner-scoped queries + row-level security'],
-            ['3 builds / day', 'On the shared free LLM pool'],
+            ['Shared build pool', 'Groq builds; Gemini powers the Archives'],
             ['Your key, your quota', 'Add any provider key after signup'],
           ].map(([title, detail]) => (
             <div key={title} style={{ minWidth: 150 }}>
@@ -194,7 +194,7 @@ export function Auth() {
 
         {mode === 'signup' && (
           <div style={{ marginTop: 12, fontSize: 11, lineHeight: 1.7, color: 'var(--intara-dim)' }}>
-            Next: add an LLM key for unlimited builds (optional). Skip it to use the shared pool — 3 builds per day.
+            Next: add an LLM key (optional) to build on your own provider account. Skip it to use the shared pool; build quotas are currently off.
           </div>
         )}
 

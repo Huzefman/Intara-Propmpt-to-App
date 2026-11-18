@@ -3,9 +3,10 @@ RAG — the Intara Archives.
 
 Ask a question about the project; get a grounded answer with citations.
 
-    question → embed (OpenRouter or Gemini via the provider chain)
+    question → embed with Gemini (OpenRouter only as a configured fallback)
              → pgvector cosine top-k (match_docs)
-             → synthesize with whichever free LLM has quota, cites enforced
+             → synthesize with Gemini first, then the shared build gateway
+               (Groq-only when LLM_ONLY=groq) if Gemini is unavailable
 
 Design rules (learned the hard way in this repo):
 - Never a silent zero-vector search: if embeddings are unavailable, retrieval
@@ -261,21 +262,41 @@ def retrieve(question: str, top_k: int = 5) -> tuple[list[dict], str | None, str
 # ———————————————————————— synthesis ————————————————————————
 
 DEMO_MSG = (
-    "The archives need a backend: configure SUPABASE plus at least one LLM key "
-    "(OPENROUTER / GEMINI / GROQ / NVIDIA / DEEPSEEK) to ask questions about Intara."
+    "The archives need a backend: configure SUPABASE plus GEMINI_API_KEY for "
+    "Gemini synthesis (GROQ_API_KEY is an optional fallback) to ask questions "
+    "about Intara."
 )
 
 
 def _has_llm() -> bool:
+    # Archives deliberately use Gemini even when the build gateway is pinned to
+    # Groq, so check Gemini before asking the build-gateway policy.
+    if os.getenv("GEMINI_API_KEY", "").strip():
+        return True
     try:
         from services.llm import has_any_llm
         return has_any_llm()
     except Exception:
         return bool(
-            os.getenv("OPENROUTER_API_KEY") or os.getenv("GEMINI_API_KEY")
-            or os.getenv("GROQ_API_KEY") or os.getenv("NVIDIA_API_KEY")
-            or os.getenv("DEEPSEEK_API_KEY")
+            os.getenv("OPENROUTER_API_KEY") or os.getenv("GROQ_API_KEY")
+            or os.getenv("NVIDIA_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
         )
+
+
+def _gemini_answer(prompt: str) -> tuple[str, dict]:
+    """Archives synthesis path: direct Gemini, independent of LLM_ONLY."""
+    from main import call_gemini
+    info: dict = {}
+    text = call_gemini(
+        prompt,
+        model=os.getenv("RAG_GEMINI_MODEL", os.getenv("GEMINI_MODEL", "gemini-3.6-flash")),
+        max_output_tokens=512,
+        info=info,
+    )
+    return text, {
+        "source": info.get("provider") or "gemini",
+        "model": info.get("model") or os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
+    }
 
 
 def _clean_answer(text: str) -> str:
@@ -321,11 +342,19 @@ def answer(question: str, top_k: int = 5) -> dict:
     )
     cites = [d["content"] for d in docs]
     try:
-        from services.llm import call_llm_with_meta
-        text, meta = call_llm_with_meta(prompt, temperature=0.2)
-    except Exception as e:
-        return {**empty, "answer": f"The archives could not be consulted right now — try again in a few seconds. ({e})",
-                "cites": cites, "retrieval": mode, "retrieval_detail": detail}
+        # Archives use Gemini by design. The build gateway is Groq-only in the
+        # public deployment, so this is an explicit separate path.
+        text, meta = _gemini_answer(prompt)
+    except Exception as gemini_err:
+        try:
+            # Keep the archives useful if Gemini is unavailable, but label the
+            # provider honestly in the response.
+            from services.llm import call_llm_with_meta
+            text, meta = call_llm_with_meta(prompt, temperature=0.2)
+        except Exception as e:
+            return {**empty, "answer": f"The archives could not be consulted right now — try again in a few seconds. ({e})",
+                    "cites": cites, "retrieval": mode, "retrieval_detail": detail,
+                    "error": f"gemini: {gemini_err}; fallback: {e}"}
     return {
         "answer": _clean_answer(text),
         "cites": cites,

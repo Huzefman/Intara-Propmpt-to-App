@@ -191,7 +191,8 @@ export function Account() {
   const limit = quota?.limit ?? null
   const used = quota?.used ?? 0
   const remaining = quota?.remaining
-  const pct = limit && limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0
+  const quotaOn = limit != null && limit > 0
+  const pct = quotaOn ? Math.min(100, Math.round((used / limit) * 100)) : 0
 
   function dismissWelcome() {
     setWelcome(false)
@@ -231,7 +232,7 @@ export function Account() {
       setShowKey(false)
       setFormMsg({
         tone: 'ok',
-        text: `${meta.label} key saved. Builds now use your key${wasEmpty ? ' and skip the shared 3/day quota' : ''}.`,
+        text: `${meta.label} key saved. Builds now use your key${wasEmpty ? ' and skip the shared quota when it is enabled' : ''}.`,
       })
       await load()
     } catch (e: any) {
@@ -282,7 +283,7 @@ export function Account() {
     if (rowBusy) return
     const last = (data?.keys.length ?? 0) <= 1
     const ok = window.confirm(
-      `Remove your ${k.label} key?${last ? ' Builds will go back to the shared 3/day pool.' : ' Your other saved keys will still be used.'}`,
+      `Remove your ${k.label} key?${last ? ' Builds will go back to the shared pool.' : ' Your other saved keys will still be used.'}`,
     )
     if (!ok) return
 
@@ -300,7 +301,7 @@ export function Account() {
       setPageMsg({
         tone: 'ok',
         text: last
-          ? 'Key removed. Builds are back on the shared pool — 3 builds per day.'
+          ? 'Key removed. Builds are back on the shared pool.'
           : `${k.label} key removed. Your remaining keys are still in use.`,
       })
     } catch (e: any) {
@@ -352,7 +353,7 @@ export function Account() {
             <div>
               <div style={{ fontSize: 12.5, fontWeight: 600, color: '#6EE7B7' }}>Welcome to Intara.</div>
               <div style={{ fontSize: 11.8, lineHeight: 1.7, color: 'var(--intara-muted)', marginTop: 4 }}>
-                Builds are unlimited on this deployment. You can also configure your own LLM keys below if desired.
+                Builds use the shared pool on this deployment. You can also configure your own LLM keys below if desired.
               </div>
             </div>
             <button
@@ -382,7 +383,9 @@ export function Account() {
           <span style={{ fontSize: 12.5, color: 'var(--intara-muted)', lineHeight: 1.6 }}>
             {byok
               ? 'Builds use your saved key first and skip the shared quota.'
-              : `Builds use Intara's shared free LLM pool, limited to ${limit ?? 3} per account per day.`}
+              : quotaOn
+                ? `Builds use Intara's shared free LLM pool, limited to ${limit} per account per day.`
+                : "Builds use Intara's shared free LLM pool. Quotas are currently disabled on this deployment."}
           </span>
         </div>
 
@@ -390,7 +393,7 @@ export function Account() {
           <div style={{ marginTop: 12, fontSize: 11.5, lineHeight: 1.7, color: 'var(--intara-faint)' }}>
             Your key is tried first, in most-recently-updated order. If it fails, the build stops and tells you — it will not quietly spend the shared pool. Remove it below to return to the shared mode.
           </div>
-        ) : limit != null && limit <= 0 ? (
+        ) : !quotaOn ? (
           <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--intara-faint)' }}>Shared builds are currently unlimited on this deployment.</div>
         ) : (
           <div style={{ marginTop: 14 }}>
@@ -424,7 +427,7 @@ export function Account() {
 
         {data.keys.length === 0 ? (
           <div style={{ marginTop: 12, fontSize: 12.5, lineHeight: 1.75, color: 'var(--intara-faint)' }}>
-            No keys yet. You are on the shared pool. Add one below to build with your own provider account and lift the 3/day limit.
+            No keys yet. You are on the shared pool. Add one below to build with your own provider account.
           </div>
         ) : (
           <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
@@ -595,10 +598,10 @@ export function Account() {
       <div className="glass" style={{ marginTop: 14, padding: 16, borderRadius: 18 }}>
         <div style={eyebrow}>How your key is handled</div>
         <div style={{ fontSize: 11.8, lineHeight: 1.85, color: 'var(--intara-faint)', marginTop: 9, letterSpacing: '-0.005em' }}>
-          Keys are encrypted at rest with Fernet, scoped to your account, and readable only by Intara's backend service role. The browser never receives a saved key again — testing a saved key happens server-side. Build calls go from the backend directly to your provider; requests are attributed to your account, and using your own key does not count against the shared 3/day pool.
+          Keys are encrypted at rest with Fernet, scoped to your account, and readable only by Intara's backend service role. The browser never receives a saved key again — testing a saved key happens server-side. Build calls go from the backend directly to your provider; requests are attributed to your account, and using your own key does not count against the shared quota when it is enabled.
         </div>
         <div style={{ marginTop: 9, fontSize: 11, color: 'var(--intara-dim)', lineHeight: 1.7 }}>
-          Looking after the shared pool? Remove the last saved key to return to the 3/day shared mode. Custom endpoints must be public HTTPS URLs.
+          Looking after the shared pool? Remove the last saved key to return to the shared mode. Custom endpoints must be public HTTPS URLs.
         </div>
       </div>
 

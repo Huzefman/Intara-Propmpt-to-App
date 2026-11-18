@@ -1,4 +1,8 @@
 {
+  "type": "module",
+  "scripts": {
+    "test": "npm --prefix packages/runtime test"
+  },
   "dependencies": {
     "jszip": "^3.10.2",
     "react-router-dom": "^7.18.4"

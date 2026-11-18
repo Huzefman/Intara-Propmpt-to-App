@@ -208,9 +208,13 @@ def test_embed_passes_through(monkeypatch):
 # ———————————————————————— answer() ————————————————————————
 
 def _patch_llm(monkeypatch, text="Grounded answer [1].", meta=None, raises=None):
+    import rag
     import services.llm as llm
 
     calls = {}
+
+    def no_gemini(prompt):
+        raise RuntimeError("Gemini unavailable in this test")
 
     def fake(prompt, temperature=0.2, **kw):
         calls["prompt"] = prompt
@@ -218,8 +222,36 @@ def _patch_llm(monkeypatch, text="Grounded answer [1].", meta=None, raises=None)
             raise raises
         return text, (meta or {"source": "groq", "model": "openai/gpt-oss-20b"})
 
+    monkeypatch.setattr(rag, "_gemini_answer", no_gemini)
     monkeypatch.setattr(llm, "call_llm_with_meta", fake)
     return calls
+
+
+def test_answer_prefers_gemini_for_archives(monkeypatch):
+    import rag
+    import services.llm as llm
+
+    sup = FakeSupa(docs=[{"content": "Gemini powers archive synthesis."}])
+    monkeypatch.setattr(rag, "supabase", sup)
+    monkeypatch.setattr(rag, "_has_llm", lambda: True)
+    monkeypatch.setattr(rag, "embed", lambda texts: (_ for _ in ()).throw(rag.EmbeddingUnavailable("no keys")))
+
+    seen = {}
+
+    def fake_gemini(prompt):
+        seen["prompt"] = prompt
+        return "Gemini answer [1].", {"source": "gemini", "model": "gemini-3.6-flash"}
+
+    def forbid_groq(*args, **kwargs):
+        raise AssertionError("Groq fallback must not run when Gemini answers")
+
+    monkeypatch.setattr(rag, "_gemini_answer", fake_gemini)
+    monkeypatch.setattr(llm, "call_llm_with_meta", forbid_groq)
+
+    res = rag.answer("Who answers archive questions?")
+    assert res["provider"] == "gemini"
+    assert res["answer"].startswith("Gemini answer")
+    assert "[1]" in seen["prompt"] and "Who answers archive questions?" in seen["prompt"]
 
 
 def test_answer_lexical_fallback(monkeypatch):

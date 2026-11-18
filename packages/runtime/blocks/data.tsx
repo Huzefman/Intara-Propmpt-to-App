@@ -27,18 +27,20 @@ export function DataTable({ block, rows, state, error, onAction }: BlockHostProp
     <BlockShell state={st} error={error} emptyActions={block.props.create ? actions : undefined}>
       {st === "ready" ? (
         <>
-          <table className="blk-table">
-            <thead><tr>{cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
-            <tbody>
-              {(rows ?? []).map((r, i) => (
-                <tr key={String(r["id"] ?? i)}
-                  className={block.props.row_link ? "blk-row-link" : undefined}
-                  onClick={block.props.row_link ? () => onAction?.("open", r["id"]) : undefined}>
-                  {cols.map((c) => <td key={c}>{displayPath(r, c)}</td>)}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="blk-table-wrap">
+            <table className="blk-table">
+              <thead><tr>{cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
+              <tbody>
+                {(rows ?? []).map((r, i) => (
+                  <tr key={String(r["id"] ?? i)}
+                    className={block.props.row_link ? "blk-row-link" : undefined}
+                    onClick={block.props.row_link ? () => onAction?.("open", r["id"]) : undefined}>
+                    {cols.map((c) => <td key={c}>{displayPath(r, c)}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {actions}
         </>
       ) : undefined}

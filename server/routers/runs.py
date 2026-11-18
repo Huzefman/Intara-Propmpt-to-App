@@ -105,7 +105,8 @@ async def start_run(body: StartIn, user: dict = Depends(require_user)):
             if not rows or (not is_dev(user) and
                             str(rows[0].get("owner") or "") != str(uid(user) or "")):
                 raise HTTPException(404, "wish not found")
-        # Quota check disabled — builds are unlimited
+        # No-op unless BUILD_QUOTA_ENABLED=1 (enable only after migration 012).
+        consume_build(user, wish_id=body.wish_id, kind=body.kind)
         if not project_id:
             res = store.supa.table("projects").insert(
                 {"name": (body.wish.strip()[:80] or body.app_name),
@@ -438,7 +439,8 @@ async def retry_run(run_id: str, body: RetryIn | None = None, user: dict = Depen
         if not str(inputs.get("wish") or "").strip():
             raise HTTPException(409, "run predates stored inputs and no wish could be recovered; start a new build")
 
-        # Quota check disabled — builds are unlimited
+        # Retries spend a fresh build only when the quota flag is enabled.
+        consume_build(user, wish_id=inputs.get("wish_id"), kind="retry")
         # Mark running before returning so the first status poll cannot see
         # the old `failed` row and stop polling while the task starts.
         eng.store.set_status(run_id, "running")

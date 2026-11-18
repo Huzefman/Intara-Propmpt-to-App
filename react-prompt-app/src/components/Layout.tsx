@@ -32,6 +32,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       }}>
         <span style={{ color: 'var(--intara-faint)' }}>Intara listens from 3.7 light years away</span>
         <span style={{ margin: '0 12px', opacity: 0.3 }}>·</span>
+        <span>Groq</span>
+        <span style={{ margin: '0 8px', opacity: 0.3 }}>·</span>
         <span>Gemini</span>
         <span style={{ margin: '0 8px', opacity: 0.3 }}>·</span>
         <span>Supabase</span>

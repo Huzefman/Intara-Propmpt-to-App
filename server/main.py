@@ -102,9 +102,9 @@ def _gemini_client_for(api_key: str):
 @retry(wait=wait_exponential(min=1, max=8), stop=stop_after_attempt(3), retry=retry_if_exception(_gemini_retryable))
 def call_gemini(prompt: str, *, response_mime_type: str | None = None, max_output_tokens: int | None = None, info: dict | None = None,
                 api_key: str | None = None, model: str | None = None):
-    if os.getenv("LLM_ONLY") == "groq":
-        from services.llm import call_llm
-        return call_llm(prompt, temperature=0.2, max_output_tokens=max_output_tokens, info=info, json_mode=(response_mime_type == "application/json"))
+    # Direct Gemini call. Build-provider policy lives in services.llm:
+    # LLM_ONLY=groq pins shared build calls to Groq, while Archives use this
+    # function deliberately for Gemini. Never redirect a BYOK key here.
     gem = client
     if api_key and api_key != GEMINI_KEY:
         gem = _gemini_client_for(api_key)
@@ -138,21 +138,33 @@ def call_gemini(prompt: str, *, response_mime_type: str | None = None, max_outpu
             pass
     return resp.text
 
+def _shared_gemini_fallback_allowed() -> bool:
+    """Legacy endpoint only: respect LLM_ONLY when falling back from Groq."""
+    try:
+        from services.llm import provider_allowed
+        return provider_allowed("gemini")
+    except Exception:
+        return True
+
+
 @app.post("/generate")
 @app.post("/api/generate")
 def generate(inp: PromptIn, user: dict = Depends(require_user)):
     # Legacy schema endpoint — signed-in callers only (it spends LLM quota).
-    # OpenRouter-first via call_llm, fallback to Gemini
+    # Shared build calls go through the gateway; with LLM_ONLY=groq that is
+    # Groq-only. The direct Gemini fallback is allowed only when policy permits.
     try:
         from services.llm import call_llm
         raw = call_llm(PROMPT.format(prompt=inp.prompt), json_mode=True)
     except Exception as e:
         # A BYOK account must never silently fall back to the app's Gemini key
-        # (that would bypass the shared quota and spend Intara's budget).
+        # (that would bypass the shared bucket and spend Intara's budget).
         if getattr(e, "byok_error", False):
             raise
         from userkeys import using_byok
         if using_byok():
+            raise
+        if not _shared_gemini_fallback_allowed():
             raise
         raw = call_gemini(PROMPT.format(prompt=inp.prompt))
     try:
@@ -160,7 +172,7 @@ def generate(inp: PromptIn, user: dict = Depends(require_user)):
         if "tables" not in data:
             raise ValueError("no tables")
     except Exception as e:
-        # repair pass — OpenRouter first
+        # One bounded repair through the same gateway.
         try:
             from services.llm import call_llm
             raw2 = call_llm(f"Fix this to valid JSON with tables: {raw}", json_mode=True)
@@ -169,6 +181,8 @@ def generate(inp: PromptIn, user: dict = Depends(require_user)):
                 raise
             from userkeys import using_byok
             if using_byok():
+                raise
+            if not _shared_gemini_fallback_allowed():
                 raise
             raw2 = call_gemini(f"Fix this to valid JSON with tables: {raw}")
         try:
