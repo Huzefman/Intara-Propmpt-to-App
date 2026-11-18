@@ -57,7 +57,7 @@ html, body {
   content: "";
   position: fixed;
   inset: 0;
-  background: url('/assets/starfield.png') center/cover no-repeat;
+  background: url('/assets/starfield.png?v=2') center/cover no-repeat;
   opacity: 0.32;
   pointer-events: none;
   z-index: 0;
