@@ -30,7 +30,7 @@ function labelFor(status: string) {
 
 function Card({ title, children }: { title: string; children: any }) {
   return (
-    <div className="glass" style={{ padding: '12px 14px', borderRadius: 14 }}>
+    <div className="glass" style={{ padding: '12px 14px', borderRadius: 14, minWidth: 0, width: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
       <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 8 }}>{title}</div>
       {children}
     </div>
@@ -335,7 +335,7 @@ export function RunStudio({ runId }: { runId: string }) {
       )}
 
       {tab === 'spec' && (
-        <div style={{ display: 'grid', gap: 12 }}>
+        <div style={{ display: 'grid', gap: 12, minWidth: 0, width: '100%', boxSizing: 'border-box' }}>
           {!spec && <div className="glass" style={{ padding: 20, color: 'var(--intara-faint)' }}>The spec appears when the run reaches assembly.</div>}
           {spec && (
             <>
@@ -362,12 +362,13 @@ export function RunStudio({ runId }: { runId: string }) {
                 </Card>
               </div>
               <Card title="App Spec JSON & Code Export">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                   <span className="run-small">The declarative blueprint and downloadable code project.</span>
                   <button
                     className="btn-primary btn-sm"
                     onClick={handleDownloadCode}
                     disabled={downloading}
+                    style={{ flexShrink: 0 }}
                   >
                     ↓ {downloading ? 'Packing…' : 'Download Complete Code (.zip)'}
                   </button>

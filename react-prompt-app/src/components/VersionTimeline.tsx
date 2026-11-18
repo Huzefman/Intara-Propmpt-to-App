@@ -77,17 +77,17 @@ export function VersionTimeline({ projectId, onPick }: {
         const parent = v.parent ? byId[v.parent] : null
         const note = parent ? diffNote(parent.spec, v.spec) : 'initial version'
         return (
-          <div key={v.id} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 12, padding: '5px 0', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-            <span className="mono" style={{ color: 'var(--intara-faint)' }}>v{v.id.slice(0, 8)}</span>
-            <span style={{ color: 'var(--intara-dim)' }}>{v.source}</span>
-            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div key={v.id} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 12, padding: '5px 0', borderTop: '1px solid rgba(255,255,255,0.04)', minWidth: 0, flexWrap: 'wrap' }}>
+            <span className="mono" style={{ color: 'var(--intara-faint)', flexShrink: 0 }}>v{v.id.slice(0, 8)}</span>
+            <span style={{ color: 'var(--intara-dim)', flexShrink: 0 }}>{v.source}</span>
+            <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {v.summary || <i style={{ color: 'var(--intara-faint)' }}>{note}</i>}
             </span>
             {v.spec && (
-              <button className="btn-ghost btn-sm" onClick={() => onPick?.(v.id, v.spec)}>View</button>
+              <button className="btn-ghost btn-sm" style={{ flexShrink: 0 }} onClick={() => onPick?.(v.id, v.spec)}>View</button>
             )}
             {v.parent && (
-              <button className="btn-ghost btn-sm" disabled={busy} onClick={() => revert(v.id)}>Undo</button>
+              <button className="btn-ghost btn-sm" style={{ flexShrink: 0 }} disabled={busy} onClick={() => revert(v.id)}>Undo</button>
             )}
           </div>
         );

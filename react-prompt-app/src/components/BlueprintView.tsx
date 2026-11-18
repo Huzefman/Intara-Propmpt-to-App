@@ -108,7 +108,7 @@ export function BlueprintView({ runId }: { runId: string }) {
   const degradedSteps = run?.degraded_steps || []
 
   return (
-    <div style={{ display: 'grid', gap: 12 }}>
+    <div style={{ display: 'grid', gap: 12, minWidth: 0, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
       <div className="glass" style={{ padding: '10px 14px', borderRadius: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-nebula-light)' }}>✦ Blueprint</span>
         <span className={`pill status-${status}`}>{status.replace('_', ' ')}</span>
@@ -275,7 +275,7 @@ export function BlueprintView({ runId }: { runId: string }) {
       {dev && (
         <div className="glass" style={{ padding: '12px 14px', borderRadius: 14 }}>
           <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 8 }}>Developer · spec JSON</div>
-          <pre className="mono" style={{ fontSize: 11, overflow: 'auto', maxHeight: 320, background: '#0A0A0F', padding: 10, borderRadius: 8 }}>{JSON.stringify(spec, null, 1)?.slice(0, 20000)}</pre>
+          <pre className="mono" style={{ fontSize: 11, overflow: 'auto', maxHeight: 320, background: '#0A0A0F', padding: 10, borderRadius: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere', width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}>{JSON.stringify(spec, null, 1)?.slice(0, 20000)}</pre>
           <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', margin: '10px 0 6px' }}>Run events · {(events || []).length}</div>
           <div className="mono" style={{ fontSize: 11, maxHeight: 180, overflow: 'auto' }}>
             {(events || []).map((e: any, i: number) => (

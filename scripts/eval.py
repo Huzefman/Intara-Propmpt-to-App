@@ -50,9 +50,10 @@ def check_fe_build(wish):
         return False, "no src/pages/ file"
     # try tsc if available
     try:
-        # quick check: any file contains "export" ?
-        # optional tsc run in temp dir
-        if subprocess.run(["npx", "tsc", "--version"], capture_output=True, timeout=5).returncode != 0:
+        node_modules = ROOT / "react-prompt-app" / "node_modules"
+        local_tsc = node_modules / ".bin" / "tsc"
+        tsc_cmd = [str(local_tsc)] if local_tsc.is_file() else ["npx", "tsc"]
+        if subprocess.run([*tsc_cmd, "--version"], capture_output=True, timeout=10).returncode != 0:
             return True, "skipped tsc (not installed), has_page ok"
         with tempfile.TemporaryDirectory() as tmp:
             tmp = pathlib.Path(tmp)
@@ -64,10 +65,9 @@ def check_fe_build(wish):
             (tmp / "tsconfig.json").write_text('{"compilerOptions":{"jsx":"react-jsx","esModuleInterop":true,"allowJs":true,"strict":false,"skipLibCheck":true,"target":"ES2020","module":"ESNext"},"include":["src"]}')
             # The temp app needs the Studio's node_modules for React's JSX runtime
             # (CI installs deps with --prefix, so there is no root node_modules).
-            node_modules = ROOT / "react-prompt-app" / "node_modules"
             if node_modules.is_dir() and not (tmp / "node_modules").exists():
                 (tmp / "node_modules").symlink_to(node_modules, target_is_directory=True)
-            res = subprocess.run(["npx", "tsc", "--noEmit"], cwd=tmp, capture_output=True, timeout=15)
+            res = subprocess.run([*tsc_cmd, "--noEmit"], cwd=tmp, capture_output=True, timeout=40)
             if res.returncode == 0:
                 return True, "tsc pass"
             else:

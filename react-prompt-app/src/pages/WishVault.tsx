@@ -89,7 +89,7 @@ export function WishVault() {
       )
     }
     return (
-      <div>
+      <div style={{ maxWidth: 1080, margin: '0 auto', padding: '24px 20px 80px', width: '100%', boxSizing: 'border-box', minWidth: 0 }}>
         <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div>
             <Link to="/" style={{ fontSize: 11.5, fontWeight: 450, letterSpacing: '0.01em', color: 'var(--intara-faint)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>← New wish</Link>
