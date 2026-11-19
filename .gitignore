@@ -20,3 +20,7 @@ docs/assets/qa/
 
 # Local editor / agent workspace
 .opencode/
+
+# External references & local documents
+Rocket-Assignment/
+*.pdf

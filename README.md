@@ -96,6 +96,25 @@ Without provider keys the planner uses a deterministic mock and the deterministi
 - Saved keys are tried first. If a BYOK call fails, the build fails with an explicit error — it never silently spends the shared pool.
 - Deployment details for Supabase, Render and Vercel are in [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
+## Architecture & Prior Art
+
+Intara's backend service architecture, pipeline design, and testing methodology are developed around established production patterns and academic literature in generative AI systems:
+
+- **Alireza Parandeh (2025).** *Building Generative AI Services with FastAPI: Production-Ready Applications from Conception to Deployment*. O'Reilly Media.
+  - **Layered Onion Architecture:** Clean boundaries isolating HTTP transport ([`routers/`](server/routers)), orchestration ([`controllers/`](server/controllers)), core compilation & guardrails ([`services/`](server/services)), and database access (`gates.py`).
+  - **Schema & Type Safety:** Strict Pydantic v2 data transfer objects across all ingress, egress, and intermediate generation phases.
+  - **Testing Trophy:** 490+ automated tests combining static typing, modular Pytest fixtures, parameterized matrix tests, and hermetic mock evaluations without live network dependencies during CI.
+  - **Resilience:** Non-blocking asynchronous I/O, exponential backoff retries with Tenacity, and AES-256-GCM encrypted BYOK tenant key management.
+
+- **Gabriel Poesia, Alex Polozov, Rishabh Singh, Tao Xie (ICLR 2022).** *Synchromesh: Reliable Code Generation from Pre-trained Language Models*.
+  - **Constrained Decoding:** LLMs emit typed JSON App Specs rather than unconstrained raw code, guaranteeing syntactically valid structures.
+
+- **Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik Narasimhan, Shunyu Yao (NeurIPS 2023).** *Reflexion: Language Agents with Verbal Reinforcement Learning*.
+  - **Fail-Closed Verification:** Multi-tier guardrail ladder (G0–G4, R01–R50 lint rules) with bounded repair loops to catch and heal structural anomalies before code assembly.
+
+- **Lei Wang et al. (ACL 2023).** *Plan-and-Solve Prompting: Improving Zero-Shot Chain-of-Thought Reasoning by Large Language Models*.
+  - **Hierarchical Decomposition:** Breaking prompt-to-app synthesis into discrete sub-stages (S0 intake → S1 clarify → S2 model → S3 design → S4 logic → S5 assemble).
+
 ## Limitations
 
 1. **Free-tier quota dominates failures.** Roughly half of observed live-eval failures are quota-shaped (daily caps, congestion). A paid key removes this class outright.

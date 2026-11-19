@@ -99,7 +99,7 @@ def _gemini_client_for(api_key: str):
     return _make_gemini_client(api_key)
 
 
-@retry(wait=wait_exponential(min=1, max=8), stop=stop_after_attempt(3), retry=retry_if_exception(_gemini_retryable))
+@retry(wait=wait_exponential(min=1, max=8), stop=stop_after_attempt(3), retry=retry_if_exception(_gemini_retryable), reraise=True)
 def call_gemini(prompt: str, *, response_mime_type: str | None = None, max_output_tokens: int | None = None, info: dict | None = None,
                 api_key: str | None = None, model: str | None = None):
     # Direct Gemini call. Build-provider policy lives in services.llm:

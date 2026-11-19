@@ -131,6 +131,29 @@ def delete_account_key(provider: str, user: dict = Depends(require_user)):
     return {"ok": True}
 
 
+def _clean_key_error(exc: Exception, key: str | None = None) -> str:
+    if hasattr(exc, "last_attempt") and getattr(exc, "last_attempt", None):
+        try:
+            inner = exc.last_attempt.exception()
+            if inner:
+                exc = inner
+        except Exception:
+            pass
+    msg = str(exc)
+    if key:
+        msg = msg.replace(key, "[redacted]")
+    m_lower = msg.lower()
+    if "503" in msg or "unavailable" in m_lower or "high demand" in m_lower:
+        return "Provider is temporarily experiencing high demand (503). The key is valid; please try again in a moment."
+    if "400" in msg and ("key" in m_lower or "invalid" in m_lower):
+        return "Invalid API key for this provider. Please check your credentials."
+    if "403" in msg or "permission" in m_lower:
+        return "Permission denied or invalid API key."
+    if "429" in msg or "quota" in m_lower:
+        return "Provider rate limit or quota exceeded (429)."
+    return msg[:300]
+
+
 @router.post("/account/keys/test")
 def test_account_key(body: KeyTestIn, user: dict = Depends(require_user)):
     """Test a key before saving it. 200 with ok=false on provider rejection."""
@@ -142,10 +165,7 @@ def test_account_key(body: KeyTestIn, user: dict = Depends(require_user)):
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     except Exception as exc:
-        msg = str(exc)
-        if body.api_key:
-            msg = msg.replace(body.api_key, "[redacted]")
-        return {"ok": False, "error": msg[:300]}
+        return {"ok": False, "error": _clean_key_error(exc, body.api_key)}
 
 
 @router.post("/account/keys/{provider}/test")
@@ -167,5 +187,4 @@ def test_saved_key(provider: str, user: dict = Depends(require_user)):
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     except Exception as exc:
-        msg = str(exc).replace(row["api_key"], "[redacted]")
-        return {"ok": False, "error": msg[:300]}
+        return {"ok": False, "error": _clean_key_error(exc, row["api_key"])}
