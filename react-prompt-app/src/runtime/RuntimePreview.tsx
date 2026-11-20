@@ -187,6 +187,37 @@ function RenderBlock({
           }
         }
 
+        if (b.type === 'data.kanban' && entity && ent) {
+          const card = { ...(props['card'] as any ?? {}) }
+          if (!card.title) {
+            if (ent.display?.title) {
+              card.title = ent.display.title.replace(/[{}]/g, '')
+            } else {
+              const candidate = ent.fields.find((f) => ['title', 'name', 'full_name', 'common_name', 'label', 'summary', 'subject', 'device'].includes(f.id))
+                ?? ent.fields.find((f) => f.type === 'text')
+                ?? ent.fields[0]
+              if (candidate) card.title = candidate.id
+            }
+          }
+          if (!card.subtitle && ent.display?.subtitle) {
+            card.subtitle = ent.display.subtitle.replace(/[{}]/g, '')
+          }
+          if (!props['columns']) {
+            if (ent.lifecycle?.states) {
+              props['columns'] = ent.lifecycle.states
+            } else {
+              const fieldDef = ent.fields.find((f) => f.id === (props['group_by'] || 'status'))
+              if (fieldDef?.enum) {
+                const enumDef = spec.model.enums?.find((e) => e.id === fieldDef.enum)
+                if (enumDef?.values) {
+                  props['columns'] = enumDef.values.map((v: any) => typeof v === 'string' ? v : v.value)
+                }
+              }
+            }
+          }
+          props['card'] = card
+        }
+
         let blockRows: Rows[string] | undefined = entity ? applyFilters(entity, viewRows[entity] ?? []) : undefined
         if (b.type === 'record.related_list' && entity) {
           const linkField = ent?.fields.find((f) => f.id === props['via'] && (f.type === 'ref' || f.type === 'multi_ref'))

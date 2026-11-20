@@ -824,8 +824,23 @@ export default function App() {
               // ==========================================
               if (b.type === 'data.kanban') {
                 const groupBy = b.props?.group_by || 'status'
-                const enumDef = enums.find((en: any) => en.id === groupBy || en.id.includes(groupBy))
-                const stages = enumDef?.values?.map((v: any) => v.value) || ['todo', 'in_progress', 'done']
+                const propStages = Array.isArray(b.props?.columns) ? b.props.columns : Array.isArray(b.props?.stages) ? b.props.stages : null
+                const lifecycleStates = ent?.lifecycle?.states
+                const fieldDef = ent?.fields?.find((f: any) => f.id === groupBy)
+                const enumId = fieldDef?.enum || groupBy
+                const enumDef = enums.find((en: any) => en.id === enumId || en.id.includes(groupBy) || groupBy.includes(en.id))
+                const enumStages = enumDef?.values?.map((v: any) => (typeof v === 'string' ? v : v.value))
+                const rowValues = [...new Set(filteredRows.map((r: any) => r[groupBy]).filter((v: any) => v !== undefined && v !== null))]
+                const baseStages = propStages || lifecycleStates || enumStages || []
+                const allStages = [...baseStages]
+                for (const rv of rowValues) {
+                  const rvStr = String(rv)
+                  if (!allStages.some((s: string) => s.toLowerCase() === rvStr.toLowerCase())) {
+                    allStages.push(rvStr)
+                  }
+                }
+                const stages = allStages.length > 0 ? allStages : ['todo', 'in_progress', 'done']
+                const cardConf = b.props?.card || {}
 
                 return (
                   <div key={b.id || bIdx} className="card block-card">
@@ -844,7 +859,7 @@ export default function App() {
 
                     <div className="kanban-board">
                       {stages.map((st: string) => {
-                        const inStage = filteredRows.filter((r: any) => (r[groupBy] || '').toLowerCase() === st.toLowerCase())
+                        const inStage = filteredRows.filter((r: any) => String(r[groupBy] || '').toLowerCase() === String(st).toLowerCase())
                         return (
                           <div key={st} className="kanban-col">
                             <div className="kanban-col-header">
@@ -852,19 +867,34 @@ export default function App() {
                               <span className="col-count">{inStage.length}</span>
                             </div>
                             <div className="kanban-cards">
-                              {inStage.map((r: any) => (
-                                <div key={r.id} className="kanban-card">
-                                  <div className="card-title-sm">{r.title || r.name || r.device || r.id}</div>
-                                  <div className="card-meta">
-                                    {Object.entries(r)
-                                      .filter(([k]) => !['id', 'created_at', groupBy, 'title', 'name'].includes(k))
-                                      .slice(0, 2)
-                                      .map(([k, v]) => (
-                                        <div key={k} className="meta-pill">{k}: {String(v)}</div>
-                                      ))}
-                                  </div>
+                              {inStage.length === 0 ? (
+                                <div style={{ padding: '14px 10px', textAlign: 'center', fontSize: 11, color: 'var(--text-dim)', border: '1px dashed var(--border)', borderRadius: 6 }}>
+                                  No cards
                                 </div>
-                              ))}
+                              ) : (
+                                inStage.map((r: any) => {
+                                  const cardTitle = (cardConf.title && r[String(cardConf.title).replace(/[{}]/g, '')]) ||
+                                    r.title || r.name || r.full_name || r.common_name || r.device || r.summary || r.subject || r.label || r.task || r.description || r.id
+                                  const cardSub = (cardConf.subtitle && r[String(cardConf.subtitle).replace(/[{}]/g, '')]) ||
+                                    (r.subtitle || r.email || r.customer || r.project || r.author || r.category || '')
+                                  const metaPills = Object.entries(r)
+                                    .filter(([k, v]) => !['id', 'created_at', groupBy, 'title', 'name', String(cardConf.title).replace(/[{}]/g, '')].includes(k) && v !== null && v !== undefined && typeof v !== 'object')
+                                    .slice(0, 2)
+                                  return (
+                                    <div key={r.id} className="kanban-card">
+                                      <div className="card-title-sm">{String(cardTitle)}</div>
+                                      {cardSub && <div style={{ fontSize: 11.5, color: 'var(--text-dim)', marginTop: 2 }}>{String(cardSub)}</div>}
+                                      {metaPills.length > 0 && (
+                                        <div className="card-meta" style={{ marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                          {metaPills.map(([k, v]) => (
+                                            <div key={k} className="meta-pill">{k}: {String(v)}</div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                })
+                              )}
                             </div>
                           </div>
                         )

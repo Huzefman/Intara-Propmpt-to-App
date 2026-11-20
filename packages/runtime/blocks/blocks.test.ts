@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { BLOCKS, BLOCK_TYPES } from "./registry.ts";
-import { displayPath, resolveState } from "./types.ts";
+import { displayPath, resolveState, resolveCardContent } from "./types.ts";
 import { aggValue } from "./stats.ts";
 
 const dir = dirname(fileURLToPath(import.meta.url));
@@ -21,7 +21,7 @@ const fixtures = JSON.parse(readFileSync(join(dir, "fixtures.json"), "utf8")).fi
 // Mirror of server/gates/g1_lint.py BLOCKS (required + optional props).
 const LINT_BLOCKS: Record<string, { stability: string; required: string[]; optional: string[] }> = {
   "data.table": { stability: "stable", required: ["entity"], optional: ["columns", "row_link", "create"] },
-  "data.kanban": { stability: "stable", required: ["entity", "group_by"], optional: ["card", "drag_transitions"] },
+  "data.kanban": { stability: "stable", required: ["entity", "group_by"], optional: ["card", "drag_transitions", "columns", "row_link"] },
   "metric.stat": { stability: "stable", required: ["entity", "items"], optional: [] },
   "filter.bar": { stability: "stable", required: ["entity"], optional: ["fields", "search"] },
   "record.detail": { stability: "stable", required: ["entity"], optional: ["sections"] },
@@ -100,4 +100,30 @@ test("display paths for cards and cells", () => {
     displayPath({ planting: { id: "planting-1", bed: { name: "Raised Bed A" }, plant: { common_name: "Tomato" } } }, "planting"),
     "Raised Bed A · Tomato");
   assert.equal(displayPath({ planting: { id: "planting-1" } }, "planting"), "planting-1");
+});
+
+test("kanban card content resolution falls back gracefully instead of empty dash", () => {
+  // 1. Explicit card.title with template braces
+  const r1 = { id: "c1", title: "Build feature", status: "todo", priority: "high" };
+  const res1 = resolveCardContent(r1, { title: "{title}" });
+  assert.equal(res1.title, "Build feature");
+  assert.ok(res1.badges.some((b) => b.label.includes("high")));
+
+  // 2. Missing card config entirely: falls back to name/device/summary
+  const r2 = { id: "c2", device: "MacBook Pro", status: "diagnosing", technician: "Sarah" };
+  const res2 = resolveCardContent(r2, undefined, "status");
+  assert.equal(res2.title, "MacBook Pro");
+  assert.ok(res2.badges.some((b) => b.label.includes("Sarah")));
+
+  // 3. card.fields array supported
+  const r3 = { id: "c3", task_name: "Fix bug", project: "App", urgency: "critical" };
+  const res3 = resolveCardContent(r3, { fields: ["task_name", "project", "urgency"] });
+  assert.equal(res3.title, "Fix bug");
+  assert.equal(res3.subtitle, "App");
+  assert.equal(res3.badges[0]?.label, "critical");
+
+  // 4. Record with arbitrary field and no card config never returns empty or "—"
+  const r4 = { id: "row-42", arbitrary_item: "Widget A", status: "done" };
+  const res4 = resolveCardContent(r4, {}, "status");
+  assert.equal(res4.title, "Widget A");
 });

@@ -64,3 +64,98 @@ export function displayPath(row: Rec, path: string): string {
   if (typeof cur === "object") return labelOf(cur);
   return String(cur);
 }
+
+/** Pure resolution of card title, subtitle, and badges with smart fallbacks. */
+export function resolveCardContent(r: Rec, card: any = {}, groupBy: string = "status") {
+  const cardFields = Array.isArray(card.fields) ? card.fields : [];
+
+  // 1. Resolve Title
+  let titleVal = "";
+  const titlePath = card.title || cardFields[0];
+  if (titlePath) {
+    const rawPath = String(titlePath).replace(/[{}]/g, "");
+    const v = displayPath(r, rawPath);
+    if (v && v !== "—") titleVal = v;
+  }
+  if (!titleVal) {
+    for (const k of ["title", "name", "full_name", "common_name", "label", "summary", "subject", "device", "task_name", "task", "description"]) {
+      const v = r[k];
+      if (typeof v === "string" && v.trim()) {
+        titleVal = v.trim();
+        break;
+      }
+    }
+  }
+  if (!titleVal) {
+    for (const [k, v] of Object.entries(r)) {
+      if (!["id", "created_at", groupBy, "_key"].includes(k) && (typeof v === "string" || typeof v === "number")) {
+        const str = String(v).trim();
+        if (str && str !== "—") {
+          titleVal = str;
+          break;
+        }
+      }
+    }
+  }
+  if (!titleVal) {
+    const label = labelOf(r);
+    if (label && label !== "—") titleVal = label;
+  }
+  if (!titleVal) {
+    titleVal = r["id"] ? String(r["id"]) : "Card";
+  }
+
+  // 2. Resolve Subtitle
+  let subtitleVal: string | null = null;
+  const subtitlePath = card.subtitle || cardFields[1];
+  if (subtitlePath) {
+    const rawPath = String(subtitlePath).replace(/[{}]/g, "");
+    const v = displayPath(r, rawPath);
+    if (v && v !== "—") subtitleVal = v;
+  }
+  if (!subtitleVal) {
+    for (const k of ["subtitle", "email", "customer", "project", "author", "category", "description", "note"]) {
+      const v = r[k];
+      if (typeof v === "string" && v.trim() && v.trim() !== titleVal) {
+        subtitleVal = v.trim();
+        break;
+      } else if (v && typeof v === "object") {
+        const l = labelOf(v);
+        if (l && l !== "—" && l !== titleVal) {
+          subtitleVal = l;
+          break;
+        }
+      }
+    }
+  }
+
+  // 3. Resolve Badges
+  const badgesList: Array<{ label: string; key: string }> = [];
+  const rawBadges = Array.isArray(card.badges)
+    ? card.badges
+    : typeof card.badges === "string"
+    ? [card.badges]
+    : cardFields.slice(2);
+
+  if (rawBadges.length > 0) {
+    for (const b of rawBadges) {
+      const rawB = String(b).replace(/[{}]/g, "");
+      const v = displayPath(r, rawB);
+      if (v && v !== "—") {
+        badgesList.push({ label: v, key: rawB });
+      }
+    }
+  } else {
+    for (const k of ["priority", "owner", "technician", "role", "tag", "genre", "value", "total", "category", "urgency"]) {
+      if (r[k] !== undefined && r[k] !== null && String(r[k]) !== titleVal && String(r[k]) !== subtitleVal) {
+        const v = displayPath(r, k);
+        if (v && v !== "—") {
+          badgesList.push({ label: `${k}: ${v}`, key: k });
+          if (badgesList.length >= 2) break;
+        }
+      }
+    }
+  }
+
+  return { title: titleVal, subtitle: subtitleVal, badges: badgesList };
+}

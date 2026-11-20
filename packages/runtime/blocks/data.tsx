@@ -1,7 +1,7 @@
 /** Data blocks: table, kanban, filter bar. */
 import React from "react";
 import { BlockShell } from "./chrome.tsx";
-import { displayPath, resolveState } from "./types.ts";
+import { displayPath, resolveState, labelOf, resolveCardContent } from "./types.ts";
 import type { BlockHostProps, Rec } from "./types.ts";
 
 export type BadgeVariant = "success" | "warning" | "danger" | "info" | "neutral";
@@ -180,18 +180,32 @@ export function DataTable({ block, rows, state, error, onAction }: BlockHostProp
 }
 
 export function Kanban({ block, rows, state, error, onAction }: BlockHostProps<{
-  entity: string; group_by: string; card?: { title?: string; subtitle?: string; badges?: string[] }; drag_transitions?: boolean;
+  entity: string; group_by: string; columns?: string[]; card?: { title?: string; subtitle?: string; badges?: string[]; fields?: string[] }; drag_transitions?: boolean;
 }>) {
   const st = resolveState(rows, undefined, state, error);
   const groupBy = block.props.group_by || "status";
+  const columnsProp = block.props.columns;
+  const initialColumns: string[] = Array.isArray(columnsProp)
+    ? columnsProp.map(String)
+    : [];
+
   const groups = new Map<string, Rec[]>();
+  for (const col of initialColumns) {
+    groups.set(col, []);
+  }
   for (const r of rows ?? []) {
-    const k = String(r[groupBy] ?? "—");
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k)!.push(r);
+    const rawVal = r[groupBy];
+    let targetKey = String(rawVal ?? "—");
+    if (rawVal !== undefined && rawVal !== null && initialColumns.length > 0) {
+      const match = initialColumns.find(
+        (c) => c.toLowerCase() === String(rawVal).toLowerCase()
+      );
+      if (match) targetKey = match;
+    }
+    if (!groups.has(targetKey)) groups.set(targetKey, []);
+    groups.get(targetKey)!.push(r);
   }
   const card = block.props.card ?? {};
-  const badges = Array.isArray(card.badges) ? card.badges : (typeof card.badges === "string" ? [card.badges] : []);
   return (
     <BlockShell state={st} error={error}>
       {st === "ready" ? (
@@ -208,27 +222,37 @@ export function Kanban({ block, rows, state, error, onAction }: BlockHostProps<{
                 } catch { /* bad payload: ignore */ }
               } : undefined}>
               <h4>{g} ({rs.length})</h4>
-              {rs.map((r, i) => (
-                <div key={String(r["id"] ?? i)} className="blk-card"
-                  draggable={!!block.props.drag_transitions}
-                  onDragStart={block.props.drag_transitions ? (e) => {
-                    e.dataTransfer.setData("text/intara-card",
-                      JSON.stringify({ id: r["id"], from: g }));
-                  } : undefined}
-                  onClick={() => onAction?.("open", r["id"])}>
-                  <strong>{card.title ? displayPath(r, card.title) : "—"}</strong>
-                  {card.subtitle ? <span>{displayPath(r, card.subtitle)}</span> : null}
-                  {badges.map((b) => {
-                    const v = displayPath(r, b);
-                    const variant = getBadgeVariant(v, b);
-                    return (
-                      <em key={b} className={variant ? `blk-pill-${variant}` : undefined}>
-                        {v}
-                      </em>
-                    );
-                  })}
-                </div>
-              ))}
+              {rs.length === 0 ? (
+                <div className="blk-card-empty">No cards</div>
+              ) : (
+                rs.map((r, i) => {
+                  const item = resolveCardContent(r, card, groupBy);
+                  return (
+                    <div key={String(r["id"] ?? i)} className="blk-card"
+                      draggable={!!block.props.drag_transitions}
+                      onDragStart={block.props.drag_transitions ? (e) => {
+                        e.dataTransfer.setData("text/intara-card",
+                          JSON.stringify({ id: r["id"], from: g }));
+                      } : undefined}
+                      onClick={() => onAction?.("open", r["id"])}>
+                      <strong>{item.title}</strong>
+                      {item.subtitle ? <span>{item.subtitle}</span> : null}
+                      {item.badges.length > 0 ? (
+                        <div className="blk-card-badges">
+                          {item.badges.map((b) => {
+                            const variant = getBadgeVariant(b.label, b.key);
+                            return (
+                              <em key={b.key} className={variant ? `blk-pill-${variant}` : undefined}>
+                                {b.label}
+                              </em>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })
+              )}
             </div>
           ))}
         </div>

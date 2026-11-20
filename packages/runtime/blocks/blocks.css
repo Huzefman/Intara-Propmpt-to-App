@@ -481,6 +481,23 @@
   margin-top: 3px;
 }
 
+.blk-card-badges {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+}
+
+.blk-card-empty {
+  padding: 16px 10px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--blk-faint);
+  border: 1px dashed var(--blk-border);
+  border-radius: 8px;
+  margin-top: 4px;
+}
+
 /* ---------- filter ---------- */
 
 .blk-filter {
