@@ -104,11 +104,11 @@ def _fallback_questions(prompt: str, scored: dict) -> list[dict]:
     # 2. Roles & access
     questions.append({
         "id": "audience",
-        "q": "Who is this for and how should roles work?",
+        "q": "Who will use this app, and how should access roles work?",
         "options": [
-            {"label": "Solo maker", "desc": "Single user, direct access to all data"},
+            {"label": "Just me (Personal)", "desc": "Single user — strictly 1 role (owner) with complete direct access"},
             {"label": "Team with roles", "desc": "Shared workspace with admin, editor and viewer roles"},
-            {"label": "Public / Multi-tenant", "desc": "Public app with user accounts and scoped records"},
+            {"label": "Multi-role workflow", "desc": "Domain-specific roles (e.g. doctor & patient, manager & staff)"},
         ],
     })
 
@@ -151,11 +151,12 @@ def clarify_prompt(prompt: str) -> dict:
             '  "summary": "1-2 sentence overview of core entities and workflows",\n'
             '  "score": <number 50-95>,\n'
             '  "questions": [\n'
+            '    {"id": "audience", "q": "Who is using this app, and how should access roles work?", "options": [{"label": "Just me (Personal)", "desc": "Single user — strictly 1 role (owner) with complete direct access"}, {"label": "Team with roles", "desc": "Shared workspace with admin, editor and viewer roles"}, {"label": "Multi-role workflow", "desc": "Domain-specific roles (e.g. doctor & patient)"}]},\n'
             '    {"id": "view_layout", "q": "Which primary layout fits best?", "options": [{"label": "Kanban board", "desc": "Drag-and-drop cards across workflow stages"}, {"label": "Data table", "desc": "Spreadsheet grid with sorting and CSV export"}, {"label": "Calendar", "desc": "Month grid for date-driven items"}]},\n'
             '    {"id": "workflow", "q": "...", "options": [{"label": "...", "desc": "..."}]}\n'
             "  ]\n"
             "}\n"
-            "Max 3 questions, max 3 options each. Questions should focus on which compiler components or workflows to generate.\n\n"
+            "Max 3 questions, max 3 options each. Include a question clarifying if the app is strictly personal (1 role) or multi-user team when ambiguous. Questions must have simple, non-technical options.\n\n"
             "Wish: " + prompt[:500]
         )
         raw = call_llm(instruction, temperature=0.3, json_mode=True)

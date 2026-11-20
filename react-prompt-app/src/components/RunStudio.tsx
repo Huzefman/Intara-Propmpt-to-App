@@ -172,7 +172,7 @@ export function RunStudio({ runId }: { runId: string }) {
     setBusy(true); setErr(null); setSummary('')
     try {
       const r = await chatRun(runId, instruction.trim())
-      setData((d: any) => ({ ...(d || {}), spec: r.spec, version_id: r.version_id }))
+      setData((d: any) => ({ ...(d || {}), spec: r.spec, version_id: r.version_id, suggestions: r.suggestions || d?.suggestions || [] }))
       setSummary(r.summary || 'Spec updated.')
       setInstruction('')
       setApproved(false)
@@ -200,6 +200,7 @@ export function RunStudio({ runId }: { runId: string }) {
   const pages = spec?.ui?.pages || []
   const rules = spec?.access?.rules || []
   const automations = spec?.automations || []
+  const suggestions = (data?.suggestions as any[]) || []
   const appName = spec?.app?.name || data?.app_name || data?.run?.inputs?.app_name || (status === 'loading' ? 'Opening your wish' : 'Building your app')
   const tagline = spec?.app?.tagline || data?.wish || 'A typed spec, rendered by the Intara component runtime.'
 
@@ -253,6 +254,43 @@ export function RunStudio({ runId }: { runId: string }) {
             <button className="btn-primary btn-sm" onClick={patch} disabled={busy || instruction.trim().length < 4}>
               {busy ? 'Patching…' : 'Patch app'}
             </button>
+          </div>
+        )}
+        {spec && suggestions.length > 0 && (
+          <div className="run-suggestions" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--intara-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              💡 What to add next:
+            </span>
+            {suggestions.map((s: any, idx: number) => (
+              <button
+                key={idx}
+                type="button"
+                className="pill"
+                onClick={() => setInstruction(s.prompt || s.label)}
+                title={s.detail || ''}
+                style={{
+                  cursor: 'pointer',
+                  background: 'rgba(139, 92, 246, 0.12)',
+                  border: '1px solid rgba(139, 92, 246, 0.28)',
+                  color: 'var(--intara-text)',
+                  fontSize: 12,
+                  padding: '4px 10px',
+                  borderRadius: 16,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <span style={{ color: 'var(--intara-nebula-light)', fontWeight: 600 }}>+</span>
+                <span>{s.label}</span>
+                {s.detail && (
+                  <span style={{ fontSize: 10.5, color: 'var(--intara-faint)', borderLeft: '1px solid rgba(255,255,255,0.12)', paddingLeft: 6 }}>
+                    {s.detail}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         )}
         {summary && <div className="run-note">{summary}</div>}

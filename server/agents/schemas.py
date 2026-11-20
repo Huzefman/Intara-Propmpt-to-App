@@ -20,9 +20,15 @@ class S0IntakeOut(BaseModel):
     language: str = "en"
 
 
+class ClarifyOption(BaseModel):
+    label: str
+    desc: str = ""
+
+
 class ClarifyQuestion(BaseModel):
     id: str
     text: str
+    options: list[ClarifyOption] = Field(default_factory=list)
 
 
 class S1ClarifyOut(BaseModel):

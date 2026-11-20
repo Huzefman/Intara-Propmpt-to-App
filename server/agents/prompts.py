@@ -13,10 +13,10 @@ import json
 
 PROMPT_VERSIONS = {
     "s0": "s0-v1",
-    "s1": "s1-v1",
+    "s1": "s1-v2",
     "s2": "s2-v3",
-    "s3": "s3-v4",
-    "s4": "s4-v3",
+    "s3": "s3-v5",
+    "s4": "s4-v4",
     "s5critic": "s5critic-v1",
     "s6": "s6-v1",
     "edit": "edit-v1",
@@ -51,6 +51,8 @@ def s1_prompt(clean_wish: str, domains: str = "") -> str:
     from agents.schemas import S1ClarifyOut
     return f"""[1] You are Intara Clarifier. Ask AT MOST 3 questions, only where the answer changes app structure. Write every other decision as an assumption.
 [2] Rules: no greetings, no prose outside JSON; questions need short ids q1..; assumptions are concrete ("Single branch", "Currency INR").
+If ambiguous whether the app is personal (single user) or collaborative (multi-user team), ask a role question with options.
+Each question MUST include 2-3 structured non-technical options with 'label' and 'desc' (e.g. [{{"label": "Solo / Personal", "desc": "Single user with direct access (1 role: owner)"}}, {{"label": "Multi-user team", "desc": "Roles for managers, members or domain actors"}}]).
 [3] Return ONLY JSON matching: {_schema(S1ClarifyOut)}
 [4] Nearby domains: {domains or "none"}
 [5] Brief: {clean_wish}
@@ -90,7 +92,11 @@ def s3_prompt(model_json: str, personas: str, blocks: str = "",
         except Exception:
             pass
     return f"""[1] You are Intara Experience Designer. Output theme, nav, pages and block instances covering EVERY entity.
-[2] Rules: block types ONLY [{blocks or _block_types()}]; block props use exactly the guide vocabulary (table: columns not fields; row_link is a page id, never a URL; chart: title/x/y with y "count" or a field; calendar: date_field; detail: sections like [{{title, fields}}]); every entity in >=1 block; every page in nav or row_linked; role "owner" on at least one page plus any approval/management roles the requirements imply (each role on >=1 page); JSON only.
+[2] Rules: block types ONLY [{blocks or _block_types()}]; block props use exactly the guide vocabulary (table: columns not fields; row_link is a page id, never a URL; chart: title/x/y with y "count" or a field; calendar: date_field; detail: sections like [{{title, fields}}]); every entity in >=1 block; every page in nav or row_linked;
+ROLE DISCIPLINE:
+- If the app is single-user / personal / solo (e.g. personal habit tracker, todo list, journal, personal notes, calculator, portfolio), every page MUST have ONLY role ["owner"]. NEVER invent or add phantom roles like "member", "admin", "viewer", or "user".
+- If the app is multi-user / team / organizational (e.g. clinic, CRM, school, marketplace, helpdesk), declare domain-specific roles (e.g. "doctor", "receptionist", "manager") plus "owner". Every declared role must appear on >=1 page.
+JSON only.
 Block catalog and page recipes (required props must be present; compose pages using recipes so apps don't just become tables):
 {block_catalog or "none"}
 [3] Return ONLY JSON matching: {_schema(S3UiOut)}
@@ -103,7 +109,7 @@ Requirements (declare roles they imply): {requirements or "none"}
 def s4_prompt(model_json: str, ui_summary: str, actions: str = "", page_roles: str = "") -> str:
     from agents.schemas import S4LogicOut
     return f"""[1] You are Intara Logic Designer. Output access roles+rules, automations, and computed-field formulas.
-[2] Rules: transition roles must exist in access.roles; access.roles MUST include every UI role ({page_roles or "owner"}) — reuse those ids exactly, add more only for approvals; every (role, entity) pair shown on pages needs a read rule; automation triggers one of record.created/record.updated/lifecycle.transition/schedule/manual_button; steps one of set_field/create_record/send_email/notify/webhook/export_csv; formulas and automation 'when' expressions use bare field ids (e.g. priority == 'urgent', not record.priority) and relation accessors only; JSON only.
+[2] Rules: transition roles must exist in access.roles; access.roles MUST match EXACTLY the set of page roles from UI ({page_roles or "owner"}) — reuse those ids exactly, do not add extra unreferenced roles; if page roles has only "owner", access.roles must have ONLY "owner" with full CRUD on all entities; every (role, entity) pair shown on pages needs a read rule; automation triggers one of record.created/record.updated/lifecycle.transition/schedule/manual_button; steps one of set_field/create_record/send_email/notify/webhook/export_csv; formulas and automation 'when' expressions use bare field ids (e.g. priority == 'urgent', not record.priority) and relation accessors only; JSON only.
 [3] Return ONLY JSON matching: {_schema(S4LogicOut)}
 [4] Action catalog: {actions or "standard six"}
 [5] Model: {model_json}

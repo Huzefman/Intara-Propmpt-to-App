@@ -352,10 +352,17 @@ export async function approveRun(runId: string, by?: string): Promise<{ ok: bool
   return res.json()
 }
 
-export async function chatRun(runId: string, instruction: string): Promise<{ ok: boolean; version_id: string; summary: string; spec: any }> {
+export async function chatRun(runId: string, instruction: string): Promise<{ ok: boolean; version_id: string; summary: string; spec: any; suggestions?: any[] }> {
   const res = await apiFetch(`/api/runs/${runId}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instruction }) })
   if (!res.ok) throw apiError('chat patch', res, await res.text().catch(() => ''))
   return res.json()
+}
+
+export async function getSuggestions(runId: string): Promise<Array<{ label: string; detail: string; prompt: string; prompt_suffix?: string }>> {
+  const res = await apiFetch(`/api/runs/${runId}/suggestions`)
+  if (!res.ok) return []
+  const data = await res.json()
+  return data.suggestions || []
 }
 
 export async function patchRun(runId: string, ops: any[], summary: string, baseVersion?: string): Promise<{ ok: boolean; version_id: string; summary: string; spec: any }> {

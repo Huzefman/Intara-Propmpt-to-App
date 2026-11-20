@@ -573,10 +573,23 @@ class RunEngine:
         return await self._execute(run_id, project_id, kind, inputs, ctx)
 
     def _fresh_ctx(self, inputs: dict) -> dict:
+        answers = inputs.get("answers") or ""
+        if isinstance(answers, list):
+            answers = "\n".join(str(a) for a in answers)
+        elif isinstance(answers, dict):
+            answers = "\n".join(f"- {k}: {v}" for k, v in answers.items() if v)
+
+        reqs = inputs.get("requirements") or []
+        # If answers is not provided but requirements contains Q&A strings, synthesize answers
+        if not answers and reqs and isinstance(reqs, list):
+            qa_lines = [r for r in reqs if isinstance(r, str) and ":" in r]
+            if qa_lines:
+                answers = "\n".join(f"- {line}" for line in qa_lines)
+
         ctx: dict = {"wish": inputs.get("wish", ""), "wish_id": inputs.get("wish_id"),
-                     "answers": inputs.get("answers", ""),
+                     "answers": answers,
                      "app": {"name": inputs.get("app_name", "App")},
-                     "requirements": inputs.get("requirements") or [],
+                     "requirements": reqs,
                      "spec": {}}
         if not ctx["requirements"] and ctx["wish"]:
             ctx["requirements"] = [{"id": "R1", "text": ctx["wish"][:500],

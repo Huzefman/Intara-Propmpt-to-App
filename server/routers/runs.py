@@ -79,6 +79,7 @@ class StartIn(BaseModel):
     app_name: str = "App"
     project_id: str | None = None
     requirements: list = []
+    answers: str | list | dict = ""
     wish_id: str | None = None  # when set, run id + finished spec write back to the wish (Studio tabs)
 
 
@@ -116,6 +117,7 @@ async def start_run(body: StartIn, user: dict = Depends(require_user)):
             project_id = res.data[0]["id"]
         inputs: dict = {"wish": body.wish.strip(), "app_name": body.app_name,
                         "requirements": body.requirements,
+                        "answers": body.answers,
                         "wish_id": body.wish_id, "budgets": {},
                         "owner_id": uid(user)}
         if body.kind == "build":
@@ -268,6 +270,19 @@ async def run_status(run_id: str, user: dict = Depends(require_user)):
                 out["spec"] = ver.get("spec")
             except Exception:
                 pass
+        if out["spec"]:
+            try:
+                from services.suggest import suggest_next
+                out["suggestions"] = suggest_next(out["spec"])
+            except Exception:
+                out["suggestions"] = []
+        for s in steps:
+            if s.get("step_key") == "s1":
+                s1_out = s.get("output") or {}
+                if s1_out.get("questions"):
+                    out["clarifying_questions"] = s1_out.get("questions")
+                if s1_out.get("assumptions"):
+                    out["assumptions"] = s1_out.get("assumptions")
         try:
             for ev in eng.store.get_events(run_id):
                 p = ev.get("payload") or {}
@@ -279,6 +294,29 @@ async def run_status(run_id: str, user: dict = Depends(require_user)):
         except Exception:
             pass
         return out
+    except Exception as e:
+        raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
+
+
+@router.get("/runs/{run_id}/suggestions")
+@router.get("/api/runs/{run_id}/suggestions")
+async def run_suggestions(run_id: str, user: dict = Depends(require_user)):
+    try:
+        eng = _engine()
+        run = eng.store.get_run(run_id)
+        _assert_run_owner(eng.store, run, user)
+        vid = _current_version(eng.store, run_id)
+        spec = None
+        if vid:
+            try:
+                ver = eng.store.get_version(vid)
+                spec = ver.get("spec")
+            except Exception:
+                pass
+        from services.suggest import suggest_next
+        return {"suggestions": suggest_next(spec or {})}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(404 if "not found" in str(e).lower() else 500, str(e))
 
@@ -767,9 +805,17 @@ async def chat_patch(run_id: str, body: ChatIn, user: dict = Depends(require_use
                     "instruction": body.instruction.strip()})
         if report.get("status") != "done":
             raise HTTPException(500, f"chat patch failed: {report.get('error')}")
+        suggestions = []
+        if report.get("spec"):
+            try:
+                from services.suggest import suggest_next
+                suggestions = suggest_next(report["spec"])
+            except Exception:
+                pass
         return {"ok": True, "version_id": report["version_id"],
                 "summary": report.get("summary", ""),
-                "patch": report.get("patch"), "spec": report.get("spec")}
+                "patch": report.get("patch"), "spec": report.get("spec"),
+                "suggestions": suggestions}
     except HTTPException:
         raise
     except Exception as e:
