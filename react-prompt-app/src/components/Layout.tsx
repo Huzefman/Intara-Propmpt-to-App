@@ -14,10 +14,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </div>
     )
   }
+  const isRun = loc.pathname.startsWith('/runs/')
   return (
     <div className="intara-shell">
       <Header />
-      <main style={{ maxWidth: 1080, margin: '0 auto', padding: '40px 24px 80px' }}>
+      <main style={{ maxWidth: isRun ? 1380 : 1080, margin: '0 auto', padding: isRun ? '24px 20px 80px' : '40px 24px 80px' }}>
         {children}
       </main>
       <footer style={{

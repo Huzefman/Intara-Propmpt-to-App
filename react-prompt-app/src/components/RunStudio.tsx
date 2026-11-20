@@ -28,6 +28,18 @@ function labelFor(status: string) {
   return status.replace(/_/g, ' ')
 }
 
+function suggestionIcon(label: string) {
+  const l = (label || '').toLowerCase()
+  if (l.includes('calendar')) return '📅'
+  if (l.includes('kanban') || l.includes('board')) return '📋'
+  if (l.includes('metric') || l.includes('dashboard') || l.includes('chart') || l.includes('stat')) return '📊'
+  if (l.includes('alert') || l.includes('notif') || l.includes('email')) return '🔔'
+  if (l.includes('team') || l.includes('collab') || l.includes('role')) return '👥'
+  if (l.includes('filter') || l.includes('search')) return '🔍'
+  if (l.includes('file') || l.includes('upload') || l.includes('doc')) return '📎'
+  return '✨'
+}
+
 function Card({ title, children }: { title: string; children: any }) {
   return (
     <div className="glass" style={{ padding: '12px 14px', borderRadius: 14, minWidth: 0, width: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
@@ -61,6 +73,7 @@ function StageRail({ steps }: { steps: any[] }) {
 export function RunStudio({ runId }: { runId: string }) {
   const [data, setData] = useState<any>(null)
   const [tab, setTab] = useState<'app' | 'spec' | 'activity'>('app')
+  const [viewport, setViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop')
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [instruction, setInstruction] = useState('')
@@ -242,47 +255,48 @@ export function RunStudio({ runId }: { runId: string }) {
         </div>
 
         {spec && (
-          <div className="run-command">
-            <input
-              value={instruction}
-              onChange={(e) => setInstruction(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') patch() }}
-              placeholder="Ask for a change — e.g. “add a kanban view for tasks”"
-              disabled={busy}
-              aria-label="Ask for a spec change"
-            />
-            <button className="btn-primary btn-sm" onClick={patch} disabled={busy || instruction.trim().length < 4}>
-              {busy ? 'Patching…' : 'Patch app'}
+          <div className="run-command-palette">
+            <div className="command-input-wrap">
+              <span className="command-ai-icon">✦</span>
+              <input
+                value={instruction}
+                onChange={(e) => setInstruction(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') patch() }}
+                placeholder="Ask for a change — e.g. “add a kanban view for tasks”"
+                disabled={busy}
+                aria-label="Ask for a spec change"
+              />
+              {instruction && (
+                <button
+                  type="button"
+                  className="command-clear-btn"
+                  onClick={() => setInstruction('')}
+                  title="Clear input"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            <button className="btn-primary btn-sm" onClick={patch} disabled={busy || instruction.trim().length < 4} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span>{busy ? 'Patching…' : 'Patch app'}</span>
+              <kbd className="cmd-kbd">↵</kbd>
             </button>
           </div>
         )}
         {spec && suggestions.length > 0 && (
           <div className="run-suggestions" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--intara-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--intara-muted)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               💡 What to add next:
             </span>
             {suggestions.map((s: any, idx: number) => (
               <button
                 key={idx}
                 type="button"
-                className="pill"
+                className="starter-pill"
                 onClick={() => setInstruction(s.prompt || s.label)}
                 title={s.detail || ''}
-                style={{
-                  cursor: 'pointer',
-                  background: 'rgba(139, 92, 246, 0.12)',
-                  border: '1px solid rgba(139, 92, 246, 0.28)',
-                  color: 'var(--intara-text)',
-                  fontSize: 12,
-                  padding: '4px 10px',
-                  borderRadius: 16,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  transition: 'all 0.15s ease',
-                }}
               >
-                <span style={{ color: 'var(--intara-nebula-light)', fontWeight: 600 }}>+</span>
+                <span>{suggestionIcon(s.label)}</span>
                 <span>{s.label}</span>
                 {s.detail && (
                   <span style={{ fontSize: 10.5, color: 'var(--intara-faint)', borderLeft: '1px solid rgba(255,255,255,0.12)', paddingLeft: 6 }}>
@@ -306,22 +320,57 @@ export function RunStudio({ runId }: { runId: string }) {
       {tab === 'app' && (
         <>
           {spec ? (
-            <section className="run-app-frame">
-              <div className="studio-browserbar glass" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span className="studio-browser-dots"><i /><i /><i /></span>
-                  <span className="studio-browser-addr">{(spec?.app?.name || 'app').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.intara.app</span>
-                  <span className="studio-browser-refresh">↻</span>
+            <section className={`run-window-frame ${viewport !== 'desktop' ? `viewport-${viewport}` : ''}`}>
+              <div className="run-window-chrome">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div className="window-dots">
+                    <span className="window-dot dot-red" />
+                    <span className="window-dot dot-yellow" />
+                    <span className="window-dot dot-green" />
+                  </div>
+                  <div className="window-address-bar">
+                    <span className="window-lock">🔒</span>
+                    <span className="window-url">{(spec?.app?.name || 'app').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.intara.live</span>
+                  </div>
                 </div>
-                <button
-                  className="btn-ghost btn-sm"
-                  onClick={handleDownloadCode}
-                  disabled={downloading}
-                  title="Download complete standalone app project (.zip)"
-                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, color: '#93C5FD', cursor: 'pointer', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.2)' }}
-                >
-                  ↓ {downloading ? 'Packing…' : 'Download Code (.zip)'}
-                </button>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div className="viewport-toggle">
+                    <button
+                      type="button"
+                      className={`viewport-btn ${viewport === 'desktop' ? 'active' : ''}`}
+                      onClick={() => setViewport('desktop')}
+                      title="Desktop (100%)"
+                    >
+                      🖥 Desktop
+                    </button>
+                    <button
+                      type="button"
+                      className={`viewport-btn ${viewport === 'tablet' ? 'active' : ''}`}
+                      onClick={() => setViewport('tablet')}
+                      title="Tablet (768px)"
+                    >
+                      📱 Tablet
+                    </button>
+                    <button
+                      type="button"
+                      className={`viewport-btn ${viewport === 'mobile' ? 'active' : ''}`}
+                      onClick={() => setViewport('mobile')}
+                      title="Mobile (390px)"
+                    >
+                      📲 Mobile
+                    </button>
+                  </div>
+                  <button
+                    className="btn-ghost btn-sm"
+                    onClick={handleDownloadCode}
+                    disabled={downloading}
+                    title="Download complete standalone app project (.zip)"
+                    style={{ fontSize: 11, padding: '4px 10px', height: 26, borderRadius: 6, color: '#93C5FD', cursor: 'pointer', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.2)' }}
+                  >
+                    ↓ {downloading ? 'Packing…' : 'Code (.zip)'}
+                  </button>
+                </div>
               </div>
               <div className="run-app-canvas">
                 <Suspense fallback={<div className="glass" style={{ padding: 48, textAlign: 'center' }}>Loading app…</div>}>

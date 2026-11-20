@@ -75,7 +75,8 @@ export function Archives() {
             onKeyDown={(e) => { if (e.key === 'Enter') ask() }}
             placeholder="What is Intara?"
             disabled={loading}
-            style={{ flex: 1, minWidth: 200, padding: '12px 14px', borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', color: 'var(--intara-text)', fontSize: 13, fontWeight: 400, outline: 'none', transition: 'border-color 0.3s var(--ease-premium)' }}
+            className="intara-input"
+            style={{ flex: 1, minWidth: 200 }}
           />
           <button onClick={() => ask()} disabled={loading || !q.trim()} className="btn-primary" style={{ padding: '12px 20px', fontSize: 12.5 }}>
             {loading ? 'Consulting…' : 'Ask'}
@@ -83,7 +84,9 @@ export function Archives() {
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }} aria-label="Suggested questions">
           {SUGGESTIONS.map((s) => (
-            <button key={s} onClick={() => ask(s)} disabled={loading} style={chip(asked === s)}>{s}</button>
+            <button key={s} onClick={() => ask(s)} disabled={loading} className="starter-pill" style={asked === s ? { borderColor: 'rgba(139,92,246,0.85)', background: 'rgba(139,92,246,0.18)', color: '#fff' } : undefined}>
+              <span>✦</span> {s}
+            </button>
           ))}
         </div>
       </div>

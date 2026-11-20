@@ -130,7 +130,7 @@ export function Auth() {
   }
 
   return (
-    <div className="auth-grid" style={{ maxWidth: 980, margin: '24px auto 0', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 420px)', gap: 36, alignItems: 'center', animation: 'fade-in-fluid 0.5s var(--ease-premium) both' }}>
+    <div className="auth-grid" style={{ animation: 'fade-in-fluid 0.5s var(--ease-premium) both' }}>
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }} style={{ display: 'grid', gap: 14 }}>
         <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--intara-nebula-light)' }}>Intara accounts</div>
         <div style={{ fontFamily: 'Space Grotesk', fontSize: 'clamp(28px, 4vw, 38px)', fontWeight: 400, letterSpacing: '-0.04em', lineHeight: 1.02, color: 'var(--intara-text)' }}>
@@ -174,16 +174,16 @@ export function Auth() {
         <form onSubmit={submit} style={{ display: 'grid', gap: 14, marginTop: 18 }}>
           <div>
             <label htmlFor="auth-email" style={labelStyle}>Email</label>
-            <input id="auth-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" style={fieldStyle} autoFocus />
+            <input id="auth-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className="intara-input" autoFocus />
           </div>
           <div>
             <label htmlFor="auth-password" style={labelStyle}>Password</label>
-            <input id="auth-password" type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" style={fieldStyle} />
+            <input id="auth-password" type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" className="intara-input" />
           </div>
           {mode === 'signup' && (
             <div>
               <label htmlFor="auth-confirm" style={labelStyle}>Confirm password</label>
-              <input id="auth-confirm" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Repeat the password" style={fieldStyle} />
+              <input id="auth-confirm" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Repeat the password" className="intara-input" />
             </div>
           )}
 

@@ -165,7 +165,32 @@ export function Landing() {
           </div>
           <div ref={wishRef} style={{ scrollMarginTop: 90 }}>
             {!clarify ? (
-              <WishInput value={prompt} onChange={setPrompt} onSubmit={onWeave} loading={loading} placeholder="I wish for a hackathon manager with teams, projects, votes..." autoFocus />
+              <>
+                <WishInput value={prompt} onChange={setPrompt} onSubmit={onWeave} loading={loading} placeholder="I wish for a hackathon manager with teams, projects, votes..." autoFocus />
+                <div className="starter-wishes" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--intara-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    ✦ Try an example:
+                  </span>
+                  {[
+                    { label: '🩺 Vet Clinic & Visits', prompt: 'Veterinary clinic manager with patients, pet owners, appointments, and medical visit records' },
+                    { label: '📦 Warehouse Stock & Alerts', prompt: 'Warehouse inventory tracker with stock items, suppliers, reorder thresholds, and restock logs' },
+                    { label: '📋 Personal Taskflow & Habits', prompt: 'Personal habit and task manager with priority tags, daily streaks, and completion notes' },
+                    { label: '💼 Client CRM & Deals Pipeline', prompt: 'CRM lead tracker with client contacts, deal stages, pipeline values, and follow-up activities' },
+                  ].map((starter, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className="starter-pill"
+                      onClick={() => {
+                        setPrompt(starter.prompt)
+                        if (wishRef.current) wishRef.current.scrollIntoView({ behavior: 'smooth' })
+                      }}
+                    >
+                      {starter.label}
+                    </button>
+                  ))}
+                </div>
+              </>
             ) : (
               <motion.div
                 initial={{ opacity: 0, y: 14 }}

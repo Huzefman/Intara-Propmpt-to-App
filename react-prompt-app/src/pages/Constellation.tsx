@@ -47,7 +47,7 @@ export function Constellation() {
           <div style={{ fontFamily: 'Space Grotesk', fontSize: 26, fontWeight: 400, letterSpacing: '-0.03em', color: 'var(--intara-text)' }}>Constellation</div>
           <div style={{ color: 'var(--intara-faint)', fontSize: 12.5, fontWeight: 400, marginTop: 6, letterSpacing: '-0.01em' }}><span style={{ color: 'var(--intara-nebula-light)', fontWeight: 600 }}>{filtered.length}</span> wishes · each a star</div>
         </div>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter wishes…" style={{ padding: '10px 14px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', color: 'var(--intara-text)', fontSize: 12.5, fontWeight: 400, width: 240, outline: 'none', transition: 'all 0.3s var(--ease-premium)' }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter wishes…" className="intara-input" style={{ width: 240 }} />
       </div>
 
       {/* Star map — premium fluid */}
@@ -89,7 +89,7 @@ export function Constellation() {
         <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)' }}>Wishes · {filtered.length}</div>
         <div style={{ maxHeight: 420, overflow: 'auto' }}>
           {filtered.map((r) => (
-            <Link key={r.id} to={`/wish/${r.id}`} style={{ display: 'block', padding: 16, borderBottom: '1px solid rgba(255,255,255,0.03)', textDecoration: 'none', transition: 'background 0.3s var(--ease-premium)' }}>
+            <Link key={r.id} to={`/wish/${r.id}`} className="constellation-row">
               <div style={{ fontSize: 13.5, fontWeight: 550, letterSpacing: '-0.02em', color: 'var(--intara-text)' }}>{r.prd?.appName || 'Wish'}</div>
               <div style={{ fontSize: 12, fontWeight: 400, color: 'var(--intara-faint)', marginTop: 4, lineHeight: 1.5 }}>{r.prompt}</div>
               <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>

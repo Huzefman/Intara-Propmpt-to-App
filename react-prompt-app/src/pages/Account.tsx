@@ -490,7 +490,7 @@ export function Account() {
                   id="key-provider"
                   value={provider}
                   onChange={(e) => chooseProvider(e.target.value)}
-                  style={fieldStyle}
+                  className="intara-select"
                 >
                   {providers.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -509,7 +509,7 @@ export function Account() {
                   placeholder={meta.default_model || 'Model name'}
                   spellCheck={false}
                   autoComplete="off"
-                  style={fieldStyle}
+                  className="intara-input"
                 />
                 <div style={{ marginTop: 6, fontSize: 10.8, color: 'var(--intara-dim)', lineHeight: 1.6 }}>
                   {meta.needs_base_url ? 'Required for custom endpoints.' : `Blank uses ${meta.default_model || 'the provider default'}.`}
@@ -528,7 +528,8 @@ export function Account() {
                   placeholder={existing ? `Saved ${existing.masked} — paste a new key to replace` : meta.placeholder}
                   spellCheck={false}
                   autoComplete="off"
-                  style={{ ...fieldStyle, flex: 1 }}
+                  className="intara-input"
+                  style={{ flex: 1 }}
                 />
                 <button
                   type="button"
@@ -558,7 +559,7 @@ export function Account() {
                   placeholder="https://api.example.com/v1"
                   spellCheck={false}
                   autoComplete="off"
-                  style={fieldStyle}
+                  className="intara-input"
                 />
                 <div style={{ marginTop: 6, fontSize: 10.8, color: 'var(--intara-dim)', lineHeight: 1.6 }}>
                   Must be a public HTTPS endpoint. Local and private network addresses are rejected.
