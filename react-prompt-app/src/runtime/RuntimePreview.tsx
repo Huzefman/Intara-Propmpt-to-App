@@ -263,7 +263,16 @@ export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey
   const [filters, setFilters] = useState<Record<string, Record<string, { q?: string; search?: string[]; fields: Record<string, string> }>>>({});
   const [ready, setReady] = useState(false);
   const [notices, setNotices] = useState<string[]>([]);
+  const [fullscreen, setFullscreen] = useState(false);
   const viewRows = useMemo(() => hydrateRefs(spec, rows), [rows, spec]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && fullscreen) setFullscreen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [fullscreen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -474,14 +483,28 @@ export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey
   }
 
   return (
-    <>
+    <div className={fullscreen ? 'runtime-preview-fullscreen' : 'runtime-preview-inline'}>
       <style>{`@media print {
-        .app-nav, .blk-actions, .blk-printbar, button, input, select { display: none !important; }
+        .app-nav, .blk-actions, .blk-printbar, .blk-topbar, button, input, select { display: none !important; }
         .app-shell, .app-main, .blk { background: #fff !important; color: #000 !important; }
         .blk-card, .blk-day { break-inside: avoid; }
       }`}</style>
-      <div className="blk-printbar" style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-        <button className="btn-ghost btn-sm" onClick={() => window.print()}>🖨 Print / PDF</button>
+      <div className="blk-topbar">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button className="btn-ghost btn-sm" onClick={() => window.print()} title="Print or save as PDF">
+            🖨 Print / PDF
+          </button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            className={`btn-ghost btn-sm ${fullscreen ? 'active' : ''}`}
+            onClick={() => setFullscreen((v) => !v)}
+            title={fullscreen ? 'Exit fullscreen (Esc)' : 'Open in standalone fullscreen view'}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 550 }}
+          >
+            {fullscreen ? '✕ Exit Fullscreen' : '⛶ Fullscreen App'}
+          </button>
+        </div>
       </div>
       <AppShell
       spec={spec}
@@ -506,8 +529,13 @@ export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey
       }}
     >
       {notices.length > 0 && (
-        <div className="blk" role="status" style={{ marginBottom: 8 }}>
-          {notices.map((n, i) => <div key={i} style={{ fontSize: 12 }}>🔔 {n}</div>)}
+        <div className="blk-notices-tray" role="status">
+          {notices.map((n, i) => (
+            <div key={i} className="blk-notice-toast">
+              <span className="blk-notice-icon">✓</span>
+              <span>{n}</span>
+            </div>
+          ))}
         </div>
       )}
       {(page.blocks ?? []).map((b) => (
@@ -550,6 +578,6 @@ export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey
           }} />
       );
     })()}
-    </>
+    </div>
   );
 }

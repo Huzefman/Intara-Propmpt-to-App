@@ -201,6 +201,154 @@
 
 /* ---------- table ---------- */
 
+.blk-table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.blk-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 180px;
+  max-width: 300px;
+}
+
+.blk-search-icon {
+  position: absolute;
+  left: 9px;
+  pointer-events: none;
+  color: var(--blk-faint);
+}
+
+.blk-search-input {
+  width: 100%;
+  padding: 6px 26px 6px 28px;
+  background: var(--blk-surface-2);
+  border: 1px solid var(--blk-border);
+  border-radius: 8px;
+  color: var(--blk-text);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.blk-search-input:focus {
+  border-color: var(--blk-accent-border);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.blk-search-clear {
+  position: absolute;
+  right: 6px;
+  background: transparent;
+  border: none;
+  color: var(--blk-faint);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.blk-search-clear:hover {
+  color: var(--blk-text);
+}
+
+.blk-table-meta {
+  font-size: 11px;
+  color: var(--blk-faint);
+  font-variant-numeric: tabular-nums;
+  margin-right: auto;
+}
+
+.blk-th-sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+
+.blk-th-sortable:hover {
+  color: var(--blk-text);
+}
+
+.blk-th-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.blk-sort-icon {
+  font-size: 10px;
+  opacity: 0.35;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.blk-sort-icon.active {
+  opacity: 1;
+  color: var(--blk-accent-text);
+}
+
+.blk-no-results {
+  text-align: center;
+  padding: 24px 10px !important;
+  color: var(--blk-faint);
+  font-style: italic;
+}
+
+/* ---------- status badges / pills ---------- */
+
+.blk-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1.2;
+  padding: 2.5px 8.5px;
+  border-radius: 999px;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.blk-pill-success,
+.blk-card em.blk-pill-success {
+  background: rgba(16, 185, 129, 0.12) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  color: #34d399 !important;
+}
+
+.blk-pill-warning,
+.blk-card em.blk-pill-warning {
+  background: rgba(245, 158, 11, 0.12) !important;
+  border: 1px solid rgba(245, 158, 11, 0.35) !important;
+  color: #fbbf24 !important;
+}
+
+.blk-pill-danger,
+.blk-card em.blk-pill-danger {
+  background: rgba(244, 63, 94, 0.12) !important;
+  border: 1px solid rgba(244, 63, 94, 0.35) !important;
+  color: #fb7185 !important;
+}
+
+.blk-pill-info,
+.blk-card em.blk-pill-info {
+  background: rgba(99, 102, 241, 0.12) !important;
+  border: 1px solid rgba(99, 102, 241, 0.35) !important;
+  color: #a5b4fc !important;
+}
+
+.blk-pill-neutral,
+.blk-card em.blk-pill-neutral {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #a8a8b8 !important;
+}
+
 .blk-table-wrap {
   width: 100%;
   overflow-x: auto;
@@ -344,6 +492,62 @@
 .blk-filter input {
   flex: 1;
   min-width: 150px;
+}
+
+/* ---------- fullscreen preview & toast notices ---------- */
+
+.runtime-preview-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #0a0a0f;
+  padding: 16px 20px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.runtime-preview-fullscreen .app-shell {
+  min-height: calc(100vh - 70px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+}
+
+.blk-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.blk-notices-tray {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.blk-notice-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(139, 92, 246, 0.14);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  color: #d8b4fe;
+  animation: blk-toast-in 0.2s ease-out;
+}
+
+.blk-notice-icon {
+  font-weight: 700;
+  color: #c084fc;
+}
+
+@keyframes blk-toast-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ---------- stats + gauge ---------- */

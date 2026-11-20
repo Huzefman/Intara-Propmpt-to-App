@@ -124,8 +124,8 @@ Spec elements: {spec_summary}
 
 def s6_prompt(model_json: str, domain: str, locale: str = "en") -> str:
     from agents.schemas import S6SeedOut
-    return f"""[1] You are Intara Seed Writer. Output 2-4 realistic rows per entity, relational (@key references), locale {locale}.
-[2] Rules: rows use _key ids; refs use @key; required fields present; values match field types; JSON only.
+    return f"""[1] You are Intara Seed Writer. Output 6-10 realistic, diverse, domain-rich rows per entity, relational (@key references), locale {locale}.
+[2] Rules: rows use _key ids; refs use @key; required fields present; values match field types; varied statuses (active, in_progress, completed, etc.); believable human names, realistic dates, contact info, and amounts (never 'test' or 'sample'); JSON only.
 [3] Return ONLY JSON matching: {_schema(S6SeedOut)}
 [5] Model: {model_json}
 Domain: {domain}
