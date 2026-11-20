@@ -15,8 +15,8 @@ const TERMINAL = new Set(['done', 'degraded', 'failed', 'cancelled', 'approved',
 
 function Card({ title, children }: { title: string; children: any }) {
   return (
-    <div className="glass" style={{ padding: '12px 14px', borderRadius: 14 }}>
-      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 8 }}>{title}</div>
+    <div className="glass" style={{ padding: '14px 16px', borderRadius: 14 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 8 }}>{title}</div>
       {children}
     </div>
   )
@@ -129,15 +129,15 @@ export function BlueprintView({ runId }: { runId: string }) {
 
   return (
     <div style={{ display: 'grid', gap: 12, minWidth: 0, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
-      <div className="glass" style={{ padding: '10px 14px', borderRadius: 14, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-nebula-light)' }}>✦ Blueprint</span>
+      <div className="glass" style={{ padding: '12px 16px', borderRadius: 14, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-nebula-light)' }}>✦ Blueprint</span>
         <span className={`pill status-${status}`}>{status.replace('_', ' ')}</span>
-        {versionId && <span className="mono" style={{ fontSize: 11, color: 'var(--intara-faint)' }}>v{versionId.slice(0, 8)}</span>}
-        {approved && <span style={{ fontSize: 11, color: '#6EE7B7' }}>Approved ✓</span>}
+        {versionId && <span className="mono" style={{ fontSize: 12, color: 'var(--intara-faint)' }}>v{versionId.slice(0, 8)}</span>}
+        {approved && <span style={{ fontSize: 12, color: '#6EE7B7' }}>Approved ✓</span>}
         <span style={{ flex: 1 }} />
         <div className="studio-seg" role="tablist" aria-label="Plain or developer">
           <button role="tab" aria-selected={!dev} className={!dev ? 'active' : ''} onClick={() => setDev(false)}>Plain</button>
-          <button role="tab" aria-selected={dev} className={dev ? 'active' : ''} onClick={() => { setDev(true); if (events === null) getEventlog(runId).then(setEvents).catch(() => setEvents([])); }}>Developer</button>
+          <button role="tab" aria-selected={dev} className={dev ? 'active' : ''} onClick={() => { setDev(true); if (events === null) getEventlog(runId).then(setEvents).catch(() => setEvents([])); }}>Technical</button>
         </div>
         <button className="btn-primary btn-sm" onClick={approve} disabled={busy || !versionId || approved}>
           {busy ? 'Working…' : approved ? 'Approved' : 'Approve plan ✦'}

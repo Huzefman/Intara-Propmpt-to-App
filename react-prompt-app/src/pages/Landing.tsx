@@ -116,38 +116,38 @@ export function Landing() {
             </span><br />
             <span style={{ fontWeight: 300, color: 'var(--intara-muted)', letterSpacing: '-0.03em' }}>come true.</span>
           </motion.div>
-          <motion.p variants={heroItem} style={{ color: 'var(--intara-faint)', fontSize: 14, fontWeight: 400, marginTop: 14, lineHeight: 1.7, maxWidth: 500, letterSpacing: '-0.01em' }}>
+          <motion.p variants={heroItem} style={{ color: 'var(--intara-faint)', fontSize: 16, fontWeight: 400, marginTop: 16, lineHeight: 1.7, maxWidth: 560, letterSpacing: '-0.01em' }}>
             Intara listens beyond the heliopause. Describe any app — task tracker, blog, salon booking — and watch schemas, frontend, backend and specs emerge as stardust. Minimal. Fluid. Runnable.
           </motion.p>
-          <motion.div variants={heroItem} style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+          <motion.div variants={heroItem} style={{ display: 'flex', gap: 8, marginTop: 18, flexWrap: 'wrap' }}>
             {!DEMO && EXAMPLES.slice(0, 4).map((ex) => (
-              <motion.button key={ex} whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} onClick={() => setPrompt(ex)} className="btn-ghost" style={{ fontSize: 11.5, fontWeight: 450, padding: '8px 12px', letterSpacing: '-0.01em' }}>{ex.slice(0, 34)}…</motion.button>
+              <motion.button key={ex} whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} onClick={() => setPrompt(ex)} className="btn-ghost" style={{ fontSize: 13.5, fontWeight: 450, padding: '8px 14px', letterSpacing: '-0.01em' }}>{ex.slice(0, 34)}…</motion.button>
             ))}
           </motion.div>
-          <motion.div variants={heroItem} style={{ marginTop: 14, fontSize: 11, fontWeight: 400, letterSpacing: '0.02em', color: 'var(--intara-dim)' }}>
+          <motion.div variants={heroItem} style={{ marginTop: 16, fontSize: 13, fontWeight: 400, letterSpacing: '0.01em', color: 'var(--intara-dim)' }}>
             {DEMO ? (
               <><span style={{ color: 'var(--intara-nebula-light)', fontWeight: 600 }}>10 gold apps</span> · static demo · runs in your browser <span style={{ opacity: 0.3, margin: '0 8px' }}>·</span> 3.7 light years away</>
             ) : (
               <><span style={{ color: 'var(--intara-nebula-light)', fontWeight: 600 }}>Private by default</span> · every wish is scoped to your account <span style={{ opacity: 0.3, margin: '0 8px' }}>·</span> 3.7 light years away</>
             )}
           </motion.div>
-          <motion.div variants={heroItem} style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+          <motion.div variants={heroItem} style={{ display: 'flex', gap: 12, marginTop: 18, flexWrap: 'wrap' }}>
             {DEMO ? (
               <>
-                <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => nav('/templates')} className="btn-primary" style={{ fontSize: 12.5, padding: '11px 20px' }}>Open the 10 live apps</motion.button>
-                <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="btn-ghost" style={{ fontSize: 12.5, padding: '11px 20px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Source on GitHub</a>
+                <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => nav('/templates')} className="btn-primary" style={{ fontSize: 14.5, padding: '12px 22px' }}>Open the 10 live apps</motion.button>
+                <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="btn-ghost" style={{ fontSize: 14.5, padding: '12px 22px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Source on GitHub</a>
               </>
             ) : authLoading ? (
-              <button className="btn-ghost" disabled style={{ fontSize: 12.5, padding: '11px 20px', opacity: 0.6 }}>Checking your orbit…</button>
+              <button className="btn-ghost" disabled style={{ fontSize: 14.5, padding: '12px 22px', opacity: 0.6 }}>Checking your orbit…</button>
             ) : user ? (
               <>
-                <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={scrollToWish} className="btn-primary" style={{ fontSize: 12.5, padding: '11px 20px' }}>Start weaving</motion.button>
-                <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => nav('/constellation')} className="btn-ghost" style={{ fontSize: 12.5 }}>View constellation</motion.button>
+                <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={scrollToWish} className="btn-primary" style={{ fontSize: 14.5, padding: '12px 22px' }}>Start weaving</motion.button>
+                <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => nav('/constellation')} className="btn-ghost" style={{ fontSize: 14.5, padding: '12px 22px' }}>View constellation</motion.button>
               </>
             ) : (
               <>
-                <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => nav('/auth?mode=signup')} className="btn-primary" style={{ fontSize: 12.5, padding: '11px 20px' }}>Create an account to weave</motion.button>
-                <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => nav('/auth')} className="btn-ghost" style={{ fontSize: 12.5 }}>Sign in</motion.button>
+                <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => nav('/auth?mode=signup')} className="btn-primary" style={{ fontSize: 14.5, padding: '12px 22px' }}>Create an account to weave</motion.button>
+                <motion.button whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => nav('/auth')} className="btn-ghost" style={{ fontSize: 14.5, padding: '12px 22px' }}>Sign in</motion.button>
               </>
             )}
           </motion.div>
@@ -159,16 +159,16 @@ export function Landing() {
 
       {!DEMO && !authLoading && user && (
         <>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--intara-nebula-light)' }}>Spec build</span>
-            <span style={{ fontSize: 10.5, color: 'var(--intara-dim)' }}>Prompt → typed App Spec → composed from prebuilt blocks → live app</span>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--intara-nebula-light)' }}>Instant App Generator</span>
+            <span style={{ fontSize: 13, color: 'var(--intara-faint)' }}>Describe what you want — Intara designs and builds your full application instantly</span>
           </div>
           <div ref={wishRef} style={{ scrollMarginTop: 90 }}>
             {!clarify ? (
               <>
                 <WishInput value={prompt} onChange={setPrompt} onSubmit={onWeave} loading={loading} placeholder="I wish for a hackathon manager with teams, projects, votes..." autoFocus />
-                <div className="starter-wishes" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12, alignItems: 'center' }}>
-                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--intara-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <div className="starter-wishes" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14, alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--intara-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                     ✦ Try an example:
                   </span>
                   {[
@@ -196,48 +196,48 @@ export function Landing() {
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="glass"
-                style={{ padding: 24, borderRadius: 20, display: 'grid', gap: 16 }}
+                style={{ padding: 26, borderRadius: 20, display: 'grid', gap: 18 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                   <div>
-                    <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--intara-nebula-light)' }}>
-                      Surface Analysis & Clarification
+                    <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--intara-nebula-light)' }}>
+                      App Blueprint &amp; Preferences
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
                       <input
                         value={appName}
                         onChange={(e) => setAppName(e.target.value)}
-                        style={{ fontFamily: 'Space Grotesk', fontSize: 20, fontWeight: 600, background: 'transparent', border: 'none', borderBottom: '1px dashed rgba(255,255,255,0.2)', color: 'var(--intara-text)', padding: '2px 0', minWidth: 200 }}
+                        style={{ fontFamily: 'Space Grotesk', fontSize: 22, fontWeight: 600, background: 'transparent', border: 'none', borderBottom: '1px dashed rgba(255,255,255,0.2)', color: 'var(--intara-text)', padding: '2px 0', minWidth: 220 }}
                         placeholder="App Name"
                         title="Click to rename your app"
                       />
-                      <span style={{ fontSize: 11, color: 'var(--intara-dim)' }}>✎ rename</span>
+                      <span style={{ fontSize: 12, color: 'var(--intara-dim)' }}>✎ rename</span>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span className="pill" style={{ background: 'rgba(139,92,246,0.15)', color: 'var(--intara-nebula-light)', border: '1px solid rgba(139,92,246,0.3)' }}>
+                    <span className="pill" style={{ background: 'rgba(139,92,246,0.15)', color: 'var(--intara-nebula-light)', border: '1px solid rgba(139,92,246,0.3)', fontSize: 13, padding: '4px 12px' }}>
                       Clarity score: {clarify.score}/100
                     </span>
                   </div>
                 </div>
 
-                <div style={{ fontSize: 13, color: 'var(--intara-muted)', lineHeight: 1.6 }}>
+                <div style={{ fontSize: 14.5, color: 'var(--intara-text)', lineHeight: 1.65 }}>
                   {clarify.tagline}
-                  {clarify.summary && <div style={{ fontSize: 12, color: 'var(--intara-faint)', marginTop: 4 }}>{clarify.summary}</div>}
+                  {clarify.summary && <div style={{ fontSize: 13.5, color: 'var(--intara-faint)', marginTop: 4 }}>{clarify.summary}</div>}
                 </div>
 
                 {clarify.questions?.length > 0 && (
-                  <div style={{ display: 'grid', gap: 14, marginTop: 4 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--intara-text)' }}>
-                      A few quick choices so Intara composes the right compiler components:
+                  <div style={{ display: 'grid', gap: 16, marginTop: 4 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--intara-text)' }}>
+                      A few quick preferences so Intara configures the best experience for your app:
                     </div>
                     {clarify.questions.map((q, i) => (
                       <div key={q.id || i} className="thread-q" style={{ marginTop: 0 }}>
-                        <div className="thread-q-title" style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                          <span className="thread-q-num" style={{ background: 'rgba(139,92,246,0.2)', padding: '2px 6px', borderRadius: 6, fontSize: 11, fontWeight: 600 }}>{String(i + 1).padStart(2, '0')}</span>
-                          <span>{q.q}</span>
+                        <div className="thread-q-title" style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+                          <span className="thread-q-num" style={{ background: 'rgba(139,92,246,0.2)', padding: '3px 8px', borderRadius: 6, fontSize: 12, fontWeight: 600 }}>{String(i + 1).padStart(2, '0')}</span>
+                          <span style={{ fontSize: 14.5 }}>{q.q}</span>
                         </div>
-                        <div className="thread-opts" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
+                        <div className="thread-opts" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
                           {(q.options || []).map((o) => {
                             const isSelected = answers[q.id] === o.label
                             return (
@@ -246,12 +246,12 @@ export function Landing() {
                                 type="button"
                                 className={`thread-opt ${isSelected ? 'selected' : ''}`}
                                 onClick={() => setAnswers((prev) => ({ ...prev, [q.id]: isSelected ? '' : o.label }))}
-                                style={{ textAlign: 'left', cursor: 'pointer' }}
+                                style={{ textAlign: 'left', cursor: 'pointer', padding: '12px 14px' }}
                               >
-                                <div style={{ fontWeight: 600, color: isSelected ? 'var(--intara-nebula-light)' : 'var(--intara-text)' }}>
+                                <div style={{ fontWeight: 600, fontSize: 14, color: isSelected ? 'var(--intara-nebula-light)' : 'var(--intara-text)' }}>
                                   {isSelected ? '✓ ' : ''}{o.label}
                                 </div>
-                                {o.desc && <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>{o.desc}</div>}
+                                {o.desc && <div className="muted" style={{ fontSize: 12.5, marginTop: 3 }}>{o.desc}</div>}
                               </button>
                             )
                           })}
@@ -263,20 +263,20 @@ export function Landing() {
 
                 {err && <div className="run-error" role="alert">{err}</div>}
 
-                <div style={{ display: 'flex', gap: 10, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 12, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                   <button
                     className="btn-primary"
                     onClick={() => onStartBuild(false)}
                     disabled={building}
-                    style={{ padding: '11px 22px' }}
+                    style={{ padding: '12px 24px', fontSize: 14.5 }}
                   >
-                    {building ? 'Weaving your app…' : `Build App${Object.values(answers).filter(Boolean).length ? ` (${Object.values(answers).filter(Boolean).length} chosen)` : ''} →`}
+                    {building ? 'Designing your app…' : `Build App${Object.values(answers).filter(Boolean).length ? ` (${Object.values(answers).filter(Boolean).length} chosen)` : ''} →`}
                   </button>
                   <button
                     className="btn-ghost"
                     onClick={() => onStartBuild(true)}
                     disabled={building}
-                    style={{ padding: '11px 18px' }}
+                    style={{ padding: '12px 20px', fontSize: 14 }}
                   >
                     Build without answering →
                   </button>
@@ -284,7 +284,7 @@ export function Landing() {
                     className="btn-ghost"
                     onClick={() => { setClarify(null); setAnswers({}) }}
                     disabled={building}
-                    style={{ fontSize: 12, opacity: 0.8 }}
+                    style={{ fontSize: 13, opacity: 0.85, padding: '10px 16px' }}
                   >
                     ← Edit wish
                   </button>

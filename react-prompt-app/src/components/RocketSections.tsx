@@ -65,17 +65,17 @@ const steps = [
 export function Pillars() {
   const ref = useReveal<HTMLDivElement>()
   return (
-    <div ref={ref} className="glass reveal" style={{ marginTop: 20, padding: 24, borderRadius: 20 }}>
-      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--intara-faint)' }}>
+    <div ref={ref} className="glass reveal" style={{ marginTop: 24, padding: 28, borderRadius: 20 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--intara-nebula-light)' }}>
         The wishing · The forging · The remembering
       </div>
-      <div className="text-display" style={{ fontSize: 'clamp(22px, 3.4vw, 30px)', fontWeight: 500, letterSpacing: '-0.03em', marginTop: 10, color: 'var(--intara-text)' }}>
+      <div className="text-display" style={{ fontSize: 'clamp(24px, 3.4vw, 32px)', fontWeight: 500, letterSpacing: '-0.03em', marginTop: 10, color: 'var(--intara-text)' }}>
         Three movements. One shared stardust.
       </div>
-      <p style={{ color: 'var(--intara-faint)', fontSize: 13, marginTop: 8, maxWidth: 560, lineHeight: 1.7 }}>
+      <p style={{ color: 'var(--intara-faint)', fontSize: 15, marginTop: 8, maxWidth: 600, lineHeight: 1.7 }}>
         Start anywhere — Intara carries everything you already wished into your next step.
       </p>
-      <div className="pillars-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginTop: 18 }}>
+      <div className="pillars-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 20 }}>
         {pillars.map((p, i) => (
           <motion.div
             key={p.id}
@@ -83,20 +83,20 @@ export function Pillars() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-8% 0px' }}
             transition={{ duration: 0.55, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
-            style={{ padding: 18, borderRadius: 16, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)', position: 'relative', overflow: 'hidden' }}
+            style={{ padding: 20, borderRadius: 16, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)', position: 'relative', overflow: 'hidden' }}
           >
-            <div style={{ fontFamily: 'Space Grotesk', fontSize: 40, fontWeight: 600, letterSpacing: '-0.04em', color: 'rgba(255,255,255,0.07)', position: 'absolute', top: 6, right: 12, pointerEvents: 'none' }}>
+            <div style={{ fontFamily: 'Space Grotesk', fontSize: 44, fontWeight: 600, letterSpacing: '-0.04em', color: 'rgba(255,255,255,0.07)', position: 'absolute', top: 6, right: 12, pointerEvents: 'none' }}>
               {p.id}
             </div>
-            <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--intara-nebula-light)' }}>{p.id} · {p.kicker}</div>
-            <div style={{ fontFamily: 'Space Grotesk', fontSize: 16, fontWeight: 500, letterSpacing: '-0.02em', marginTop: 8, color: 'var(--intara-text)' }}>{p.headline}</div>
-            <div style={{ fontSize: 12, color: 'var(--intara-faint)', marginTop: 6, lineHeight: 1.65 }}>{p.body}</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--intara-nebula-light)' }}>{p.id} · {p.kicker}</div>
+            <div style={{ fontFamily: 'Space Grotesk', fontSize: 17, fontWeight: 500, letterSpacing: '-0.02em', marginTop: 8, color: 'var(--intara-text)' }}>{p.headline}</div>
+            <div style={{ fontSize: 13.5, color: 'var(--intara-faint)', marginTop: 6, lineHeight: 1.65 }}>{p.body}</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 14 }}>
               {p.chips.map((c) => (
-                <span key={c} style={{ fontSize: 10.5, padding: '4px 9px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', color: 'var(--intara-muted)' }}>{c}</span>
+                <span key={c} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', color: 'var(--intara-muted)' }}>{c}</span>
               ))}
             </div>
-            <Link to={p.linkTo} style={{ display: 'inline-block', marginTop: 12, fontSize: 12, fontWeight: 550, color: 'var(--intara-nebula-light)', textDecoration: 'none' }}>
+            <Link to={p.linkTo} style={{ display: 'inline-block', marginTop: 14, fontSize: 13.5, fontWeight: 550, color: 'var(--intara-nebula-light)', textDecoration: 'none' }}>
               {p.linkLabel} →
             </Link>
           </motion.div>
@@ -110,14 +110,14 @@ export function HowItWorks({ onStart }: { onStart: () => void }) {
   const ref = useReveal<HTMLDivElement>()
   const [active, setActive] = useState(1)
   return (
-    <div ref={ref} className="glass reveal" style={{ marginTop: 16, padding: 24, borderRadius: 20 }}>
-      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--intara-faint)' }}>
+    <div ref={ref} className="glass reveal" style={{ marginTop: 20, padding: 28, borderRadius: 20 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--intara-nebula-light)' }}>
         Pick your starting point
       </div>
-      <div className="text-display" style={{ fontSize: 'clamp(20px, 3vw, 26px)', fontWeight: 500, letterSpacing: '-0.03em', marginTop: 10, color: 'var(--intara-text)' }}>
+      <div className="text-display" style={{ fontSize: 'clamp(22px, 3vw, 28px)', fontWeight: 500, letterSpacing: '-0.03em', marginTop: 10, color: 'var(--intara-text)' }}>
         Intara connects the rest.
       </div>
-      <div style={{ display: 'flex', gap: 6, marginTop: 14, flexWrap: 'wrap' }} role="tablist" aria-label="Starting points">
+      <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }} role="tablist" aria-label="Starting points">
         {startingPoints.map((s, i) => (
           <button
             key={s.id}
@@ -125,7 +125,7 @@ export function HowItWorks({ onStart }: { onStart: () => void }) {
             aria-selected={active === i}
             onClick={() => setActive(i)}
             style={{
-              padding: '8px 14px', borderRadius: 999, fontSize: 12, fontWeight: active === i ? 600 : 450, cursor: 'pointer',
+              padding: '9px 16px', borderRadius: 999, fontSize: 13.5, fontWeight: active === i ? 600 : 450, cursor: 'pointer',
               border: active === i ? '1px solid rgba(139,92,246,0.9)' : '1px solid rgba(255,255,255,0.06)',
               background: active === i ? 'rgba(139,92,246,0.12)' : 'transparent',
               color: active === i ? 'var(--intara-nebula-light)' : 'var(--intara-faint)',
@@ -136,7 +136,7 @@ export function HowItWorks({ onStart }: { onStart: () => void }) {
           </button>
         ))}
       </div>
-      <div className="steps-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 16 }}>
+      <div className="steps-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginTop: 18 }}>
         {steps.map((s, i) => (
           <motion.div
             key={s.id}
@@ -144,17 +144,17 @@ export function HowItWorks({ onStart }: { onStart: () => void }) {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-8% 0px' }}
             transition={{ duration: 0.5, delay: i * 0.06, ease: [0.16, 1, 0.3, 1] }}
-            style={{ padding: 14, borderRadius: 14, border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.02)' }}
+            style={{ padding: 16, borderRadius: 14, border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.02)' }}
           >
-            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--intara-nebula-light)', fontWeight: 600 }}>{s.id}</div>
-            <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em', marginTop: 6, color: 'var(--intara-text)' }}>{s.title}</div>
-            <div style={{ fontSize: 11.5, color: 'var(--intara-faint)', marginTop: 6, lineHeight: 1.6 }}>{s.body}</div>
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--intara-nebula-light)', fontWeight: 600 }}>{s.id}</div>
+            <div style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: '-0.01em', marginTop: 6, color: 'var(--intara-text)' }}>{s.title}</div>
+            <div style={{ fontSize: 13, color: 'var(--intara-faint)', marginTop: 6, lineHeight: 1.6 }}>{s.body}</div>
           </motion.div>
         ))}
       </div>
-      <div style={{ marginTop: 16, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button onClick={onStart} className="btn-primary" style={{ padding: '12px 20px', fontSize: 12.5 }}>Weave your first wish</button>
-        <span style={{ fontSize: 11, color: 'var(--intara-dim)' }}>Plan approval → sequential build → trial &amp; download</span>
+      <div style={{ marginTop: 18, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button onClick={onStart} className="btn-primary" style={{ padding: '12px 22px', fontSize: 14.5 }}>Weave your first wish</button>
+        <span style={{ fontSize: 13, color: 'var(--intara-dim)' }}>Plan approval → sequential build → trial &amp; download</span>
       </div>
     </div>
   )

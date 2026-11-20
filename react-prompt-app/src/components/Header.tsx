@@ -60,19 +60,19 @@ export function Header() {
         <div className="header-actions">
           {DEMO ? (
             <>
-              <span className="header-badge">Static demo · no backend</span>
+              <span className="header-badge">Demo preview</span>
               <a
                 href={GITHUB_URL}
                 target="_blank"
                 rel="noreferrer"
                 className="btn-ghost btn-sm"
-                style={{ fontSize: 12, padding: '5px 13px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', height: 32 }}
+                style={{ fontSize: 13, padding: '6px 14px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', height: 34 }}
               >
                 GitHub
               </a>
             </>
           ) : isSupabaseDemo ? (
-            <span className="header-badge">Demo · MEM</span>
+            <span className="header-badge">Demo mode</span>
           ) : onAuth ? null : user ? (
             <>
               <button
@@ -114,14 +114,14 @@ export function Header() {
               <button
                 onClick={() => nav('/auth')}
                 className="btn-ghost btn-sm"
-                style={{ fontSize: 12, padding: '6px 14px', height: 32 }}
+                style={{ fontSize: 13.5, padding: '7px 16px', height: 34 }}
               >
                 Sign in
               </button>
               <button
                 onClick={() => nav('/auth?mode=signup')}
                 className="btn-primary btn-sm"
-                style={{ fontSize: 12, padding: '6px 14px', height: 32 }}
+                style={{ fontSize: 13.5, padding: '7px 16px', height: 34 }}
               >
                 Create account
               </button>

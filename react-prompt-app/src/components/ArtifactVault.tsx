@@ -70,8 +70,8 @@ export function Code({ title, content, lang }: { title: string; content: string;
   return (
     <div style={{ marginBottom: 18 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)' }}>{title} {lang && <span style={{ fontWeight: 400, textTransform: 'none', opacity: 0.7 }}>· {lang}</span>}</span>
-        <button className="btn-ghost" style={{ padding: '6px 12px', fontSize: 11, fontWeight: 450 }} onClick={() => navigator.clipboard.writeText(content)}>Copy</button>
+        <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)' }}>{title} {lang && <span style={{ fontWeight: 400, textTransform: 'none', opacity: 0.7 }}>· {lang}</span>}</span>
+        <button className="btn-ghost" style={{ padding: '6px 14px', fontSize: 12.5, fontWeight: 450 }} onClick={() => navigator.clipboard.writeText(content)}>Copy</button>
       </div>
       <pre className="code-block" style={{ background: '#08080C', border: '1px solid rgba(255,255,255,0.04)' }}>{content || '// empty'}</pre>
     </div>
@@ -87,12 +87,12 @@ function SchemaTab({ artifacts, prd }: any) {
   const er = tables.map((t: any) => `${t.name} {\n${(t.fields || []).map((f: any) => `  ${f.type} ${f.name}`).join('\n')}\n}`).join('\n\n')
   return (
     <div>
-      <div className="glass" style={{ padding: 14, marginBottom: 16 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--intara-muted)', marginBottom: 8 }}>ER Diagram</div>
+      <div className="glass" style={{ padding: 18, marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--intara-muted)', marginBottom: 10 }}>Entity Relationship Map</div>
         <pre className="code-block" style={{ background: 'rgba(255,255,255,0.04)' }}>{er || '// no tables'}</pre>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
           {tables.map((t: any) => (
-            <span key={t.name} style={{ fontSize: 11, border: '1px solid var(--intara-border)', padding: '5px 9px', borderRadius: 999, background: 'rgba(255,255,255,0.06)' }}>
+            <span key={t.name} style={{ fontSize: 12.5, border: '1px solid var(--intara-border)', padding: '6px 12px', borderRadius: 999, background: 'rgba(255,255,255,0.06)' }}>
               <b>{t.name}</b> — {(t.fields || []).map((f: any) => `${f.name}:${f.type}`).join(', ')}
             </span>
           ))}

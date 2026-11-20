@@ -97,7 +97,7 @@ function PlanProgress({ phase, label }: { phase?: string | null; label?: string 
           return (
             <span key={p.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <span style={{
-                padding: '6px 10px', borderRadius: 999, fontSize: 11, fontWeight: active ? 600 : 500,
+                padding: '7px 12px', borderRadius: 999, fontSize: 12.5, fontWeight: active ? 600 : 500,
                 background: done ? 'rgba(16,185,129,0.12)' : active ? 'rgba(139,92,246,0.16)' : 'rgba(255,255,255,0.04)',
                 border: `1px solid ${done ? 'rgba(16,185,129,0.22)' : active ? 'rgba(139,92,246,0.32)' : 'rgba(255,255,255,0.06)'}`,
                 color: done ? '#10B981' : active ? 'var(--intara-nebula-light)' : 'var(--intara-faint)',
@@ -107,13 +107,13 @@ function PlanProgress({ phase, label }: { phase?: string | null; label?: string 
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: done ? '#10B981' : active ? '#8B5CF6' : 'var(--intara-dim)', display: 'inline-block', marginRight: 6, verticalAlign: 'middle' }} />
                 {p.label}
               </span>
-              {i < PLAN_PHASES.length - 1 && <span style={{ color: 'var(--intara-dim)', fontSize: 10 }}>→</span>}
+              {i < PLAN_PHASES.length - 1 && <span style={{ color: 'var(--intara-dim)', fontSize: 11 }}>→</span>}
             </span>
           )
         })}
       </div>
       {(label || activeIdx >= 0) && (
-        <div style={{ fontSize: 11.5, color: 'var(--intara-faint)', marginTop: 8 }}>
+        <div style={{ fontSize: 13, color: 'var(--intara-faint)', marginTop: 8 }}>
           <span className="chat-shimmer" aria-label="Planning in progress">✦</span> {label || 'Warming up the forge…'}
         </div>
       )}

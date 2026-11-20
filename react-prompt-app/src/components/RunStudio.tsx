@@ -14,13 +14,13 @@ const VersionTimeline = lazy(() => import('./VersionTimeline').then(m => ({ defa
 const RolesMatrix = lazy(() => import('../runtime/RolesMatrix').then(m => ({ default: m.RolesMatrix })))
 
 const STAGES = [
-  ['s0', 'Intake'],
-  ['s1', 'Clarify'],
-  ['s2', 'Model'],
-  ['s3', 'Screens'],
-  ['s4', 'Logic'],
-  ['s5', 'Assemble'],
-  ['s6', 'Seed'],
+  ['s0', 'Understanding'],
+  ['s1', 'Refining'],
+  ['s2', 'Data Structure'],
+  ['s3', 'Pages & Views'],
+  ['s4', 'Actions & Rules'],
+  ['s5', 'Assembling'],
+  ['s6', 'Sample Records'],
 ] as const
 
 const TERMINAL = new Set(['done', 'degraded', 'failed', 'cancelled', 'approved', 'ready'])
@@ -43,8 +43,8 @@ function suggestionIcon(label: string) {
 
 function Card({ title, children }: { title: string; children: any }) {
   return (
-    <div className="glass" style={{ padding: '12px 14px', borderRadius: 14, minWidth: 0, width: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
-      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 8 }}>{title}</div>
+    <div className="glass" style={{ padding: '14px 16px', borderRadius: 14, minWidth: 0, width: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
+      <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 8 }}>{title}</div>
       {children}
     </div>
   )
@@ -244,14 +244,14 @@ export function RunStudio({ runId }: { runId: string }) {
       <header className="run-head glass">
         <div className="run-head-main">
           <div style={{ minWidth: 0 }}>
-            <div className="run-eyebrow">Intara spec studio</div>
+            <div className="run-eyebrow">App Studio</div>
             <h1 className="run-title">{appName}</h1>
             <p className="run-tagline">{tagline}</p>
           </div>
           <div className="run-head-actions">
             <span className={`pill status-${status}`}>{labelFor(status)}</span>
-            {versionId && <span className="mono" style={{ fontSize: 11, color: 'var(--intara-faint)' }}>v{String(versionId).slice(0, 8)}</span>}
-            {approved && <span style={{ fontSize: 11, color: '#6EE7B7' }}>Approved ✓</span>}
+            {versionId && <span className="mono" style={{ fontSize: 12, color: 'var(--intara-faint)' }}>v{String(versionId).slice(0, 8)}</span>}
+            {approved && <span style={{ fontSize: 12, color: '#6EE7B7' }}>Approved ✓</span>}
             {status === 'failed' ? (
               <button className="btn-primary btn-sm" onClick={retry} disabled={busy}>
                 {busy ? 'Retrying…' : 'Retry build'}
@@ -266,10 +266,10 @@ export function RunStudio({ runId }: { runId: string }) {
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 >
                   <span>↓</span>
-                  <span>{downloading ? 'Packing…' : 'Download Code'}</span>
+                  <span>{downloading ? 'Packing…' : 'Download App (.zip)'}</span>
                 </button>
                 <button className="btn-primary btn-sm" onClick={approve} disabled={busy || !versionId || approved}>
-                  {approved ? 'Approved' : 'Approve version'}
+                  {approved ? 'Approved' : 'Approve & Publish'}
                 </button>
               </>
             ) : null}
@@ -286,7 +286,7 @@ export function RunStudio({ runId }: { runId: string }) {
                 onKeyDown={(e) => { if (e.key === 'Enter') patch() }}
                 placeholder="Ask for a change — e.g. “add a kanban view for tasks”"
                 disabled={busy}
-                aria-label="Ask for a spec change"
+                aria-label="Ask for a change"
               />
               {instruction && (
                 <button
@@ -300,14 +300,14 @@ export function RunStudio({ runId }: { runId: string }) {
               )}
             </div>
             <button className="btn-primary btn-sm" onClick={patch} disabled={busy || instruction.trim().length < 4} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span>{busy ? 'Patching…' : 'Patch app'}</span>
+              <span>{busy ? 'Patching…' : 'Update app'}</span>
               <kbd className="cmd-kbd">↵</kbd>
             </button>
           </div>
         )}
         {spec && suggestions.length > 0 && (
           <div className="run-suggestions" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--intara-muted)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--intara-muted)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               💡 What to add next:
             </span>
             {suggestions.map((s: any, idx: number) => (
@@ -321,7 +321,7 @@ export function RunStudio({ runId }: { runId: string }) {
                 <span>{suggestionIcon(s.label)}</span>
                 <span>{s.label}</span>
                 {s.detail && (
-                  <span style={{ fontSize: 10.5, color: 'var(--intara-faint)', borderLeft: '1px solid rgba(255,255,255,0.12)', paddingLeft: 6 }}>
+                  <span style={{ fontSize: 11, color: 'var(--intara-faint)', borderLeft: '1px solid rgba(255,255,255,0.12)', paddingLeft: 6 }}>
                     {s.detail}
                   </span>
                 )}
@@ -334,7 +334,7 @@ export function RunStudio({ runId }: { runId: string }) {
 
         <div className="run-tabs" role="tablist" aria-label="Run views">
           <button role="tab" aria-selected={tab === 'app'} className={tab === 'app' ? 'active' : ''} onClick={() => setTab('app')}>App</button>
-          <button role="tab" aria-selected={tab === 'spec'} className={tab === 'spec' ? 'active' : ''} onClick={() => setTab('spec')}>Spec</button>
+          <button role="tab" aria-selected={tab === 'spec'} className={tab === 'spec' ? 'active' : ''} onClick={() => setTab('spec')}>Architecture</button>
           <button role="tab" aria-selected={tab === 'activity'} className={tab === 'activity' ? 'active' : ''} onClick={openActivity}>Activity</button>
         </div>
       </header>
@@ -388,9 +388,9 @@ export function RunStudio({ runId }: { runId: string }) {
                     onClick={handleDownloadCode}
                     disabled={downloading}
                     title="Download complete standalone app project (.zip)"
-                    style={{ fontSize: 11, padding: '4px 10px', height: 26, borderRadius: 6, color: '#93C5FD', cursor: 'pointer', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.2)' }}
+                    style={{ fontSize: 12, padding: '5px 12px', height: 28, borderRadius: 6, color: '#93C5FD', cursor: 'pointer', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.2)' }}
                   >
-                    ↓ {downloading ? 'Packing…' : 'Code (.zip)'}
+                    ↓ {downloading ? 'Packing…' : 'App (.zip)'}
                   </button>
                 </div>
               </div>
@@ -405,19 +405,19 @@ export function RunStudio({ runId }: { runId: string }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                 <span className="run-pulse" aria-hidden="true" style={status === 'failed' ? { background: '#F87171', animation: 'none' } : undefined} />
                 <div>
-                  <div style={{ fontFamily: 'Space Grotesk', fontSize: 19 }}>
-                    {status === 'failed' ? 'Build failed' : TERMINAL.has(status) ? 'Spec unavailable' : 'Weaving the App Spec'}
+                  <div style={{ fontFamily: 'Space Grotesk', fontSize: 20 }}>
+                    {status === 'failed' ? 'Build failed' : TERMINAL.has(status) ? 'Architecture ready' : 'Designing your application'}
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--intara-faint)', marginTop: 2 }}>
-                    The LLM writes a typed spec; the runtime composes prebuilt blocks. No app code is generated.
+                  <div style={{ fontSize: 13.5, color: 'var(--intara-faint)', marginTop: 3 }}>
+                    Composing data models, interactive pages, and workflows for your app.
                   </div>
                 </div>
-                {llmCalls !== null && llmCalls !== undefined && <span className="pill">{llmCalls} LLM calls</span>}
+                <span className="pill" style={{ fontSize: 12 }}>AI Powered</span>
               </div>
               <StageRail steps={steps} />
               {run?.error && <div className="run-error" style={{ marginTop: 10 }}>{run.error}</div>}
               {degraded.length > 0 && (
-                <div className="run-note" style={{ color: '#FCD34D' }}>Degraded fallbacks: {degraded.join(', ')}</div>
+                <div className="run-note" style={{ color: '#FCD34D' }}>Optimized fallbacks: {degraded.join(', ')}</div>
               )}
               {status === 'failed' && (
                 <div style={{ marginTop: 12 }}>

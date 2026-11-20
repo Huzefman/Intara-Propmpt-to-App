@@ -29,8 +29,8 @@
   overflow: hidden;
   color: var(--blk-text);
   font-family: Inter, "Space Grotesk", system-ui, -apple-system, sans-serif;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 /* ---------- shell: nav ---------- */
@@ -38,33 +38,33 @@
 .app-nav {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
-  padding: 10px 12px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--blk-border);
   background: rgba(255, 255, 255, 0.015);
 }
 
 .app-nav .app-brand {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14.5px;
   letter-spacing: -0.01em;
-  margin-right: 8px;
+  margin-right: 10px;
 }
 
 .app-nav .app-brand::before {
   content: "◆";
   color: var(--blk-accent);
-  font-size: 9px;
+  font-size: 10px;
   margin-right: 7px;
   vertical-align: 1px;
 }
 
 .app-nav button {
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--blk-muted);
-  padding: 6px 12px;
+  padding: 7px 14px;
   border-radius: 999px;
   border: 1px solid transparent;
   background: transparent;
@@ -87,9 +87,9 @@
 .app-nav select {
   margin-left: auto;
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--blk-muted);
-  padding: 6px 10px;
+  padding: 7px 12px;
   border-radius: 999px;
   border: 1px solid var(--blk-border);
   background: var(--blk-surface-2);
@@ -98,17 +98,17 @@
 
 .app-main {
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  gap: 14px;
+  padding: 18px;
 }
 
 /* ---------- shared controls ---------- */
 
 .app-shell button {
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--blk-muted);
-  padding: 7px 13px;
+  padding: 8px 15px;
   border-radius: 999px;
   border: 1px solid var(--blk-border);
   background: var(--blk-surface-2);
@@ -131,12 +131,12 @@
 .app-shell textarea,
 .app-shell select {
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--blk-text);
   background: var(--blk-surface);
   border: 1px solid var(--blk-border);
   border-radius: 10px;
-  padding: 8px 11px;
+  padding: 9px 12px;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
@@ -165,13 +165,13 @@
   background: var(--blk-surface);
   border: 1px solid var(--blk-border);
   border-radius: var(--blk-radius);
-  padding: 14px;
+  padding: 16px;
   min-width: 0;
 }
 
 .blk-title {
-  margin: 0 0 10px;
-  font-size: 10.5px;
+  margin: 0 0 12px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -180,15 +180,15 @@
 
 .blk-loading,
 .blk-empty {
-  padding: 22px;
+  padding: 24px;
   text-align: center;
   color: var(--blk-faint);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 /* Empty state nested inside a block that still offers actions (create/import). */
 .blk > .blk-empty {
-  padding: 12px 0 6px;
+  padding: 14px 0 8px;
 }
 
 .blk-error {
@@ -196,7 +196,7 @@
   color: #fda4af;
   background: rgba(239, 68, 68, 0.07);
   border-color: rgba(239, 68, 68, 0.22);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 /* ---------- table ---------- */
@@ -228,12 +228,12 @@
 
 .blk-search-input {
   width: 100%;
-  padding: 6px 26px 6px 28px;
+  padding: 7px 28px 7px 30px;
   background: var(--blk-surface-2);
   border: 1px solid var(--blk-border);
   border-radius: 8px;
   color: var(--blk-text);
-  font-size: 12px;
+  font-size: 13px;
   outline: none;
   transition: border-color 0.15s, background 0.15s;
 }
@@ -260,7 +260,7 @@
 }
 
 .blk-table-meta {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--blk-faint);
   font-variant-numeric: tabular-nums;
   margin-right: auto;
@@ -283,7 +283,7 @@
 }
 
 .blk-sort-icon {
-  font-size: 10px;
+  font-size: 11px;
   opacity: 0.35;
   transition: opacity 0.15s, color 0.15s;
 }
@@ -298,6 +298,7 @@
   padding: 24px 10px !important;
   color: var(--blk-faint);
   font-style: italic;
+  font-size: 13px;
 }
 
 /* ---------- status badges / pills ---------- */
@@ -305,10 +306,10 @@
 .blk-pill {
   display: inline-flex;
   align-items: center;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 550;
-  line-height: 1.2;
-  padding: 2.5px 8.5px;
+  line-height: 1.25;
+  padding: 3px 9px;
   border-radius: 999px;
   white-space: nowrap;
   letter-spacing: 0.01em;
@@ -362,19 +363,19 @@
 
 .blk-table th {
   text-align: left;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--blk-faint);
-  padding: 6px 10px 8px;
+  padding: 8px 12px 9px;
   border-bottom: 1px solid var(--blk-border-strong);
   white-space: nowrap;
 }
 
 .blk-table td {
-  padding: 9px 10px;
-  font-size: 12.5px;
+  padding: 11px 12px;
+  font-size: 13.5px;
   border-bottom: 1px solid var(--blk-border);
   color: var(--blk-muted);
   max-width: 280px;
@@ -428,7 +429,7 @@
 
 .blk-col h4 {
   margin: 0 0 9px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -458,22 +459,22 @@
 }
 
 .blk-card strong {
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 550;
   color: var(--blk-text);
 }
 
 .blk-card span {
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--blk-muted);
 }
 
 .blk-card em {
   justify-self: start;
   font-style: normal;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 550;
-  padding: 2px 8px;
+  padding: 2.5px 8px;
   border-radius: 999px;
   background: var(--blk-accent-soft);
   border: 1px solid var(--blk-accent-border);
@@ -585,7 +586,7 @@
 }
 
 .blk-stat span {
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -594,7 +595,7 @@
 
 .blk-stat strong {
   font-family: "Space Grotesk", Inter, sans-serif;
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 500;
   letter-spacing: -0.03em;
   color: var(--blk-text);
@@ -722,7 +723,7 @@
 
 .blk-detail h4 {
   margin: 0 0 8px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -733,7 +734,7 @@
   display: flex;
   justify-content: space-between;
   gap: 14px;
-  padding: 7px 0;
+  padding: 8px 0;
   border-bottom: 1px solid var(--blk-border);
 }
 
@@ -742,12 +743,12 @@
 }
 
 .blk-kv span {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--blk-faint);
 }
 
 .blk-kv strong {
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 500;
   text-align: right;
 }
@@ -759,8 +760,8 @@
 }
 
 .blk-related li {
-  padding: 8px 10px;
-  font-size: 12.5px;
+  padding: 9px 12px;
+  font-size: 13.5px;
   color: var(--blk-muted);
   border-bottom: 1px solid var(--blk-border);
   border-radius: 8px;
@@ -791,14 +792,14 @@
 
 .blk-form {
   display: grid;
-  gap: 11px;
-  max-width: 540px;
+  gap: 12px;
+  max-width: 580px;
 }
 
 .blk-form label {
   display: grid;
   gap: 6px;
-  font-size: 11.5px;
+  font-size: 13px;
   color: var(--blk-muted);
 }
 

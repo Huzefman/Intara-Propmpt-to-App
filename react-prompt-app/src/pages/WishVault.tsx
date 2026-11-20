@@ -203,17 +203,17 @@ function eventLabel(ev: any): { text: string; tone: 'ok' | 'busy' | 'bad' | 'dim
     case 'step_done': return { text: `✓ ${d.stepId || ''} done`, tone: 'ok' }
     case 'step_failed': return { text: `✗ ${d.stepId || ''} failed — ${(d.error || '').slice(0, 140)}`, tone: 'bad' }
     case 'step_skipped': return { text: `↷ ${d.stepId || ''} already done — skipped`, tone: 'dim' }
-    case 'validation_started': return { text: 'Running pre-checks (syntax + wiring)…', tone: 'busy' }
+    case 'validation_started': return { text: 'Running pre-checks…', tone: 'busy' }
     case 'validation_warnings': return { text: `⚠ ${(d.errors || []).length} validation warning(s) — see details`, tone: 'bad' }
-    case 'validation_gates': return { text: d.phase === 'tsc/vite' ? 'Heavy gates: type-check + production build (slowest step, minutes)…' : d.phase === 'import/crud' ? 'Heavy gates: backend import + CRUD matrix…' : `Gate phase: ${d.phase || ''}`, tone: 'busy' }
+    case 'validation_gates': return { text: d.phase === 'tsc/vite' ? 'Verifying code quality and compiling app…' : d.phase === 'import/crud' ? 'Setting up database tables and verifying connections…' : `Verification phase: ${d.phase || ''}`, tone: 'busy' }
     case 'plan_phase': return { text: `Plan: ${d.label || d.phase || ''}`, tone: 'busy' }
     case 'plan_ready': return { text: 'Plan ready — awaiting approval', tone: 'ok' }
     case 'plan_failed': return { text: `Plan failed — ${(d.error || '').slice(0, 140)}`, tone: 'bad' }
-    case 'build_done': return { text: 'Build done — packing the trial…', tone: 'ok' }
+    case 'build_done': return { text: 'Build completed — preparing preview…', tone: 'ok' }
     case 'build_failed': {
       const where = d.failedStep ? ` at ${d.failedStep}` : ''
       const why = d.error || d.reason
-      return { text: `Build failed${where}${why ? ` — ${String(why).slice(0, 160)}` : ''}`, tone: 'bad' }
+      return { text: `Build paused${where}${why ? ` — ${String(why).slice(0, 160)}` : ''}`, tone: 'bad' }
     }
     case 'heartbeat': return { text: `Still working — status ${(d.status || '').replace('_', ' ')}`, tone: 'dim' }
     case 'error': return { text: `Stream note: ${(d.error || ev.error || '').slice(0, 140)}`, tone: 'dim' }
@@ -351,20 +351,20 @@ function BuildingView({ wish, compact = false, onChanged }: { wish: any; compact
         </div>
       </div>
 
-      <div className="glass" style={{ padding: 16, borderRadius: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Build pipeline — DAG</span>
-          <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: '-0.01em', fontSize: 10.5, color: 'var(--intara-dim)' }}>{done} / {total} steps · {graph.filter((n:any)=>n.kind==='frontend_page').length} pages · {graph.filter((n:any)=>n.kind==='backend_table').length} tables</span>
+      <div className="glass" style={{ padding: 18, borderRadius: 16 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-nebula-light)', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Application Build Progress</span>
+          <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: '-0.01em', fontSize: 12, color: 'var(--intara-muted)' }}>{done} / {total} steps · {graph.filter((n:any)=>n.kind==='frontend_page').length} pages · {graph.filter((n:any)=>n.kind==='backend_table').length} data tables</span>
         </div>
-        {/* DAG flowchart — CSS grid, no D3 */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12, padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 12 }}>
+        {/* Visual progress flow */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14, padding: '12px 14px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 12 }}>
           {graph.map((n:any, idx:number) => {
             const st = steps[n.id] || { status: 'pending' }
             const isRunning = st.status === 'running'
             return (
               <span key={n.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <span style={{
-                  padding: '6px 10px', borderRadius: 999, fontSize: 11, fontWeight: isRunning ? 600 : 500,
+                  padding: '7px 12px', borderRadius: 999, fontSize: 12.5, fontWeight: isRunning ? 600 : 500,
                   background: st.status==='done' ? 'rgba(16,185,129,0.12)' : isRunning ? 'rgba(139,92,246,0.16)' : st.status==='failed' ? 'rgba(248,113,113,0.12)' : 'rgba(255,255,255,0.04)',
                   border: `1px solid ${st.status==='done' ? 'rgba(16,185,129,0.22)' : isRunning ? 'rgba(139,92,246,0.32)' : 'rgba(255,255,255,0.06)'}`,
                   color: st.status==='done' ? '#10B981' : isRunning ? 'var(--intara-nebula-light)' : st.status==='failed' ? '#F87171' : 'var(--intara-faint)',
@@ -372,10 +372,10 @@ function BuildingView({ wish, compact = false, onChanged }: { wish: any; compact
                   animation: isRunning ? 'pulse 1.2s ease-in-out infinite' : 'none',
                   whiteSpace: 'nowrap'
                 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: st.status==='done' ? '#10B981' : isRunning ? '#8B5CF6' : st.status==='failed' ? '#F87171' : 'var(--intara-dim)', display: 'inline-block', marginRight: 6, verticalAlign: 'middle', boxShadow: isRunning ? '0 0 6px #8B5CF6' : 'none' }} />
-                  {n.id.replace('backend-','be:').replace('frontend-','fe:')}
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: st.status==='done' ? '#10B981' : isRunning ? '#8B5CF6' : st.status==='failed' ? '#F87171' : 'var(--intara-dim)', display: 'inline-block', marginRight: 6, verticalAlign: 'middle', boxShadow: isRunning ? '0 0 6px #8B5CF6' : 'none' }} />
+                  {n.id.replace('backend-','Data: ').replace('frontend-','Screen: ')}
                 </span>
-                {idx < graph.length - 1 && <span style={{ color: 'var(--intara-dim)', fontSize: 10, margin: '0 2px' }}>→</span>}
+                {idx < graph.length - 1 && <span style={{ color: 'var(--intara-dim)', fontSize: 11, margin: '0 3px' }}>→</span>}
               </span>
             )
           })}
@@ -390,24 +390,24 @@ function BuildingView({ wish, compact = false, onChanged }: { wish: any; compact
             const eMs = toMs(st.endedAt)
             const dur = sMs != null ? fmtDur((eMs ?? now) - sMs) : null
             return (
-              <div key={n.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 12, background: bg, border: '1px solid rgba(255,255,255,0.04)', opacity: isRunning ? 1 : st.status === 'pending' ? 0.7 : 1 }}>
+              <div key={n.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 12, background: bg, border: '1px solid rgba(255,255,255,0.04)', opacity: isRunning ? 1 : st.status === 'pending' ? 0.7 : 1 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, boxShadow: isRunning ? '0 0 8px rgba(139,92,246,0.5)' : 'none', flexShrink: 0, animation: isRunning ? 'pulse 1s infinite' : 'none' }} />
-                <span style={{ fontSize: 12, fontWeight: 550, color: 'var(--intara-text)' }}>{n.id}</span>
-                <span style={{ fontSize: 11, color: 'var(--intara-faint)' }}>{n.kind} · {n.ref || '-'}{dur ? ` · ${dur}` : ''}</span>
-                <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 500, color, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 13.5, fontWeight: 550, color: 'var(--intara-text)' }}>{n.id}</span>
+                <span style={{ fontSize: 12.5, color: 'var(--intara-faint)' }}>{n.kind.replace('_', ' ')} · {n.ref || '-'}{dur ? ` · ${dur}` : ''}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 12.5, fontWeight: 500, color, display: 'flex', alignItems: 'center', gap: 6 }}>
                   {isRunning && <span style={{ width: 10, height: 10, border: '1.5px solid rgba(139,92,246,0.3)', borderTopColor: '#8B5CF6', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />}
                   {st.status}
                   {st.status === 'done' && st.fallback_reason && (
-                    <span title={String(st.fallback_reason).slice(0, 300)} style={{ padding: '3px 8px', borderRadius: 999, fontSize: 10, border: '1px solid rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.08)', color: '#FBBF24', whiteSpace: 'nowrap' }}>template fallback</span>
+                    <span title={String(st.fallback_reason).slice(0, 300)} style={{ padding: '3px 8px', borderRadius: 999, fontSize: 11, border: '1px solid rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.08)', color: '#FBBF24', whiteSpace: 'nowrap' }}>Optimized design</span>
                   )}
-                  {st.status === 'failed' && <button onClick={() => onRetryStep(n.id)} disabled={retrying === n.id} style={{ marginLeft: 8, padding: '4px 8px', borderRadius: 999, fontSize: 10, border: '1px solid rgba(248,113,113,0.3)', background: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer' }}>{retrying === n.id ? 'Retrying…' : 'Retry'}</button>}
+                  {st.status === 'failed' && <button onClick={() => onRetryStep(n.id)} disabled={retrying === n.id} style={{ marginLeft: 8, padding: '5px 10px', borderRadius: 999, fontSize: 11.5, border: '1px solid rgba(248,113,113,0.3)', background: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer' }}>{retrying === n.id ? 'Retrying…' : 'Retry'}</button>}
                 </span>
               </div>
             )
           })}
         </div>
         {failedSteps.length > 0 && (
-          <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 12, background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.14)', fontSize: 11.5, color: '#FCA5A5' }}>
+          <div style={{ marginTop: 10, padding: '12px 14px', borderRadius: 12, background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.14)', fontSize: 12.5, color: '#FCA5A5' }}>
             {failedSteps.map((n:any) => (
               <div key={n.id} style={{ marginTop: 4 }}>{n.id}: {String((steps[n.id] || {}).error || 'failed').slice(0, 220)}</div>
             ))}
@@ -415,11 +415,11 @@ function BuildingView({ wish, compact = false, onChanged }: { wish: any; compact
           </div>
         )}
         {feed.length > 0 && (
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 6 }}>Live activity</div>
+          <div style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--intara-faint)', marginBottom: 6 }}>Live activity</div>
             <div style={{ display: 'grid', gap: 4, maxHeight: 180, overflow: 'auto', padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 12 }}>
               {feed.slice(-8).map((f, i) => (
-                <div key={i} style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: toneColor[f.tone] || 'var(--intara-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div key={i} style={{ fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: toneColor[f.tone] || 'var(--intara-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   <span style={{ opacity: 0.6 }}>{new Date(f.t).toLocaleTimeString()}</span> {f.text}
                 </div>
               ))}
@@ -427,14 +427,14 @@ function BuildingView({ wish, compact = false, onChanged }: { wish: any; compact
           </div>
         )}
         <style>{`@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        <div style={{ marginTop: 10, fontSize: 11, color: 'var(--intara-dim)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <span>● Step-by-step, wired as one app at the end</span>
-          <span>● Type-check + build gates are the slow part (minutes)</span>
+        <div style={{ marginTop: 14, fontSize: 12.5, color: 'var(--intara-faint)', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+          <span>● Step-by-step assembly, composed into one cohesive app</span>
+          <span>● Quality checks and component verification</span>
           <span>● Safe to keep open — progress resumes after refresh</span>
         </div>
       </div>
 
-      <div style={{ marginTop: 12, fontSize: 11, color: 'var(--intara-dim)' }}>Building sequentially on the shared free pool — quiet stretches of a few minutes during gates are normal.</div>
+      <div style={{ marginTop: 14, fontSize: 12.5, color: 'var(--intara-dim)' }}>Building your application — you can safely explore while components assemble.</div>
     </div>
   )
 }
