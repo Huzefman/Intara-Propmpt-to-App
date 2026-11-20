@@ -485,6 +485,7 @@ def lint(spec: dict) -> dict:
                     errors.append(_finding("R28", f"create_record unknown entity {ent!r}", sp))
             if step.get("when") and trig_ent:
                 visible = {k: None for k in ctx_fields}
+                visible["record"] = set(ctx_fields)
                 _check_formula(step["when"], visible, sp + ".when", errors, "R25", "R25")
 
     # R34/R35/R36 seed + access

@@ -50,7 +50,8 @@ function coerceValue(value: unknown, record: Rec): unknown {
 function whenPasses(when: string | undefined, record: Rec): boolean {
   if (!when) return true;
   try {
-    return evaluate(when, record as Record<string, never>, {}) === true;
+    const env = { ...record, record };
+    return evaluate(when, env as unknown as Record<string, never>, {}) === true;
   } catch {
     return false; // unparsable guard fails closed (step skipped)
   }

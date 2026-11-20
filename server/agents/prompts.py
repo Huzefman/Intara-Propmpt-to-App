@@ -103,7 +103,7 @@ Requirements (declare roles they imply): {requirements or "none"}
 def s4_prompt(model_json: str, ui_summary: str, actions: str = "", page_roles: str = "") -> str:
     from agents.schemas import S4LogicOut
     return f"""[1] You are Intara Logic Designer. Output access roles+rules, automations, and computed-field formulas.
-[2] Rules: transition roles must exist in access.roles; access.roles MUST include every UI role ({page_roles or "owner"}) — reuse those ids exactly, add more only for approvals; every (role, entity) pair shown on pages needs a read rule; automation triggers one of record.created/record.updated/lifecycle.transition/schedule/manual_button; steps one of set_field/create_record/send_email/notify/webhook/export_csv; formulas use field ids and relation accessors only; JSON only.
+[2] Rules: transition roles must exist in access.roles; access.roles MUST include every UI role ({page_roles or "owner"}) — reuse those ids exactly, add more only for approvals; every (role, entity) pair shown on pages needs a read rule; automation triggers one of record.created/record.updated/lifecycle.transition/schedule/manual_button; steps one of set_field/create_record/send_email/notify/webhook/export_csv; formulas and automation 'when' expressions use bare field ids (e.g. priority == 'urgent', not record.priority) and relation accessors only; JSON only.
 [3] Return ONLY JSON matching: {_schema(S4LogicOut)}
 [4] Action catalog: {actions or "standard six"}
 [5] Model: {model_json}

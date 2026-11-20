@@ -283,6 +283,27 @@ def _normalize_ui(parts: dict) -> dict:
     return ui
 
 
+def _normalize_automations(automations: list) -> list:
+    out = []
+    for a in automations or []:
+        if not isinstance(a, dict):
+            continue
+        acopy = {**a}
+        steps = []
+        for s in acopy.get("steps") or []:
+            if isinstance(s, dict):
+                scopy = {**s}
+                w = scopy.get("when")
+                if isinstance(w, str) and "record." in w:
+                    scopy["when"] = re.sub(r'\brecord\.([A-Za-z_][A-Za-z0-9_]*)', r'\1', w)
+                steps.append(scopy)
+            else:
+                steps.append(s)
+        acopy["steps"] = steps
+        out.append(acopy)
+    return out
+
+
 def assemble_spec(parts: dict) -> dict:
     """Merge stage slices into an AppSpec dict (S5 assembler, deterministic)."""
     app = parts.get("app") or {"name": "App"}
@@ -297,7 +318,7 @@ def assemble_spec(parts: dict) -> dict:
         "model": parts.get("model") or {"enums": [], "entities": []},
         "access": parts.get("access") or {"roles": [], "rules": []},
         "ui": _normalize_ui(parts),
-        "automations": parts.get("automations") or [],
+        "automations": _normalize_automations(parts.get("automations") or []),
         "seed": parts.get("seed") or {},
         "integrations": [],
         "trace": parts.get("trace") or [],
