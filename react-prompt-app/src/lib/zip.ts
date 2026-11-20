@@ -367,7 +367,7 @@ export default function App() {
   const currentPage = useMemo(() => {
     return pages.find((p: any) => {
       if (p.route === activeRoute) return true
-      const pPattern = p.route.replace(/\\\\/:[a-zA-Z0-9_]+|\\\\/{[a-zA-Z0-9_]+}/g, '/[^/]+')
+      const pPattern = p.route.replace(/\\/:[a-zA-Z0-9_]+|\\/{[a-zA-Z0-9_]+}/g, '/[^/]+')
       return new RegExp(\`^\${pPattern}$\`).test(activeRoute)
     }) || pages[0]
   }, [pages, activeRoute])

@@ -32,6 +32,9 @@ def test_download_run_code(monkeypatch):
         assert "fixit/src/spec.json" in names
         assert "fixit/src/db.ts" in names
         assert "fixit/README.md" in names
+        app_tsx = z.read("fixit/src/App.tsx").decode("utf-8")
+        assert "const pPattern = p.route.replace(/\\/:[a-zA-Z0-9_]+|\\/{[a-zA-Z0-9_]+}/g, '/[^/]+')" in app_tsx
+        assert "/\\\\/" not in app_tsx
 
 def test_retry_recovers_wish_from_events(monkeypatch):
     mod, eng, _, _ = _engine_with_gold(monkeypatch)
