@@ -333,11 +333,21 @@ export function Account() {
 
   return (
     <div style={{ maxWidth: 840, animation: 'fade-in-fluid 0.5s var(--ease-premium) both' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ fontFamily: 'Space Grotesk', fontSize: 26, fontWeight: 400, letterSpacing: '-0.03em', color: 'var(--intara-text)' }}>Account</div>
-          <div style={{ color: 'var(--intara-faint)', fontSize: 12.5, marginTop: 6, letterSpacing: '-0.01em' }}>
-            {data.email ? <>{data.email} · </> : null}Your private workspace, build mode and model keys.
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg, #8B5CF6, #6D28D9)', display: 'grid', placeItems: 'center', fontWeight: 600, fontSize: 18, color: '#fff', boxShadow: '0 0 16px rgba(139, 92, 246, 0.35)', flexShrink: 0 }}>
+            {(data.email?.[0] || 'U').toUpperCase()}
+          </div>
+          <div>
+            <div style={{ fontFamily: 'Space Grotesk', fontSize: 24, fontWeight: 500, letterSpacing: '-0.03em', color: 'var(--intara-text)' }}>
+              {data.email ? data.email.split('@')[0] : 'Account'}
+            </div>
+            <div style={{ color: 'var(--intara-faint)', fontSize: 12, marginTop: 2, letterSpacing: '-0.01em' }}>
+              {data.email ? <>{data.email} · </> : null}
+              <span style={{ color: byok ? '#34D399' : 'var(--intara-nebula-light)' }}>
+                {byok ? 'Custom API Keys Mode' : 'Shared Pool Mode'}
+              </span>
+            </div>
           </div>
         </div>
         <Link to="/" className="btn-ghost" style={{ fontSize: 12, padding: '9px 14px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Back to wishes</Link>

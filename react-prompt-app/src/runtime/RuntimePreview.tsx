@@ -264,6 +264,7 @@ export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey
   const [ready, setReady] = useState(false);
   const [notices, setNotices] = useState<string[]>([]);
   const [fullscreen, setFullscreen] = useState(false);
+  const [showRoles, setShowRoles] = useState(false);
   const viewRows = useMemo(() => hydrateRefs(spec, rows), [rows, spec]);
 
   useEffect(() => {
@@ -495,7 +496,18 @@ export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey
             🖨 Print / PDF
           </button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {spec?.access?.roles && spec.access.roles.length > 0 && (
+            <button
+              type="button"
+              className={`btn-ghost btn-sm ${showRoles ? 'active' : ''}`}
+              onClick={() => setShowRoles((v) => !v)}
+              title="Toggle Role Access Matrix"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 550 }}
+            >
+              🛡 Access Matrix
+            </button>
+          )}
           <button
             className={`btn-ghost btn-sm ${fullscreen ? 'active' : ''}`}
             onClick={() => setFullscreen((v) => !v)}
@@ -506,6 +518,13 @@ export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey
           </button>
         </div>
       </div>
+      {showRoles && (
+        <div style={{ margin: '8px 0' }}>
+          <Suspense fallback={<div className="skeleton" style={{ height: 120 }} />}>
+            <RolesMatrix spec={spec} current={session.current} />
+          </Suspense>
+        </div>
+      )}
       <AppShell
       spec={spec}
       session={session}

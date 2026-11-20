@@ -19,6 +19,33 @@
   --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-fluid: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-gentle: cubic-bezier(0.25, 0.1, 0.25, 1);
+
+  /* Surface elevations with higher perceptible depth */
+  --surface-canvas:    #07070B;
+  --surface-subtle:    #0F0F16;
+  --surface-raised:    #161622;
+  --surface-overlay:   #1E1E2E;
+
+  /* Refined high-contrast borders */
+  --border-subtle:     rgba(255, 255, 255, 0.08);
+  --border-prominent:  rgba(255, 255, 255, 0.16);
+  --border-focus:      #8B5CF6;
+
+  /* Accessible text tier */
+  --text-primary:      #F8FAFC;
+  --text-secondary:    #CBD5E1;
+  --text-tertiary:     #94A3B8;
+  --text-disabled:     #64748B;
+
+  /* Operational status tokens */
+  --status-success:    #10B981;
+  --status-success-bg: rgba(16, 185, 129, 0.12);
+  --status-warning:    #F59E0B;
+  --status-warning-bg: rgba(245, 158, 11, 0.12);
+  --status-danger:     #EF4444;
+  --status-danger-bg:  rgba(239, 68, 68, 0.12);
+  --status-info:       #38BDF8;
+  --status-info-bg:    rgba(56, 189, 248, 0.12);
 }
 
 * { box-sizing: border-box; }
@@ -1604,4 +1631,145 @@ p { letter-spacing: -0.01em; }
 .constellation-row:last-child {
   border-bottom: none;
 }
+
+/* ── Skeleton Shimmer (Loading State) ────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(
+    110deg,
+    rgba(255, 255, 255, 0.03) 8%,
+    rgba(255, 255, 255, 0.08) 18%,
+    rgba(255, 255, 255, 0.03) 33%
+  );
+  border-radius: 8px;
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+@keyframes shimmer {
+  to {
+    background-position-x: -200%;
+  }
+}
+
+/* ── CRUD Operation Badges ───────────────────────────────────────────── */
+.crud-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 6px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  font-family: 'JetBrains Mono', monospace;
+  line-height: 1.2;
+}
+
+.crud-badge-create {
+  color: #34D399;
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.crud-badge-read {
+  color: #38BDF8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.crud-badge-update {
+  color: #FBBF24;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.crud-badge-delete {
+  color: #FB7185;
+  background: rgba(251, 113, 133, 0.12);
+  border: 1px solid rgba(251, 113, 133, 0.3);
+}
+
+.crud-badge-all {
+  color: #C4B5FD;
+  background: rgba(139, 92, 246, 0.16);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+}
+
+/* ── Git-Style Version Timeline ───────────────────────────────────────── */
+.v-timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-left: 18px;
+  margin-top: 10px;
+}
+
+.v-timeline-line {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 6px;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.5), rgba(255, 255, 255, 0.05));
+}
+
+.v-timeline-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  transition: all 0.25s var(--ease-premium);
+}
+
+.v-timeline-item:hover {
+  border-color: rgba(139, 92, 246, 0.35);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.v-timeline-node {
+  position: absolute;
+  top: 16px;
+  left: -18px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #07070B;
+  border: 2px solid var(--intara-nebula);
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.5);
+}
+
+.diff-badge-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10.5px;
+  font-weight: 550;
+  color: #34D399;
+  background: rgba(52, 211, 153, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  padding: 1.5px 7px;
+  border-radius: 999px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.diff-badge-remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10.5px;
+  font-weight: 550;
+  color: #FB7185;
+  background: rgba(251, 113, 133, 0.1);
+  border: 1px solid rgba(251, 113, 133, 0.25);
+  padding: 1.5px 7px;
+  border-radius: 999px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
 

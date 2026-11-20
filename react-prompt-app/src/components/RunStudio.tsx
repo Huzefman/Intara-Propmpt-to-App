@@ -11,6 +11,7 @@ import { buildAppProjectZip, downloadBlob } from '../lib/zip'
 
 const RuntimePreview = lazy(() => import('../runtime/RuntimePreview').then(m => ({ default: m.RuntimePreview })))
 const VersionTimeline = lazy(() => import('./VersionTimeline').then(m => ({ default: m.VersionTimeline })))
+const RolesMatrix = lazy(() => import('../runtime/RolesMatrix').then(m => ({ default: m.RolesMatrix })))
 
 const STAGES = [
   ['s0', 'Intake'],
@@ -462,6 +463,11 @@ export function RunStudio({ runId }: { runId: string }) {
                 </div>
                 <pre className="mono run-pre">{JSON.stringify(spec, null, 2)}</pre>
               </Card>
+              {spec?.access?.roles && spec.access.roles.length > 0 && (
+                <Suspense fallback={null}>
+                  <RolesMatrix spec={spec} />
+                </Suspense>
+              )}
               <Suspense fallback={null}>
                 <VersionTimeline key={versionId || 'none'} projectId={projectId} onPick={(vid: string, s: any) => {
                   setData((d: any) => ({ ...(d || {}), spec: s, version_id: vid }))
