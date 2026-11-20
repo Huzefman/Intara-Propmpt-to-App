@@ -5,7 +5,7 @@
  * keeps the app first: live preview, one-line change requests, and a spec /
  * activity inspector underneath. No generated application code is involved.
  */
-import { Suspense, lazy, useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { approveRun, chatRun, getEventlog, getRun, retryRun, streamRun } from '../api/client'
 import { buildAppProjectZip, downloadBlob } from '../lib/zip'
 
@@ -23,7 +23,7 @@ const STAGES = [
   ['s6', 'Seed'],
 ] as const
 
-const TERMINAL = new Set(['done', 'degraded', 'failed', 'cancelled'])
+const TERMINAL = new Set(['done', 'degraded', 'failed', 'cancelled', 'approved', 'ready'])
 
 function labelFor(status: string) {
   return status.replace(/_/g, ' ')
@@ -87,12 +87,25 @@ export function RunStudio({ runId }: { runId: string }) {
   useEffect(() => {
     let alive = true
     let timer: ReturnType<typeof setTimeout> | null = null
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
     async function fetchLatest() {
       try {
         const next = await getRun(runId)
         if (!alive) return null
-        setData(next)
+        setData((prev: any) => {
+          if (
+            prev &&
+            prev.run?.status === next.run?.status &&
+            prev.version_id === next.version_id &&
+            (prev.steps?.length ?? 0) === (next.steps?.length ?? 0) &&
+            JSON.stringify(prev.steps) === JSON.stringify(next.steps) &&
+            JSON.stringify(prev.spec) === JSON.stringify(next.spec)
+          ) {
+            return prev
+          }
+          return next
+        })
         setErr(null)
         return next
       } catch (e: any) {
@@ -101,6 +114,13 @@ export function RunStudio({ runId }: { runId: string }) {
         setErr(message)
         return null
       }
+    }
+
+    function debouncedFetch() {
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        if (alive) fetchLatest()
+      }, 150)
     }
 
     fetchLatest()
@@ -119,7 +139,7 @@ export function RunStudio({ runId }: { runId: string }) {
         evType === 'stage_output' ||
         evType === 'approved'
       ) {
-        fetchLatest()
+        debouncedFetch()
       }
     })
 
@@ -138,6 +158,7 @@ export function RunStudio({ runId }: { runId: string }) {
       alive = false
       closeStream()
       if (timer) clearTimeout(timer)
+      if (debounceTimer) clearTimeout(debounceTimer)
     }
   }, [runId, pollKey])
 
@@ -204,7 +225,7 @@ export function RunStudio({ runId }: { runId: string }) {
 
   const run = data?.run
   const status = run?.status || 'loading'
-  const spec = data?.spec
+  const spec = useMemo(() => data?.spec, [data?.version_id, JSON.stringify(data?.spec)])
   const versionId = data?.version_id || null
   const projectId = run?.project_id || null
   const steps = data?.steps || []

@@ -22,7 +22,16 @@ export function useWish(id: string | undefined) {
         if (!res.ok) throw new Error(`get wish failed ${res.status}`)
         return res.json()
       })
-      .then((w) => { if (!cancelled) setWish(w) })
+      .then((w) => {
+        if (!cancelled) {
+          setWish((prev) => {
+            if (prev && prev.id === w.id && prev.status === w.status && JSON.stringify(prev.artifacts) === JSON.stringify(w.artifacts)) {
+              return prev
+            }
+            return w
+          })
+        }
+      })
       .catch((e) => {
         if (cancelled || e?.name === 'AbortError') return
         if (!cancelled) setErr(e.message)
@@ -38,7 +47,12 @@ export function useWish(id: string | undefined) {
       try {
         const w = await getWish(id)
         if (!cancelled) {
-          setWish(w)
+          setWish((prev) => {
+            if (prev && prev.id === w.id && prev.status === w.status && JSON.stringify(prev.artifacts) === JSON.stringify(w.artifacts)) {
+              return prev
+            }
+            return w
+          })
           setLoading(false)
           setBusy(false)
           if (w.status === 'ready' || w.status === 'failed' || w.status === 'awaiting_approval') clearInterval(iv)

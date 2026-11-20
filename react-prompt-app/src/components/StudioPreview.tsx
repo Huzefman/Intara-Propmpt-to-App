@@ -55,7 +55,7 @@ export function StudioPreview({ wish }: { wish: Wish }) {
   }, [])
   const artifacts = wish.artifacts || {}
   const prd = wish.prd || {}
-  const specV1 = (artifacts as any)?.spec_v1 || null
+  const specV1 = useMemo(() => (artifacts as any)?.spec_v1 || null, [JSON.stringify((artifacts as any)?.spec_v1)])
   const v2run = (artifacts as any)?.v2?.run_id || null
   const hasTrial = !!(artifacts.preview || artifacts.frontend || artifacts.schema)
   const slug = (prd.appName || 'intara-app').toLowerCase().replace(/[^a-z0-9]+/g, '') || 'intara-app'

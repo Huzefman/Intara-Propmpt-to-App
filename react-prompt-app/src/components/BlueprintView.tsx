@@ -11,6 +11,8 @@ import { addRole, removeRole, setRule } from '../../../packages/runtime/editing/
 const RuntimePreview = lazy(() => import('../runtime/RuntimePreview').then(m => ({ default: m.RuntimePreview })))
 const VersionTimeline = lazy(() => import('./VersionTimeline').then(m => ({ default: m.VersionTimeline })))
 
+const TERMINAL = new Set(['done', 'degraded', 'failed', 'cancelled', 'approved', 'ready'])
+
 function Card({ title, children }: { title: string; children: any }) {
   return (
     <div className="glass" style={{ padding: '12px 14px', borderRadius: 14 }}>
@@ -39,8 +41,17 @@ export function BlueprintView({ runId }: { runId: string }) {
   async function refresh() {
     try {
       const r = await getRun(runId)
-      setRun(r)
-      if (r.spec) { setSpec(r.spec); setVersionId(r.version_id); }
+      setRun((prev: any) => {
+        if (prev && prev.run?.status === r.run?.status && prev.version_id === r.version_id) return prev
+        return r
+      })
+      if (r.spec) {
+        setSpec((prev: any) => {
+          if (prev && JSON.stringify(prev) === JSON.stringify(r.spec)) return prev
+          return r.spec
+        })
+        setVersionId((prev) => (prev === r.version_id ? prev : r.version_id))
+      }
     } catch (e: any) {
       setErr(e.message || 'load failed')
     }
@@ -51,9 +62,18 @@ export function BlueprintView({ runId }: { runId: string }) {
     const t = setInterval(async () => {
       try {
         const r = await getRun(runId)
-        setRun(r)
-        if (r.spec) { setSpec(r.spec); setVersionId(r.version_id); }
-        if (['done', 'degraded', 'failed', 'cancelled'].includes(r.run?.status)) clearInterval(t)
+        setRun((prev: any) => {
+          if (prev && prev.run?.status === r.run?.status && prev.version_id === r.version_id) return prev
+          return r
+        })
+        if (r.spec) {
+          setSpec((prev: any) => {
+            if (prev && JSON.stringify(prev) === JSON.stringify(r.spec)) return prev
+            return r.spec
+          })
+          setVersionId((prev) => (prev === r.version_id ? prev : r.version_id))
+        }
+        if (TERMINAL.has(r.run?.status)) clearInterval(t)
       } catch { /* keep polling */ }
     }, 3000)
     return () => clearInterval(t)

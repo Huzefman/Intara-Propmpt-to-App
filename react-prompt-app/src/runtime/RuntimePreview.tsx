@@ -4,7 +4,7 @@
  * no sandbox. Shown in Studio when the wish carries `artifacts.spec_v1`
  * (v2 pipeline output); Sandpack stays for legacy wishes.
  */
-import { Suspense, lazy, useEffect, useMemo, useState, Component } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState, useRef, Component } from 'react'
 import type { ReactNode } from 'react'
 import type { AppSpec } from '../../../packages/spec/app-spec.ts'
 import '../../../packages/runtime/blocks/blocks.css'
@@ -250,8 +250,8 @@ function RenderBlock({
 
 export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey?: string }) {
   const adapter = useMemo(
-    () => new DexieAdapter(storageKey || `intara-preview-${spec.app.name}`),
-    [spec, storageKey],
+    () => new DexieAdapter(storageKey || `intara-preview-${spec?.app?.name || 'app'}`),
+    [storageKey, spec?.app?.name],
   );
   const [session, setSession] = useState(() => new RoleSession(spec));
   const [activePage, setActivePage] = useState(spec.ui.pages[0]?.id ?? '');
@@ -267,6 +267,10 @@ export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey
   const [showRoles, setShowRoles] = useState(false);
   const viewRows = useMemo(() => hydrateRefs(spec, rows), [rows, spec]);
 
+  const specJson = useMemo(() => JSON.stringify(spec), [spec]);
+  const prevSpecJsonRef = useRef('');
+  const isInitializedRef = useRef(false);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && fullscreen) setFullscreen(false);
@@ -277,8 +281,16 @@ export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey
 
   useEffect(() => {
     let cancelled = false;
+    // If we have already initialized and the spec payload is identical, skip re-evaluating Dexie
+    if (isInitializedRef.current && prevSpecJsonRef.current === specJson) {
+      return;
+    }
+
     (async () => {
-      setReady(false);
+      // Only show the loading placeholder on the very first mount, never during background updates
+      if (!isInitializedRef.current) {
+        setReady(false);
+      }
       const seed = resolveSeed(spec);
       for (const [ent, rs] of Object.entries(seed)) {
         if ((await adapter.list(ent, {})).total === 0) {
@@ -304,12 +316,14 @@ export function RuntimePreview({ spec, storageKey }: { spec: AppSpec; storageKey
         setRows(all);
         setSelected(null);
         if (!spec.ui.pages.some((p) => p.id === activePage)) setActivePage(spec.ui.pages[0]?.id ?? '');
+        isInitializedRef.current = true;
+        prevSpecJsonRef.current = specJson;
         setReady(true);
       }
     })().catch((e) => console.error('runtime preview failed', e));
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adapter, spec, session.current]);
+  }, [adapter, specJson]);
 
   async function refresh() {
     const all: Rows = {};

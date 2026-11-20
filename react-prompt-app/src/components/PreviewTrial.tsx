@@ -3,7 +3,8 @@ import { useMemo, useState, useEffect } from 'react'
 import { toSandpackFiles } from '../lib/sandpack'
 
 export function PreviewTrial({ artifacts, appName }: { artifacts: any; appName: string }) {
-  const files = useMemo(() => toSandpackFiles(artifacts as any), [artifacts])
+  const artifactsJson = useMemo(() => JSON.stringify(artifacts), [artifacts])
+  const files = useMemo(() => toSandpackFiles(artifacts as any), [artifactsJson])
   const [activeTable, setActiveTable] = useState<string | null>(null)
   const tables: any[] = artifacts.schema?.tables || []
 
