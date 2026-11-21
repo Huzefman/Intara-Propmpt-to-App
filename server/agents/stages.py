@@ -247,6 +247,55 @@ def _fb_edit() -> dict:
 
 # ---------- S5 assembler (pure code, no LLM) ----------
 
+def _normalize_model(model: dict, access: dict) -> dict:
+    """Normalize lifecycle transition roles to match access.roles (G1 R17 safe)."""
+    m = dict(model) if isinstance(model, dict) else {"enums": [], "entities": []}
+    roles_list = (access.get("roles") or []) if isinstance(access, dict) else []
+    valid_roles = {r.get("id") for r in roles_list if isinstance(r, dict) and r.get("id")}
+    default_role = ["owner"] if "owner" in valid_roles else (list(valid_roles)[:1] if valid_roles else [])
+
+    entities = []
+    for e in m.get("entities") or []:
+        if not isinstance(e, dict):
+            continue
+        ecopy = {**e}
+        lc = ecopy.get("lifecycle")
+        if isinstance(lc, dict):
+            lccopy = {**lc}
+            transitions = []
+            for t in lccopy.get("transitions") or []:
+                if isinstance(t, dict):
+                    tcopy = {**t}
+                    t_roles = tcopy.get("roles")
+                    if t_roles is not None and isinstance(t_roles, list):
+                        if len(t_roles) > 0 and valid_roles:
+                            clean_roles = [r for r in t_roles if r in valid_roles]
+                            tcopy["roles"] = clean_roles if clean_roles else list(default_role)
+                    transitions.append(tcopy)
+                else:
+                    transitions.append(t)
+            lccopy["transitions"] = transitions
+            ecopy["lifecycle"] = lccopy
+        entities.append(ecopy)
+    m["entities"] = entities
+    return m
+
+
+def _normalize_access(access: dict) -> dict:
+    """Normalize access slice so rules only reference declared roles."""
+    acc = dict(access) if isinstance(access, dict) else {"roles": [], "rules": []}
+    roles = acc.get("roles") or []
+    valid_roles = {r.get("id") for r in roles if isinstance(r, dict) and r.get("id")}
+    if not valid_roles:
+        return acc
+    rules = [
+        rule for rule in (acc.get("rules") or [])
+        if isinstance(rule, dict) and rule.get("role") in valid_roles
+    ]
+    acc["rules"] = rules
+    return acc
+
+
 def _normalize_ui(parts: dict) -> dict:
     """Apply deterministic, lint-safe fixes to the UI slice.
 
@@ -258,6 +307,17 @@ def _normalize_ui(parts: dict) -> dict:
     """
     raw = parts.get("ui")
     ui = dict(raw) if isinstance(raw, dict) else {"pages": []}
+    access = parts.get("access") or {}
+    roles_list = (access.get("roles") or []) if isinstance(access, dict) else []
+    valid_roles = {r.get("id") for r in roles_list if isinstance(r, dict) and r.get("id")}
+
+    if valid_roles:
+        for p in ui.get("pages") or []:
+            if isinstance(p, dict) and "roles" in p and isinstance(p["roles"], list):
+                if p["roles"]:
+                    clean_pr = [r for r in p["roles"] if r in valid_roles]
+                    p["roles"] = clean_pr if clean_pr else (["owner"] if "owner" in valid_roles else list(valid_roles)[:1])
+
     pages = {
         p.get("id"): p
         for p in (ui.get("pages") or [])
@@ -307,6 +367,8 @@ def _normalize_automations(automations: list) -> list:
 def assemble_spec(parts: dict) -> dict:
     """Merge stage slices into an AppSpec dict (S5 assembler, deterministic)."""
     app = parts.get("app") or {"name": "App"}
+    access = _normalize_access(parts.get("access") or {"roles": [], "rules": []})
+    parts_with_acc = {**parts, "access": access}
     return {
         "spec_version": "1.0",
         "app": {"name": app.get("name", "App"), "tagline": app.get("tagline", ""),
@@ -315,9 +377,9 @@ def assemble_spec(parts: dict) -> dict:
         "personas": parts.get("personas") or [],
         "requirements": parts.get("requirements") or [],
         "assumptions": parts.get("assumptions") or [],
-        "model": parts.get("model") or {"enums": [], "entities": []},
-        "access": parts.get("access") or {"roles": [], "rules": []},
-        "ui": _normalize_ui(parts),
+        "model": _normalize_model(parts.get("model") or {"enums": [], "entities": []}, access),
+        "access": access,
+        "ui": _normalize_ui(parts_with_acc),
         "automations": _normalize_automations(parts.get("automations") or []),
         "seed": parts.get("seed") or {},
         "integrations": [],

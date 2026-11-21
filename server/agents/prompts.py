@@ -62,7 +62,7 @@ Each question MUST include 2-3 structured non-technical options with 'label' and
 def s2_prompt(wish: str, answers: str, assumptions: list, exemplars: str = "") -> str:
     from agents.schemas import S2ModelOut
     return f"""[1] You are Intara Domain Modeler. Output the data model: enums, entities, fields, relations, lifecycles.
-[2] Rules: ids snake_case unique; identifier fields are always type text (record ids are strings, never int); NEVER emit id/created_at/updated_at fields (storage-managed); refs are named after their target entity (customer, never customer_id); field types ONLY [{FIELD_TYPES}]; ref fields need target+onDelete; computed fields use the formula mini-language (qty * unit_price, and/or/not or &&/||/!); lifecycle field must be an enum field; NO code, JSON only.
+[2] Rules: ids snake_case unique; identifier fields are always type text (record ids are strings, never int); NEVER emit id/created_at/updated_at fields (storage-managed); refs are named after their target entity (customer, never customer_id); field types ONLY [{FIELD_TYPES}]; ref fields need target+onDelete; computed fields use the formula mini-language (qty * unit_price, and/or/not or &&/||/!); lifecycle field must be an enum field; lifecycle transition roles should be ['owner'] or omitted/empty (do not invent unanchored role names; roles are defined in UI/access); NO code, JSON only.
 [3] Return ONLY JSON matching: {_schema(S2ModelOut)}
 [4] Similar gold specs (follow their shape, do not copy): {exemplars or "none"}
 [5] Wish: {wish}
@@ -109,7 +109,7 @@ Requirements (declare roles they imply): {requirements or "none"}
 def s4_prompt(model_json: str, ui_summary: str, actions: str = "", page_roles: str = "") -> str:
     from agents.schemas import S4LogicOut
     return f"""[1] You are Intara Logic Designer. Output access roles+rules, automations, and computed-field formulas.
-[2] Rules: transition roles must exist in access.roles; access.roles MUST match EXACTLY the set of page roles from UI ({page_roles or "owner"}) — reuse those ids exactly, do not add extra unreferenced roles; if page roles has only "owner", access.roles must have ONLY "owner" with full CRUD on all entities; every (role, entity) pair shown on pages needs a read rule; automation triggers one of record.created/record.updated/lifecycle.transition/schedule/manual_button; steps one of set_field/create_record/send_email/notify/webhook/export_csv; formulas and automation 'when' expressions use bare field ids (e.g. priority == 'urgent', not record.priority) and relation accessors only; JSON only.
+[2] Rules: access.roles MUST match EXACTLY the set of page roles from UI ({page_roles or "owner"}) — reuse those ids exactly, do not add extra unreferenced roles; if page roles has only "owner", access.roles must have ONLY "owner" with full CRUD on all entities; every (role, entity) pair shown on pages needs a read rule; automation triggers one of record.created/record.updated/lifecycle.transition/schedule/manual_button; steps one of set_field/create_record/send_email/notify/webhook/export_csv; formulas and automation 'when' expressions use bare field ids (e.g. priority == 'urgent', not record.priority) and relation accessors only; JSON only.
 [3] Return ONLY JSON matching: {_schema(S4LogicOut)}
 [4] Action catalog: {actions or "standard six"}
 [5] Model: {model_json}

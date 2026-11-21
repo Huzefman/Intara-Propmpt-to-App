@@ -211,6 +211,55 @@ def test_assemble_spec_normalizes_nav_lint_traps():
     assert nav[1]["roles"] == []
 
 
+def test_assemble_spec_normalizes_lifecycle_transition_roles():
+    from agents.stages import assemble_spec
+    from gates.g1_lint import lint
+    parts = {
+        "app": {"name": "Salon"},
+        "model": {
+            "enums": [{"id": "appt_st", "values": [{"value": "scheduled", "label": "Scheduled"}, {"value": "confirmed", "label": "Confirmed"}]}],
+            "entities": [{
+                "id": "appointment", "label": "Appointment",
+                "fields": [{"id": "status", "type": "enum", "enum": "appt_st", "default": "scheduled"}],
+                "lifecycle": {
+                    "field": "status",
+                    "initial": "scheduled",
+                    "states": ["scheduled", "confirmed"],
+                    "transitions": [
+                        {"id": "confirm", "from": "scheduled", "to": "confirmed", "label": "Confirm", "roles": ["stylist"]},
+                        {"id": "reopen", "from": "confirmed", "to": "scheduled", "label": "Reopen", "roles": ["owner", "stylist"]}
+                    ]
+                }
+            }]
+        },
+        "access": {
+            "roles": [{"id": "owner", "label": "Owner"}],
+            "rules": [
+                {"role": "owner", "entity": "appointment", "ops": ["read", "create", "update", "delete"]},
+                {"role": "phantom", "entity": "appointment", "ops": ["read"]}
+            ]
+        },
+        "ui": {
+            "pages": [{"id": "home", "route": "/", "roles": ["owner", "ghost"], "blocks": [{"id": "b1", "type": "data.table", "props": {"entity": "appointment"}}]}]
+        }
+    }
+    spec = assemble_spec(parts)
+    transitions = spec["model"]["entities"][0]["lifecycle"]["transitions"]
+    # confirm had ["stylist"] (which is not in access.roles) -> normalized to fallback ["owner"]
+    assert transitions[0]["roles"] == ["owner"]
+    # reopen had ["owner", "stylist"] -> normalized to valid role ["owner"]
+    assert transitions[1]["roles"] == ["owner"]
+    # access rules stripped the "phantom" role rule
+    assert [r["role"] for r in spec["access"]["rules"]] == ["owner"]
+    # ui page roles stripped "ghost"
+    assert spec["ui"]["pages"][0]["roles"] == ["owner"]
+    # G1 lint R17, R36, R12 must have 0 findings
+    findings = lint(spec)["errors"]
+    assert [f for f in findings if f["rule"] == "R17"] == []
+    assert [f for f in findings if f["rule"] == "R36"] == []
+    assert [f for f in findings if f["rule"] == "R12"] == []
+
+
 def test_g2_coverage_semantics():
     from gates.g2_coverage import check
     reqs = [{"id": "R1", "priority": "must"}, {"id": "R2", "priority": "should"},
